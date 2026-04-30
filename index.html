@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f9f3eb" />
+  <title>Phantasma — Data engineering & cloud transformation</title>
+  <meta name="description" content="Phantasma turns manual operations into measured systems. Data engineering, Azure cloud architecture, and intelligence for mid-market teams." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&display=swap"
+  />
+  <link
+    rel="stylesheet"
+    href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap"
+  />
+
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Atmospheric layer: paper grain -->
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- Header -->
+  <header class="site-header" id="site-header">
+    <div class="page-grid site-header__row">
+      <a href="#top" class="wordmark" aria-label="Phantasma — home">Phantasma</a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#what-we-do">What we do</a>
+        <a href="#work">Work</a>
+        <a href="#approach">Approach</a>
+        <a href="#stack">Stack</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <a href="#contact" class="btn btn-primary btn-sm">Book a call</a>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- HERO -->
+    <section class="hero" id="top" aria-labelledby="hero-h">
+      <div class="hero__wash" aria-hidden="true"></div>
+      <div class="page-grid hero__grid">
+        <div class="hero__lede">
+          <p class="eyebrow">Phantasma · Data engineering & cloud solutions</p>
+          <h1 id="hero-h" class="hero__h">
+            <span class="hero__line">We turn manual operations</span>
+            <span class="hero__line">into measured systems.</span>
+          </h1>
+          <p class="hero__sub">
+            We are a small consultancy that builds Azure-native data pipelines, intelligence,
+            and IoT systems for mid-market teams that have outgrown spreadsheets. Quietly.
+            With numbers behind every claim.
+          </p>
+          <div class="hero__cta">
+            <a href="#contact" class="btn btn-primary btn-lg">Book a discovery call</a>
+            <a href="#work" class="link-quiet">See the work ↓</a>
+          </div>
+        </div>
+
+        <aside class="hero__strip" aria-label="Selected results">
+          <p class="eyebrow eyebrow--strip">Selected results</p>
+          <div class="metric">
+            <span class="metric__num" data-count-to="93.7" data-suffix="%">93.7%</span>
+            <span class="metric__label">labor reduction</span>
+            <span class="metric__source">e-commerce cost engine</span>
+          </div>
+          <div class="metric">
+            <span class="metric__num" data-count-to="700" data-suffix="%">700%</span>
+            <span class="metric__label">monthly throughput</span>
+            <span class="metric__source">mining operations</span>
+          </div>
+          <div class="metric">
+            <span class="metric__num" data-count-to="98" data-suffix="%">98%</span>
+            <span class="metric__label">forecast accuracy</span>
+            <span class="metric__source">demand engine</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- CAPABILITIES -->
+    <section class="capabilities" id="what-we-do" aria-labelledby="cap-h">
+      <div class="page-grid">
+        <h2 id="cap-h" class="section-title">What we do</h2>
+
+        <article class="cap">
+          <span class="cap__num" aria-hidden="true">01</span>
+          <h3 class="cap__h">Data Engineering</h3>
+          <p class="cap__body">
+            Pipelines that pull, normalize, and store data from your sales channels,
+            ERP, accounting, and third-party tools into a single trustworthy source.
+            Validated against your existing books before anything goes live.
+          </p>
+          <p class="cap__tags">ETL · ELT · data lakes · master data · data contracts</p>
+        </article>
+
+        <hr class="rule" />
+
+        <article class="cap">
+          <span class="cap__num" aria-hidden="true">02</span>
+          <h3 class="cap__h">Cloud Architecture</h3>
+          <p class="cap__body">
+            Azure-native systems designed to be auditable, governed, and inexpensive to
+            run. Infrastructure-as-code, environment separation, and access control built
+            in from day one — not bolted on after launch.
+          </p>
+          <p class="cap__tags">Pipelines · data warehouses · CI/CD · RBAC · IaC</p>
+        </article>
+
+        <hr class="rule" />
+
+        <article class="cap">
+          <span class="cap__num" aria-hidden="true">03</span>
+          <h3 class="cap__h">Intelligence (ML / AI / IoT)</h3>
+          <p class="cap__body">
+            Forecasting, OCR, sensor networks, and decision-support models that turn
+            data into autonomous action. We deploy what backtests against your real
+            history — not what reads well in a slide.
+          </p>
+          <p class="cap__tags">Forecasting · OCR · IoT · predictive ops</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- SELECTED WORK / BENTO -->
+    <section class="work" id="work" aria-labelledby="work-h">
+      <div class="page-grid">
+        <header class="work__header">
+          <p class="eyebrow">Selected work</p>
+          <h2 id="work-h" class="section-title">Six engagements, six industries.</h2>
+          <p class="work__sub">Click any tile to open its case study.</p>
+        </header>
+
+        <div class="bento" id="bento">
+          <!-- Tiles are rendered by script.js into this container -->
+        </div>
+      </div>
+    </section>
+
+    <!-- APPROACH -->
+    <section class="approach" id="approach" aria-labelledby="approach-h">
+      <div class="page-grid">
+        <p class="eyebrow">How we work</p>
+        <h2 id="approach-h" class="section-title">Approach</h2>
+
+        <ol class="approach__strip" id="approach-strip">
+          <li class="approach__station" data-station="0">
+            <span class="approach__marker" aria-hidden="true"></span>
+            <span class="approach__num">01</span>
+            <h3 class="approach__h">Discover</h3>
+            <p class="approach__copy">Audit operations and model the ROI of automation.</p>
+          </li>
+          <li class="approach__station" data-station="1">
+            <span class="approach__marker" aria-hidden="true"></span>
+            <span class="approach__num">02</span>
+            <h3 class="approach__h">Architect</h3>
+            <p class="approach__copy">Pipelines, data contracts, governance, and stack choices.</p>
+          </li>
+          <li class="approach__station" data-station="2">
+            <span class="approach__marker" aria-hidden="true"></span>
+            <span class="approach__num">03</span>
+            <h3 class="approach__h">Build</h3>
+            <p class="approach__copy">Pipelines shipped, validated, and tested against your history.</p>
+          </li>
+          <li class="approach__station" data-station="3">
+            <span class="approach__marker" aria-hidden="true"></span>
+            <span class="approach__num">04</span>
+            <h3 class="approach__h">Hand-off</h3>
+            <p class="approach__copy">Documentation, training, runbooks. Your team owns it.</p>
+          </li>
+          <li class="approach__station" data-station="4">
+            <span class="approach__marker" aria-hidden="true"></span>
+            <span class="approach__num">05</span>
+            <h3 class="approach__h">Operate</h3>
+            <p class="approach__copy">Optional retainer for evolution, monitoring, scaling.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- STACK & INDUSTRIES -->
+    <section class="stack" id="stack" aria-labelledby="stack-h">
+      <div class="page-grid">
+        <p class="eyebrow">Stack & industries</p>
+        <h2 id="stack-h" class="section-title">Where we work, what we use.</h2>
+
+        <div class="stack__grid">
+          <div class="stack__panel">
+            <h3 class="stack__h">Industries</h3>
+            <ul class="chips chips--industries">
+              <li class="chip"><span class="chip__dot" aria-hidden="true"></span>E-commerce</li>
+              <li class="chip"><span class="chip__dot" aria-hidden="true"></span>Mining & raw materials</li>
+              <li class="chip"><span class="chip__dot" aria-hidden="true"></span>Pharmacy & healthcare</li>
+              <li class="chip"><span class="chip__dot" aria-hidden="true"></span>Agriculture</li>
+              <li class="chip"><span class="chip__dot" aria-hidden="true"></span>Manufacturing</li>
+            </ul>
+          </div>
+
+          <div class="stack__panel">
+            <h3 class="stack__h">Technology</h3>
+            <ul class="chips">
+              <li class="chip">Azure Data Factory</li>
+              <li class="chip">Azure Databricks</li>
+              <li class="chip">Azure Machine Learning</li>
+              <li class="chip">Power BI</li>
+              <li class="chip">Power Apps</li>
+              <li class="chip">MSSQL</li>
+              <li class="chip">ADLS Gen2</li>
+              <li class="chip">Terraform / Bicep</li>
+              <li class="chip">Azure DevOps</li>
+              <li class="chip">IoT (custom)</li>
+              <li class="chip">Python · SQL</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AGGREGATE IMPACT -->
+    <section class="impact" aria-labelledby="impact-h">
+      <div class="impact__wash" aria-hidden="true"></div>
+      <div class="page-grid">
+        <p class="eyebrow">Aggregate impact</p>
+        <h2 id="impact-h" class="section-title">What it adds up to.</h2>
+
+        <div class="impact__grid">
+          <article class="impact-tile">
+            <p class="impact-tile__num">75 hrs</p>
+            <p class="impact-tile__label">reclaimed per cycle</p>
+            <p class="impact-tile__source">E-commerce engagement</p>
+          </article>
+          <article class="impact-tile">
+            <p class="impact-tile__num">€15K</p>
+            <p class="impact-tile__label">total cost over 2 years</p>
+            <p class="impact-tile__source">Mining transformation</p>
+          </article>
+          <article class="impact-tile">
+            <p class="impact-tile__num">12 ha</p>
+            <p class="impact-tile__label">autonomous, weather-aware irrigation</p>
+            <p class="impact-tile__source">Precision viticulture</p>
+          </article>
+          <article class="impact-tile">
+            <p class="impact-tile__num">6 stores · 20 yrs</p>
+            <p class="impact-tile__label">of data unified, GDP-compliant</p>
+            <p class="impact-tile__source">Pharmacy chain</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="about" aria-labelledby="about-h">
+      <div class="page-grid">
+        <p class="eyebrow">About Phantasma</p>
+        <h2 id="about-h" class="section-title">Small team. Embedded with your operations.</h2>
+        <div class="about__body">
+          <p>
+            Phantasma is a boutique data engineering and cloud transformation consultancy.
+            We work with mid-market teams — typically post-acquisition or post-spreadsheet —
+            who need an architecture that scales without adding headcount. We embed with your
+            ops, build the system end-to-end, hand it back with documentation, and then leave.
+          </p>
+          <p>
+            We choose engagements where we can put a number against the outcome. If we cannot
+            tell you what manual hours you will reclaim, what a cycle will cost to run, or what
+            accuracy your forecasts will reach — we are not the right team for that project.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOOKING -->
+    <section class="booking" id="contact" aria-labelledby="booking-h">
+      <div class="page-grid booking__grid">
+        <div class="booking__lede">
+          <h2 id="booking-h" class="booking__h">
+            Tell us what's manual.<br />
+            We'll tell you what's possible.
+          </h2>
+          <p class="booking__sub">
+            30 minutes. We listen, you describe what's manual. You leave with a one-page
+            outline of what an automation could look like, what it would cost to run, and
+            roughly what it would reclaim.
+          </p>
+          <p class="booking__fallback">
+            Or just email us:
+            <a class="link-quiet" href="mailto:hello@phantasma.studio">hello@phantasma.studio</a>
+          </p>
+        </div>
+
+        <div class="booking__embed">
+          <div class="booking__placeholder" id="calendly-placeholder" tabindex="0" role="button" aria-label="Open booking calendar">
+            <p class="booking__placeholder-eyebrow">Calendly</p>
+            <p class="booking__placeholder-h">Open booking calendar</p>
+            <p class="booking__placeholder-sub">Loads on demand. No third-party request before you ask for it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="page-grid site-footer__inner">
+      <hr class="rule rule--footer" />
+      <div class="site-footer__row">
+        <a href="#top" class="wordmark wordmark--footer">Phantasma</a>
+        <a href="#contact" class="link-quiet">Book a discovery call →</a>
+      </div>
+      <div class="site-footer__row site-footer__row--meta">
+        <p class="site-footer__tagline">Data engineering & cloud transformation.</p>
+        <a class="link-quiet" href="mailto:hello@phantasma.studio">hello@phantasma.studio</a>
+        <a class="link-quiet" href="#" aria-label="LinkedIn">LinkedIn</a>
+        <p class="site-footer__copy">© Phantasma 2026</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- LIGHTBOX -->
+  <div
+    class="lightbox"
+    id="lightbox"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="lightbox-title"
+    hidden
+  >
+    <div class="lightbox__backdrop" data-close></div>
+    <div class="lightbox__container" id="lightbox-container">
+      <header class="lightbox__header">
+        <p class="lightbox__breadcrumb">
+          <span>Phantasma</span>
+          <span aria-hidden="true">·</span>
+          <span id="lightbox-case-counter">Case 01 of 06</span>
+        </p>
+        <p class="lightbox__slidecount" id="lightbox-slide-counter">01 / 05</p>
+        <button class="lightbox__close" data-close aria-label="Close case study">✕</button>
+      </header>
+
+      <div class="lightbox__hint" id="lightbox-hint" hidden>
+        <span><kbd>←</kbd> <kbd>→</kbd> slides</span>
+        <span><kbd>[</kbd> <kbd>]</kbd> switch case</span>
+      </div>
+
+      <section class="lightbox__stage" id="lightbox-stage" aria-live="polite">
+        <!-- Slide content rendered by script.js -->
+      </section>
+
+      <footer class="lightbox__controls">
+        <button class="lightbox__nav" id="lightbox-prev" aria-label="Previous slide">◀</button>
+        <ol class="lightbox__dots" id="lightbox-dots"></ol>
+        <button class="lightbox__nav" id="lightbox-next" aria-label="Next slide">▶</button>
+      </footer>
+    </div>
+    <p class="visually-hidden" id="lightbox-announce" aria-live="polite"></p>
+  </div>
+
+  <script src="./script.js" defer></script>
+</body>
+</html>
