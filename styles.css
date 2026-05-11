@@ -620,7 +620,7 @@ kbd {
 }
 .work__header {
   grid-column: content-start / span 10;
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-5);
 }
 .work__sub {
   color: var(--ink-soft);
