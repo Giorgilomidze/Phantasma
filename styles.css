@@ -631,12 +631,13 @@ kbd {
   grid-column: content-start / content-end;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: 240px 240px 240px;
+  grid-template-rows: 240px 240px 240px 240px;
   gap: var(--space-6);
   grid-template-areas:
     "case6 case6 case1 case4"
     "case6 case6 case2 case2"
-    "case3 case3 case5 case5";
+    "case3 case3 case5 case5"
+    "case7 case7 case7 case7";
 }
 .bento [data-area="case1"] { grid-area: case1; }
 .bento [data-area="case2"] { grid-area: case2; }
@@ -644,6 +645,7 @@ kbd {
 .bento [data-area="case4"] { grid-area: case4; }
 .bento [data-area="case5"] { grid-area: case5; }
 .bento [data-area="case6"] { grid-area: case6; }
+.bento [data-area="case7"] { grid-area: case7; }
 
 /* Tile */
 .tile {
@@ -678,7 +680,8 @@ kbd {
 }
 .tile[data-area="case2"],
 .tile[data-area="case3"],
-.tile[data-area="case5"] {
+.tile[data-area="case5"],
+.tile[data-area="case7"] {
   padding: 24px 28px 20px;
 }
 .tile[data-area="case6"] {
@@ -715,7 +718,8 @@ kbd {
 }
 .tile[data-area="case2"] .tile__title,
 .tile[data-area="case3"] .tile__title,
-.tile[data-area="case5"] .tile__title {
+.tile[data-area="case5"] .tile__title,
+.tile[data-area="case7"] .tile__title {
   font-size: var(--type-h2-tile);
 }
 .tile[data-area="case6"] .tile__title {
@@ -734,7 +738,8 @@ kbd {
 .tile[data-area="case2"] .tile__outcome,
 .tile[data-area="case3"] .tile__outcome,
 .tile[data-area="case5"] .tile__outcome,
-.tile[data-area="case6"] .tile__outcome {
+.tile[data-area="case6"] .tile__outcome,
+.tile[data-area="case7"] .tile__outcome {
   display: block;
 }
 
@@ -1556,6 +1561,22 @@ kbd {
 }
 
 /* Built slide */
+.slide-built__body {
+  display: contents;
+}
+.slide-built__body--has-image {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+.slide-built__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--rule);
+}
 .slide-built__diagram {
   display: flex;
   flex-direction: column;
@@ -1764,13 +1785,14 @@ body.is-locked {
 
   .bento {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(5, 220px);
+    grid-template-rows: repeat(6, 220px);
     grid-template-areas:
       "case6 case6"
       "case6 case6"
       "case1 case4"
       "case2 case2"
-      "case3 case5";
+      "case3 case5"
+      "case7 case7";
   }
 
   .approach__strip {
@@ -1835,7 +1857,8 @@ body.is-locked {
       "case5"
       "case1"
       "case4"
-      "case3";
+      "case3"
+      "case7";
   }
 
   .impact__grid {

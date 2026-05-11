@@ -52,6 +52,7 @@
         ],
         caption:
           'A single source of truth that pulls from your sales channels, normalises pricing per contract, and emits client-ready invoices. A small Power App lets logistics update delivery rates without touching code.',
+        image: { src: './images/case1-built.jpg', alt: 'E-commerce cost engine architecture' },
       },
       impact: {
         type: 'table',
@@ -113,6 +114,7 @@
         ],
         caption:
           'Every operational task — from land acquisition to vegetation restoration — links to its financial cash flow. Weekly automated reports flag what is behind schedule before a manager has to ask.',
+        image: { src: './images/case2-built.jpg', alt: 'Mining operational intelligence architecture' },
       },
       impact: {
         type: 'table',
@@ -178,6 +180,7 @@
         ],
         caption:
           'A microservices-oriented architecture: the failure of one component cannot bring down the rest. Bronze data layer means schema changes can be reprocessed without re-fetching the source.',
+        image: { src: './images/case3-built.jpg', alt: 'Monolith to microservices architecture' },
       },
       impact: {
         type: 'tiles',
@@ -231,6 +234,7 @@
         ],
         caption:
           'Agronomic research first — defining the optimal moisture window for sugar content, the ideal NPK ratios, the soil pH range. Then sensors, edge hub, cloud, and pumps wired into one closed loop.',
+        image: { src: './images/case4-built.jpg', alt: 'Precision viticulture IoT system' },
       },
       impact: {
         type: 'tiles',
@@ -291,6 +295,7 @@
         ],
         caption:
           'AI parses and matches medicinal names across four authoritative sources, eliminating manual entry errors. IoT keeps every store within GDP-mandated environmental conditions. Reporting to the Ministry is automated.',
+        image: { src: './images/case5-built.jpg', alt: 'Pharmacy chain digital transformation architecture' },
       },
       impact: {
         type: 'tiles',
@@ -351,6 +356,7 @@
         ],
         caption:
           'Sales channels unified into a "golden record" table. Logistical metadata standardised. Forecasts engineered against rolling windows and external market signals. Replenishment recommendations are generated automatically per SKU.',
+        image: { src: './images/case6-built.jpg', alt: 'Demand forecasting architecture diagram' },
       },
       impact: {
         type: 'table',
@@ -364,6 +370,61 @@
       },
       stack: ['Azure Data Factory', 'Azure Databricks', 'Azure Machine Learning', 'MSSQL', 'Shopify API', 'Amazon SP-API', 'External market trend APIs', 'Python · SQL'],
       engagement: { duration: '~8 months', tco: 'Operational on Azure-native run rates', summary: 'Outperformed human procurement specialists in backtesting against 4 years of history.' },
+    },
+
+    {
+      slug: 'water-utility-predictive-ops',
+      area: 'case7',
+      tileSize: '2x1',
+      industry: 'Water & Utilities',
+      title: 'Predictive Infrastructure for Urban Water Utility',
+      outcome: 'From reactive break-fix to data-driven, predictive operations for a city of 3M+ residents.',
+      kpiNum: '+100%',
+      kpiLabel: 'daily incident throughput',
+      heroMetric: { kind: 'numeric', value: '+100%', label: 'daily incident throughput', foil: '40–55 → 80–140 per day, 82 field teams' },
+      situation: {
+        prose:
+          'A century-old water utility serving 3M+ residents ran entirely on reactive break-fix. SAP ERP was used as a basic task list, IoT pressure and level data sat unused, and field, warehouse, and fleet teams operated in silos with no shared KPIs. The incentive structure rewarded slow work — finishing a job quickly just meant being assigned the next difficult one.',
+        scale: [
+          { num: '3M+', label: 'residents served' },
+          { num: '82', label: 'field teams' },
+          { num: '4.5 hrs', label: 'avg fix time' },
+          { num: '<10%', label: 'IoT data utilised' },
+        ],
+      },
+      built: {
+        rows: [
+          [
+            { label: 'SAP ERP + IoT telemetry (pressure & level)' },
+            { arrow: true },
+            { label: 'PostgreSQL Data Warehouse' },
+            { arrow: true },
+            { label: 'Python ML Forecasting' },
+          ],
+          [
+            { label: 'Asset inventory + billing consumption map' },
+            { arrow: true },
+            { label: 'KPI & alert layer' },
+            { arrow: true },
+            { label: 'SAP via REST API + Power BI' },
+          ],
+        ],
+        caption:
+          'Unified a century of fragmented operational data into a single warehouse. ML forecasting achieved 80% daily / 90% weekly / 93% monthly confidence. Alerts and work orders pushed back into SAP so field teams never had to leave the system they already used.',
+        image: { src: './images/case7-built.png', alt: 'Water utility predictive operations architecture' },
+      },
+      impact: {
+        type: 'table',
+        headers: ['Before', 'After'],
+        rows: [
+          ['Incidents resolved / day', '40–55', '80–140'],
+          ['Average fix time', '4.5 hrs', '3.0 hrs (−33%)'],
+          ['High-severity pipe bursts (YoY)', 'Baseline', '−12%'],
+          ['Active field teams (of 82)', '~25', '30 (+20% capacity)'],
+        ],
+      },
+      stack: ['SAP ERP', 'PostgreSQL', 'Python ML', 'Power BI', 'IoT (pressure & level sensors)', 'Custom REST APIs'],
+      engagement: { duration: '~6 months', tco: 'Discovery, design, build, and 6-month support', summary: 'Turned a reactive century-old operation into a predictive, data-driven enterprise — without replacing SAP.' },
     },
   ];
 
@@ -766,12 +827,20 @@
           return `<div class="slide-built__row">${inner}</div>`;
         })
         .join('');
+      const imageHTML = c.built.image
+        ? `<img class="slide-built__image" src="${c.built.image.src}" alt="${c.built.image.alt}" />`
+        : '';
       return `
         <article class="slide">
           <span class="slide__chip">${c.industry}</span>
           <h2 class="slide__h">What we built</h2>
-          <div class="slide-built__diagram">${rows}</div>
-          <p class="slide-built__caption">${c.built.caption}</p>
+          <div class="slide-built__body${c.built.image ? ' slide-built__body--has-image' : ''}">
+            <div>
+              <div class="slide-built__diagram">${rows}</div>
+              <p class="slide-built__caption">${c.built.caption}</p>
+            </div>
+            ${imageHTML}
+          </div>
         </article>
       `;
     }
