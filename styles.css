@@ -557,6 +557,19 @@ kbd {
 .capabilities {
   padding: var(--space-6) 0;
 }
+.cap-headline {
+  grid-column: content-start / content-end;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-size: var(--type-h2);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  max-width: 52ch;
+  margin: 0 0 var(--space-6);
+  text-wrap: balance;
+}
 .cap-grid {
   grid-column: content-start / content-end;
   display: grid;
