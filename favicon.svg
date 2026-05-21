@@ -1,8 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Large blue star -->
-  <polygon points="36,16 40.9,31.2 56.9,31.2 44,40.6 48.9,55.8 36,46.4 23.1,55.8 28,40.6 15.1,31.2 31.1,31.2" fill="#2563EB"/>
-  <!-- Medium yellow star -->
-  <polygon points="17,7 19.9,16 29.4,16 21.8,21.6 24.6,30.5 17,25 9.4,30.5 12.2,21.6 4.6,16 14.1,16" fill="#FBBF24"/>
-  <!-- Small red star -->
-  <polygon points="51,10 52.8,15.5 58.6,15.5 54,19 55.7,24.5 51,21.1 46.3,24.5 48.1,19 43.4,15.5 49.2,15.5" fill="#EF4444"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Black outer circle -->
+  <circle cx="46" cy="50" r="46" fill="#000000"/>
+  <!-- White ring (thick edge between black and green) -->
+  <circle cx="50" cy="50" r="40" fill="#ffffff"/>
+  <!-- Green circle -->
+  <circle cx="56" cy="50" r="32" fill="#16a34a"/>
+  <!-- Yellow crescent circle -->
+  <circle cx="63" cy="50" r="24" fill="#FACC15"/>
+  <!-- Blue center circle -->
+  <circle cx="68" cy="50" r="16" fill="#2563EB"/>
 </svg>
