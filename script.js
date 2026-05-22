@@ -1083,7 +1083,7 @@
      The third-party script does not load until the booking section
      intersects the viewport (or the user activates the placeholder).
      --------------------------------------------------------------------- */
-  const CALENDLY_URL = 'https://calendly.com/avoegio22/30min';
+  const CALENDLY_URL = 'https://calendly.com/lomiddze/30min';
 
   function bootCalendly() {
     const placeholder = document.getElementById('calendly-placeholder');
