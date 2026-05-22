@@ -1133,14 +1133,23 @@ kbd {
 }
 
 /* -------------------------------------------------------------------------
-   15. Booking
+   15. About + Contact (unified)
    ------------------------------------------------------------------------- */
-.booking {
+.about-contact {
   padding: var(--space-9) 0 var(--space-10);
 }
-.booking__grid {
-  row-gap: var(--space-7);
+.about-contact__col {
+  grid-column: content-start / span 7;
+  display: flex;
+  flex-direction: column;
 }
+.about-contact__col .booking__h {
+  margin-top: var(--space-8);
+}
+
+/* -------------------------------------------------------------------------
+   16. Booking widget
+   ------------------------------------------------------------------------- */
 .booking__lede {
   grid-column: content-start / span 7;
 }
@@ -1854,7 +1863,7 @@ body.is-locked {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .booking__lede,
+  .about-contact__col,
   .booking__embed {
     grid-column: content-start / content-end;
   }
