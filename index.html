@@ -234,6 +234,127 @@
         <div class="bento" id="bento">
           <!-- Tiles are rendered by script.js into this container -->
         </div>
+
+        <!-- Full case study content — collapsed by default, indexed by Google -->
+        <div class="case-details-list">
+
+          <details class="case-detail">
+            <summary class="case-detail__summary">E-Commerce Cost Engine &amp; Financial Reporting Pipeline — Read full case study</summary>
+            <div class="case-detail__body">
+              <h3>Executive Summary</h3>
+              <p>Developed an end-to-end data automation ecosystem for a multi-channel e-commerce firm managing 8,000+ SKUs and 20+ manufacturers. The project transformed a manual, error-prone accounting process involving complex contract pricing and marketplace commissions into a scalable, $60/month cloud-native solution.</p>
+              <h3>The Challenge</h3>
+              <p>The company faced a massive operational bottleneck. Managing financial data across various platforms was a manual nightmare due to variable pricing across 20 manufacturers with unique contract terms, multi-channel marketplace commission complexity, logistical fragmentation with diverse shipping costs, and a resource drain of 80 man-hours (3 highly skilled staff over 5 days) to calculate COGS and generate invoices.</p>
+              <h3>Technical Solution &amp; Architecture</h3>
+              <p>We architected a robust ETL/ELT pipeline using Azure and Power Platform to create a Single Source of Truth. Data Acquisition: built a custom API retrieval platform to pull data from multiple e-commerce marketplaces, implemented a multi-format Data Lake handling JSON, CSV, and Parquet, and developed a parallel manual-to-automated data validation bridge ensuring 100% data integrity. Data Engineering: utilized Azure ETL processes to normalize raw data into structured SQL tables with a star schema database, fact tables for transactional sales and cost data, and dimension tables mapping SKUs to contract terms, VAT rates, and category fees. Power App Integration: created a custom Power App for logistics teams to update delivery rates manually, feeding directly into the COGS engine. Business Logic Layer: configured a Google Sheets-to-Azure pipeline allowing business users to update contract terms without touching code. Automated Reporting: developed Paginated Reports that automatically calculated final net margins and generated client-ready invoices.</p>
+              <h3>Business Impact &amp; ROI</h3>
+              <p>Total labor time reduced from 80 hours to 5 hours — a 93.7% reduction. Turnaround time cut from 5 days to 2 days. Operational cost moved from 3 senior FTEs to a $60 cloud fee plus 5 QA hours. Scalability shifted from linear (more SKUs equals more staff) to exponential with zero bottleneck. By automating the core workflows, we reclaimed 75 hours of high-level employee time per cycle, eliminated human error in financial reporting, and prepared the company for unlimited SKU expansion without increasing headcount.</p>
+              <h3>Technology Stack</h3>
+              <p>Azure Data Factory, Azure Data Lake Storage Gen2, MSSQL SQL Data Warehouse, Power BI Paginated Reports, Power Apps, Google Sheets API integration, Amazon SP-API, Shopify API.</p>
+            </div>
+          </details>
+
+          <details class="case-detail">
+            <summary class="case-detail__summary">Industrial Scale-Up &amp; Operational Intelligence Transformation — Mining Operations — Read full case study</summary>
+            <div class="case-detail__body">
+              <h3>Executive Summary</h3>
+              <p>The client, a rapidly expanding mining and raw materials producer, faced severe operational bottlenecks following a series of acquisitions. Disconnected data silos — spreadsheets, local drives, and manual accounting — hindered their ability to manage the full lifecycle of mining from land acquisition to ecological restoration. We designed and implemented an integrated data ecosystem that automated document processing, unified task management with financial flows, and provided C-level executives with real-time decision-making snapshots.</p>
+              <h3>The Challenge: Scaling Through Chaos</h3>
+              <p>Rapid acquisition of new companies led to non-standardized processes across different mining sites. Critical information was trapped in local computers, manual invoices, and isolated accounting software. The lifecycle involved high-stakes legal documentation, land rights, mining operations, and green-coverage regeneration. Massive human effort was required to map cash flows to specific mining tasks and process physical invoices.</p>
+              <h3>Technical Solution &amp; Architecture</h3>
+              <p>We leveraged the Azure Cloud Ecosystem to create a seamless flow of information across the organization. Data Integration: used Azure Data Factory and Databricks to ingest data from the Accounting API and ClickUp API. AI-Powered Document Processing: implemented Azure Machine Learning OCR to digitize manual invoices, extract metadata, and automatically map them to specific project tasks. Task and Resource Management: centralized all operations in ClickUp, ensuring that every task from land buying to vegetation restoration was linked to its respective financial cash flow. User Interface and Governance: developed Power Apps for structured data entry and used SharePoint as a centralized governed document library. Security: implemented Row-Level Security and Active Directory integration to ensure departments only accessed relevant data.</p>
+              <h3>Business Impact &amp; Results</h3>
+              <p>Monthly task capacity grew from 40 tasks to 280 tasks — a 700% increase. Raw material processing increased from 3,500 units to 11,000 units — a 314% increase. Labor inefficiency reduced from 650 man-hours per month to 300 man-hours per month. Data accessibility expanded from under 10% siloed to 80% organization-wide. Automated weekly executive snapshots of Behind Schedule versus Upcoming operations enabled proactive risk management. Total cost of ownership achieved at only €15,000 over two years covering all cloud services and IT support. The Specialist Bottleneck was eliminated — data was no longer locked with specific accountants or managers.</p>
+              <h3>Technology Stack</h3>
+              <p>Azure Databricks, Azure Data Factory, Azure Machine Learning (OCR), Power BI, Power Apps, SharePoint, ClickUp API, Azure Active Directory, Row-Level Security.</p>
+            </div>
+          </details>
+
+          <details class="case-detail">
+            <summary class="case-detail__summary">Automated Demand Forecasting &amp; Inventory Optimization Engine — E-Commerce Distribution — Read full case study</summary>
+            <div class="case-detail__body">
+              <h3>Executive Summary</h3>
+              <p>Developed an end-to-end data pipeline and machine learning solution for a large-scale e-commerce distributor managing 12,000 SKUs across 200 brands. The project automated the unification of fragmented sales channels and inventory data, replacing manual procurement processes with a predictive model that achieved 98% forecasting accuracy, significantly outperforming traditional human-led purchasing habits at 81%.</p>
+              <h3>The Business Challenge</h3>
+              <p>Data was fragmented across multiple e-commerce platforms and 40 different manufacturers. Managing 12,000 products with varying logistical requirements including PZN, EAN, and GTIN codes, packaging types, and expiration dates created extreme complexity. Sales were highly sensitive to seasonality, delivery restrictions, and external market trends. Manual stock maintenance led to frequent overstocking causing capital tie-up or understocking causing lost revenue.</p>
+              <h3>Technical Architecture &amp; Data Engineering</h3>
+              <p>We built a robust ETL/ELT architecture using the Azure ecosystem. Ingestion: orchestrated Azure Data Factory pipelines to ingest data via APIs and Databricks, ensuring regular synchronization from disparate sales channels and external market sources. Data Warehousing: stored and structured raw data into an MSSQL Data Warehouse. Unification and Normalization: unified sales data from multiple channels into a single Golden Record table, mapped fragmented product listings and inventory logs to a master product catalog, and standardized logistical metadata including dimensions, weights, and SKU variants.</p>
+              <h3>Predictive Modeling &amp; Machine Learning</h3>
+              <p>Feature Engineering: modeled sales data based on rolling windows of the last 7, 30, and 90 days, year-over-year comparisons, and category-level trends. External Intelligence: integrated external API data to capture broader market trends and seasonal shifts. Model Selection: implemented an Azure Machine Learning model to generate automated replenishment suggestions based on customized matrices and parameters. Validation: conducted rigorous backtesting by comparing forecasted numbers against historical inventory levels and actual sales performance.</p>
+              <h3>Impact and Results</h3>
+              <p>The initial model achieved 94% accuracy across all datasets. After cleaning data externalities such as poor listings and missing integration data, model precision reached 98%. In backtesting the model significantly outperformed human procurement specialists who averaged 81% accuracy due to inconsistent overstocking and understocking. The project automated generation of invoices and stock listings, reducing manual labor and human error in the supply chain.</p>
+              <h3>Technology Stack</h3>
+              <p>Azure Data Factory, Azure Databricks, MSSQL Data Warehouse, Azure Machine Learning, SQL, Python, Shopify API, Amazon SP-API, External Market Trend APIs.</p>
+            </div>
+          </details>
+
+          <details class="case-detail">
+            <summary class="case-detail__summary">Pharmacy Chain Digital Transformation &amp; Regulatory Compliance — GDP-Compliant Data Unification — Read full case study</summary>
+            <div class="case-detail__body">
+              <h3>Executive Summary</h3>
+              <p>We led the end-to-end modernization of a 6-store pharmacy chain's infrastructure to align with evolving Georgian healthcare regulations. This project involved a complex migration of 20 years of legacy data, the implementation of an AI-driven product mapping library, and the deployment of a centralized IoT monitoring system to ensure Good Distribution Practice (GDP) compliance.</p>
+              <h3>The Challenge: Legacy Fragmentation &amp; Regulatory Rigidity</h3>
+              <p>The primary hurdle was extracting and normalizing two decades of fragmented data from a 20-year-old legacy ERP system. We faced a significant data mismatch problem where product naming, logistical info, and categorization varied wildly across different sources. To meet strict new regulations, we had to ensure 100% accuracy in how medicines were identified and tracked across the supply chain.</p>
+              <h3>Technical Solution</h3>
+              <p>AI-Powered Data Normalization: implemented a Central Product Library pulling data from the Ministry of Healthcare, the Revenue Service, logistical databases, and historical purchase invoices, then used AI tools to parse and match medicinal names and attributes from these disparate sources. Data Warehousing and Predictive Operations: integrated normalized data into a custom Data Warehouse to build sales prediction models and an automated procurement system that generates purchase orders for individual branches based on real-time sales velocity and predicted demand. IoT Compliance and Regulatory Automation: deployed a centralized IoT network to monitor temperature and humidity across all 6 locations for GDP-compliant pharmaceutical storage, and centralized and automated all mandatory Ministry of Healthcare reporting workflows. Operational Ecosystem: deployed Google Workspace as a centralized digital library for all SOPs and regulatory documents, and implemented HubSpot as a tailored task management environment for sales, marketing, and purchasing operations.</p>
+              <h3>The Impact</h3>
+              <p>By moving away from a 20-year-old manual framework, we transitioned the pharmacy chain into a data-first organization. We achieved total regulatory compliance, reduced procurement waste through automation, unified 6 stores and 20 years of data into a single GDP-compliant infrastructure, and established a scalable foundation for future growth.</p>
+              <h3>Technology Stack</h3>
+              <p>Custom Data Warehouse, IoT temperature and humidity sensors, AI-powered product mapping, ERP integration, Google Workspace, HubSpot, Ministry of Healthcare API reporting.</p>
+            </div>
+          </details>
+
+          <details class="case-detail">
+            <summary class="case-detail__summary">Precision Viticulture: End-to-End IoT &amp; Irrigation Ecosystem — 12-Hectare Vineyard — Read full case study</summary>
+            <div class="case-detail__body">
+              <h3>Executive Summary</h3>
+              <p>Designed and deployed a complete precision agriculture system for a 12-hectare vineyard, combining IoT sensor infrastructure, edge computing, cloud data pipelines, and predictive automation to create a fully autonomous, weather-aware irrigation system.</p>
+              <h3>Research &amp; Agronomic Strategy</h3>
+              <p>The project began with a deep dive into the physiological requirements of the vineyard. We conducted extensive research to define the Optimal Growth Window, establishing specific thresholds for nutrient and soil chemistry including ideal NPK fertilizer ratios, environmental variables covering optimal sunlight exposure and air humidity, the precise moisture level between drought stress and over-saturation to maximize sugar content and crop health, and soil pH balance assessments to guide corrective actions.</p>
+              <h3>Infrastructure &amp; Irrigation Engineering</h3>
+              <p>We designed the physical and financial blueprint for the vineyard's water management. This involved hydraulic planning to design a system pumping water from a low-altitude river up a mountain slope into strategic storage reservoirs, hardware specification calculating requirements for high-pressure pumps, NPK mixers, water storage tanks, and kilometers of hose droppers for gravity-fed irrigation, and a comprehensive cost-benefit analysis for both heavy irrigation machinery and digital infrastructure procurement.</p>
+              <h3>IoT Deployment &amp; Edge Computing</h3>
+              <p>We deployed IoT devices in calculated locations to monitor soil NPK, moisture, and temperature in real-time across the rugged terrain. We built and configured a low-power always-on physical server on-site to act as a data retrieval center ensuring connectivity in a remote area, and connected every sensor to a centralized grid creating a seamless flow of data from the soil to the local server.</p>
+              <h3>Cloud Architecture &amp; Predictive Automation</h3>
+              <p>Built scalable pipelines using Azure and Databricks to sync on-site sensor data with external Weather Forecast APIs. Developed a decision-support model that forecasted water needs based on upcoming weather patterns through evapotranspiration versus predicted rainfall analysis. The system automatically controlled the pumping station, ensuring that the vineyard remained at the optimal moisture level while minimizing the energy required to pump water up the mountain slope. The result was 12 hectares of autonomous, weather-aware irrigation requiring no manual intervention.</p>
+              <h3>Technology Stack</h3>
+              <p>IoT soil sensors (NPK, moisture, temperature), on-premise edge computing server, Azure cloud pipelines, Azure Databricks, Weather Forecast API integration, automated pump control systems.</p>
+            </div>
+          </details>
+
+          <details class="case-detail">
+            <summary class="case-detail__summary">Strategic Architectural Overhaul &amp; Data Integration — E-Commerce Platform Recovery — Read full case study</summary>
+            <div class="case-detail__body">
+              <h3>Executive Summary</h3>
+              <p>Our consultancy was engaged to perform a forensic audit of a failing e-commerce ecosystem. The client operated across Amazon and Shopify and had previously attempted to centralize operations into a single PHP-based monolith. We performed a complete architectural overhaul, replacing the monolith with a modern decoupled microservices cloud architecture.</p>
+              <h3>The Challenge: The Monolith Bottleneck</h3>
+              <p>Every function — ETL processes, API authentications, database procedures, and front-end reporting — existed within a single massive codebase. A minor change in one module often caused unforeseen regressions elsewhere, leading to debugging marathons lasting weeks. The system was so complex and poorly documented that only the original author could navigate it, creating high institutional risk. Reports were hard-coded in Python without a visualization layer, requiring senior developers just to change a simple KPI. The single-threaded monolithic ETL meant data synchronization lagged as sales volume grew.</p>
+              <h3>The Solution: Modern Decoupled Architecture</h3>
+              <p>We proposed a complete disassembly of the monolith, replacing it with a Microservices-oriented Cloud Architecture. Orchestration and ETL via Azure Data Factory replaced hard-coded PHP scripts with visual monitoring of data pipelines, automated retries, and scheduled daily ingestion from Amazon and Shopify APIs. Compute and API Processing via Azure Databricks enabled use of Spark for massive data processing. Data Storage via Azure SQL centralized all fragmented data into a structured Data Warehouse as a Single Source of Truth for sales, finance, buybox metrics, and stock levels. Business Intelligence via Power BI empowered non-technical stakeholders to build and modify their own dashboards. DevOps via Azure DevOps implemented CI/CD pipelines separating Development, Staging, and Production environments. Project Governance via ClickUp tracked every task with full stakeholder transparency.</p>
+              <h3>Strategic Improvements</h3>
+              <p>Beyond initial requirements, we implemented Data Lake Storage using ADLS Gen2 to create a Bronze layer storing raw JSON responses from Amazon, ensuring historical data could be reprocessed if database schemas changed. Infrastructure as Code using Terraform and Bicep ensured the Azure environment was replicable and documented. Unified Identity via Azure AD with Role-Based Access Control ensured staff only accessed data relevant to their department.</p>
+              <h3>Technology Stack</h3>
+              <p>Azure Data Factory, Azure Databricks (Spark), Azure SQL Data Warehouse, ADLS Gen2, Power BI, Azure DevOps (CI/CD), Terraform, Bicep, Azure Active Directory (RBAC), ClickUp, Amazon SP-API, Shopify API.</p>
+            </div>
+          </details>
+
+          <details class="case-detail">
+            <summary class="case-detail__summary">Predictive Infrastructure &amp; Operational Optimization for Urban Water Utility — Read full case study</summary>
+            <div class="case-detail__body">
+              <h3>Executive Summary</h3>
+              <p>A century-old water utility serving a city of more than three million people was running its operations reactively. The SAP ERP incident management module was used as a basic task list, field teams worked without shared performance signals, and the IoT data the company already collected was sitting unused. As lead external consultant, I redesigned the operational process end-to-end, built a unified data warehouse, deployed a machine-learning forecasting layer, and integrated predictive alerts back into SAP. After six months, daily incident throughput more than doubled, average fix time dropped by 33%, and high-severity pipe bursts fell by 12% year-over-year.</p>
+              <h3>Root Causes Identified</h3>
+              <p>The Invisible Asset Crisis: a meaningful portion of the underground network was undocumented or wrongly mapped in the SAP asset inventory, causing field teams to arrive on site and discover the diameter or material on file was wrong — requiring a second trip with different parts. Misaligned Incentives: field crews, warehouse staff, and fleet maintenance operated in silos with no shared KPIs, where finishing a job quickly was effectively punished and the rational response was to delay reporting and stretch tasks. Logistic and Inter-Agency Friction: repairs on magistral pipes required coordinated road closures with City Hall but without forecasting every request arrived as a last-minute emergency, letting small leaks evolve into catastrophic bursts. Infrastructure Stress from Pressure Events: a significant share of pipe failures traced to over-pressure conditions and water hammer effects triggered when pumps lost power, concentrating damage on sloped heritage infrastructure sections.</p>
+              <h3>Technical Solution</h3>
+              <p>Unified Data Warehouse: built a centralized PostgreSQL data warehouse consolidating historical SAP incident records, live IoT telemetry from pressure gauges and reservoir levels, the asset inventory, and the consumption map derived from billing. Data was normalized, deduplicated, and enriched with consistent categorization including incident type, geographic zone, elevation band, asset age cohort, and severity. Correlation and Feature Engineering: surfaced strong correlations between incidents and air temperature and seasonality, sediment quantity, geographic zone and elevation, pipe age and material cohort, day-of-week and time-of-day patterns, and in-pipe pressure profiles and pump events. Forecasting Model: built a machine learning forecasting service producing rolling predictions of incident volume and likely geographic distribution, achieving 80% daily confidence, 90% weekly confidence, and 93% monthly confidence. Alerting and SAP Integration: built a KPI and alert management layer in PostgreSQL connected back into SAP via a custom REST API, generating work orders and dispatch signals inside the system the operations team already used. Visualization: Power BI dashboards covering incident volume against forecasts, fix-time distribution, team utilization, warehouse readiness against predicted demand, and live correlation between pressure profiles and infrastructure stress events.</p>
+              <h3>Achieved Results</h3>
+              <p>Incidents resolved per day increased from 40–55 to 80–140 — a 100% to 150% improvement. Average fix time per incident reduced from 4.5 hours to 3.0 hours — 33% faster. High-severity pipe bursts fell by 12% year-over-year in a controlled comparable period. Forecasting capability moved from zero to 80% daily, 90% weekly, and 93% monthly. Activated operational teams increased from approximately 25 to 30 out of 82 total teams — a 20% effective capacity gain. The project shifted the financial profile from emergency-driven OpEx toward planned lower-cost maintenance. The utility moved from being treated as a problematic neighbor to a data-driven partner in urban management, with improved permit speed and political capital with City Hall.</p>
+              <h3>Technology Stack</h3>
+              <p>SAP ERP (Incident Management module), PostgreSQL data warehouse, Python ML forecasting, Power BI, IoT pressure and level telemetry, custom REST APIs, Azure cloud infrastructure.</p>
+            </div>
+          </details>
+
+        </div>
       </div>
     </section>
 
