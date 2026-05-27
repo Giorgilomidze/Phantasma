@@ -838,22 +838,15 @@
           return `<div class="slide-built__row">${inner}</div>`;
         })
         .join('');
-      const imageHTML = c.built.image
-        ? `<button class="slide-built__image-btn" aria-label="View full image" data-src="${c.built.image.src}" data-alt="${c.built.image.alt}">
-             <img class="slide-built__image" src="${c.built.image.src}" alt="${c.built.image.alt}" />
-             <span class="slide-built__image-hint">Click to enlarge</span>
-           </button>`
-        : '';
       return `
         <article class="slide">
           <span class="slide__chip">${c.industry}</span>
           <h2 class="slide__h">What we built</h2>
-          <div class="slide-built__body${c.built.image ? ' slide-built__body--has-image' : ''}">
+          <div class="slide-built__body">
             <div>
               <div class="slide-built__diagram">${rows}</div>
               <p class="slide-built__caption">${c.built.caption}</p>
             </div>
-            ${imageHTML}
           </div>
         </article>
       `;
