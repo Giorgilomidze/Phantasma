@@ -828,7 +828,10 @@
         })
         .join('');
       const imageHTML = c.built.image
-        ? `<img class="slide-built__image" src="${c.built.image.src}" alt="${c.built.image.alt}" />`
+        ? `<button class="slide-built__image-btn" aria-label="View full image" data-src="${c.built.image.src}" data-alt="${c.built.image.alt}">
+             <img class="slide-built__image" src="${c.built.image.src}" alt="${c.built.image.alt}" />
+             <span class="slide-built__image-hint">Click to enlarge</span>
+           </button>`
         : '';
       return `
         <article class="slide">
@@ -1148,6 +1151,40 @@
   }
 
   /* ---------------------------------------------------------------------
+     Image zoom overlay
+     --------------------------------------------------------------------- */
+  function bootImageZoom() {
+    const overlay = document.createElement('div');
+    overlay.className = 'img-zoom-overlay';
+    overlay.innerHTML = `
+      <button class="img-zoom-overlay__close" aria-label="Close full image">×</button>
+      <img class="img-zoom-overlay__img" src="" alt="" />
+    `;
+    document.body.appendChild(overlay);
+
+    const overlayImg = overlay.querySelector('.img-zoom-overlay__img');
+
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('.slide-built__image-btn');
+      if (btn) {
+        overlayImg.src = btn.dataset.src;
+        overlayImg.alt = btn.dataset.alt;
+        overlay.classList.add('is-open');
+        overlay.focus();
+        return;
+      }
+      if (overlay.classList.contains('is-open') &&
+          (e.target === overlay || e.target.closest('.img-zoom-overlay__close'))) {
+        overlay.classList.remove('is-open');
+      }
+    });
+
+    overlay.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') overlay.classList.remove('is-open');
+    });
+  }
+
+  /* ---------------------------------------------------------------------
      Boot
      --------------------------------------------------------------------- */
   function init() {
@@ -1157,6 +1194,7 @@
     Lightbox.bind();
     bootApproachStrip();
     bootCalendly();
+    bootImageZoom();
   }
 
   if (document.readyState === 'loading') {
