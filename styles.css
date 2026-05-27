@@ -1511,6 +1511,25 @@ kbd {
 }
 
 /* Cover slide hero */
+.slide--cover-with-image .slide-cover__main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  align-items: start;
+  height: 100%;
+}
+.slide--cover-with-image .slide-cover__text {
+  display: flex;
+  flex-direction: column;
+}
+.slide--cover-with-image .slide-cover__image-btn {
+  height: 100%;
+  min-height: 260px;
+}
+.slide--cover-with-image .slide-built__image {
+  height: 100%;
+  object-fit: cover;
+}
 .slide-cover__hero {
   margin-top: var(--space-7);
   display: flex;

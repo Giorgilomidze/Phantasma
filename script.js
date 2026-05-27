@@ -779,12 +779,23 @@
           </div>
         `;
       }
+      const coverImageHTML = c.built && c.built.image
+        ? `<button class="slide-built__image-btn slide-cover__image-btn" aria-label="View full image" data-src="${c.built.image.src}" data-alt="${c.built.image.alt}">
+             <img class="slide-built__image" src="${c.built.image.src}" alt="${c.built.image.alt}" />
+             <span class="slide-built__image-hint">Click to enlarge</span>
+           </button>`
+        : '';
       return `
-        <article class="slide" id="slide-active">
+        <article class="slide slide--cover-with-image" id="slide-active">
           <span class="slide__chip">${c.industry}</span>
-          <h2 class="slide__h" id="lightbox-title">${c.title}</h2>
-          <p class="slide__lead">${c.outcome}</p>
-          ${heroBlock}
+          <div class="slide-cover__main">
+            <div class="slide-cover__text">
+              <h2 class="slide__h" id="lightbox-title">${c.title}</h2>
+              <p class="slide__lead">${c.outcome}</p>
+              ${heroBlock}
+            </div>
+            ${coverImageHTML}
+          </div>
         </article>
       `;
     }
