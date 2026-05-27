@@ -766,7 +766,7 @@
 
       counter.textContent = `Case ${String(caseIndex + 1).padStart(2, '0')} of ${String(CASES.length).padStart(2, '0')}`;
       slideCounter.innerHTML =
-        `<strong>${String(slideIndex + 1).padStart(2, '0')}</strong> / 05`;
+        `<strong>${String(slideIndex + 1).padStart(2, '0')}</strong> / 06`;
 
       // Slide content
       stage.innerHTML = renderSlide(c, slideIndex);
