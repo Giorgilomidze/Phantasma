@@ -735,7 +735,7 @@
     }
 
     function nextSlide() {
-      if (slideIndex < 4) {
+      if (slideIndex < 5) {
         slideIndex++;
         render();
       }
@@ -747,7 +747,7 @@
       }
     }
     function goToSlide(i) {
-      slideIndex = Math.max(0, Math.min(4, i));
+      slideIndex = Math.max(0, Math.min(5, i));
       render();
     }
     function nextCase() {
