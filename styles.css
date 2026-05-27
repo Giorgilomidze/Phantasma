@@ -515,13 +515,16 @@ kbd {
   justify-self: end;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-3);
   padding-left: var(--space-5);
   border-left: 1px solid var(--rule);
   text-align: right;
   opacity: 0;
   transform: translateY(12px);
   transition: opacity 500ms ease-out 360ms, transform 500ms ease-out 360ms;
+}
+.hero__strip .metric__num {
+  font-size: var(--type-h2);
 }
 .hero__strip .eyebrow--strip { align-self: stretch; text-align: right; }
 .hero__strip .metric { align-items: flex-end; text-align: right; }
