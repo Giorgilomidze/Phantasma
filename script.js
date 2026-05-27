@@ -66,6 +66,13 @@
       },
       stack: ['Azure Data Factory', 'ADLS Gen2', 'MSSQL', 'Power BI', 'Power Apps', 'Azure ML', 'Google Sheets bridge'],
       engagement: { duration: '~3 months', tco: '€60 / month operating cost', summary: 'Replaces ~75 hours of senior FTE time per cycle.' },
+      fullText: [
+        { h: 'Executive Summary', p: 'Developed an end-to-end data automation ecosystem for a multi-channel e-commerce firm managing 8,000+ SKUs and 20+ manufacturers. The project transformed a manual, error-prone accounting process involving complex contract pricing and marketplace commissions into a scalable, $60/month cloud-native solution.' },
+        { h: 'The Challenge', p: 'The company faced a massive operational bottleneck. Variable pricing across 20 manufacturers, multi-channel marketplace commission complexity, logistical fragmentation with diverse shipping costs, and a resource drain of 80 man-hours (3 highly skilled staff over 5 days) to calculate COGS and generate invoices.' },
+        { h: 'Technical Solution', p: 'Architected a robust ETL/ELT pipeline using Azure and Power Platform. Built a custom API retrieval platform pulling from multiple e-commerce marketplaces, implemented a multi-format Data Lake handling JSON, CSV, and Parquet, and developed a parallel validation bridge ensuring 100% data integrity. Engineered a star schema database with fact tables for transactional data and dimension tables mapping SKUs to contract terms. Created a Power App for logistics teams to update delivery rates, and configured a Google Sheets-to-Azure pipeline for business users to update contract terms without touching code. Developed Paginated Reports that automatically calculated net margins and generated client-ready invoices.' },
+        { h: 'Business Impact', p: 'Total labor time reduced from 80 hours to 5 hours — 93.7% reduction. Turnaround time cut from 5 days to 2 days. Operational cost moved from 3 senior FTEs to a $60 cloud fee plus 5 QA hours. Scalability shifted from linear to exponential with zero bottleneck. 75 hours of high-level employee time reclaimed per cycle.' },
+        { h: 'Technology Stack', p: 'Azure Data Factory, Azure Data Lake Storage Gen2, MSSQL SQL Data Warehouse, Power BI Paginated Reports, Power Apps, Google Sheets API, Amazon SP-API, Shopify API.' },
+      ],
     },
 
     {
@@ -128,6 +135,13 @@
       },
       stack: ['Azure Databricks', 'Azure Data Factory', 'Azure Machine Learning', 'Power BI', 'Power Apps', 'SharePoint', 'ClickUp API', 'Azure AD / RLS'],
       engagement: { duration: '~18 months', tco: '€15K total cost over 2 years (cloud + IT support)', summary: 'Removed the specialist bottleneck across six acquired sites.' },
+      fullText: [
+        { h: 'Executive Summary', p: 'A rapidly expanding mining and raw materials producer faced severe operational bottlenecks following a series of acquisitions. Disconnected data silos — spreadsheets, local drives, and manual accounting — hindered management of the full mining lifecycle from land acquisition to ecological restoration. We designed an integrated data ecosystem that automated document processing, unified task management with financial flows, and provided C-level executives with real-time decision-making snapshots.' },
+        { h: 'The Challenge', p: 'Rapid acquisition of new companies led to non-standardized processes across different mining sites. Critical information was trapped in local computers, manual invoices, and isolated accounting software. The lifecycle involved high-stakes legal documentation, land rights, mining operations, and green-coverage regeneration. Massive human effort was required to map cash flows to specific tasks and process physical invoices.' },
+        { h: 'Technical Solution', p: 'Used Azure Data Factory and Databricks to ingest data from the Accounting API and ClickUp API. Implemented Azure Machine Learning OCR to digitize manual invoices, extract metadata, and automatically map them to project tasks. Centralized all operations in ClickUp, ensuring every task was linked to its respective financial cash flow. Developed Power Apps for structured data entry and used SharePoint as a governed document library. Implemented Row-Level Security and Active Directory integration to ensure departments only accessed relevant data.' },
+        { h: 'Business Impact', p: 'Monthly task capacity grew from 40 to 280 tasks — 700% increase. Raw material processing increased from 3,500 to 11,000 units — 314% increase. Labor inefficiency reduced 40%. Data accessibility expanded from under 10% siloed to 80% organization-wide. Total cost of ownership €15,000 over two years covering all cloud services and IT support.' },
+        { h: 'Technology Stack', p: 'Azure Databricks, Azure Data Factory, Azure Machine Learning (OCR), Power BI, Power Apps, SharePoint, ClickUp API, Azure Active Directory, Row-Level Security.' },
+      ],
     },
 
     {
@@ -193,6 +207,13 @@
       },
       stack: ['Azure Data Factory', 'Azure Databricks', 'MSSQL', 'Azure SQL', 'Power BI', 'Azure DevOps', 'Terraform / Bicep', 'Azure AD / Entra ID', 'ClickUp'],
       engagement: { duration: '~6 months', tco: 'Replaces failing monolith — operating cost dropped to standard Azure-native run rates', summary: 'Forensic audit, then a complete decoupled rebuild.' },
+      fullText: [
+        { h: 'Executive Summary', p: 'Engaged to perform a forensic audit of a failing e-commerce ecosystem operating across Amazon and Shopify. The client had previously attempted to centralize operations into a single PHP-based monolith. We performed a complete architectural overhaul, replacing the monolith with a modern decoupled microservices cloud architecture.' },
+        { h: 'The Challenge', p: 'Every function — ETL processes, API authentications, database procedures, and front-end reporting — existed within one massive codebase. A minor change in one module caused unforeseen regressions elsewhere, leading to debugging marathons lasting weeks. The system was so complex only the original author could navigate it. Reports were hard-coded in Python, requiring senior developers just to change a simple KPI. Single-threaded ETL meant data synchronization lagged as sales volume grew.' },
+        { h: 'Technical Solution', p: 'Azure Data Factory replaced hard-coded PHP scripts with visual monitoring of data pipelines, automated retries, and scheduled daily ingestion from Amazon and Shopify APIs. Azure Databricks enabled Spark for massive data processing. Azure SQL centralized all fragmented data into a Single Source of Truth. Power BI empowered non-technical stakeholders to build their own dashboards. Azure DevOps implemented CI/CD pipelines separating Development, Staging, and Production. Data Lake Storage ADLS Gen2 created a Bronze layer storing raw JSON for historical reprocessing. Terraform and Bicep ensured Infrastructure as Code. Azure AD with RBAC secured department-level data access.' },
+        { h: 'Business Impact', p: 'Replaced a fragile monolith with a resilient microservices architecture. Operating cost dropped to standard Azure-native run rates. Non-technical stakeholders gained self-service BI. Zero single-point-of-failure in the new architecture. Full CI/CD lifecycle with separated environments.' },
+        { h: 'Technology Stack', p: 'Azure Data Factory, Azure Databricks (Spark), Azure SQL Data Warehouse, ADLS Gen2, Power BI, Azure DevOps (CI/CD), Terraform, Bicep, Azure Active Directory (RBAC), ClickUp, Amazon SP-API, Shopify API.' },
+      ],
     },
 
     {
@@ -247,6 +268,13 @@
       },
       stack: ['IoT (custom sensors)', 'On-prem edge server', 'Azure Data Factory', 'Azure Databricks', 'Weather APIs', 'Predictive ML'],
       engagement: { duration: '~9 months including agronomic research', tco: 'Hardware + cloud + edge support', summary: 'Research, hardware design, deployment, and pump automation in one engagement.' },
+      fullText: [
+        { h: 'Executive Summary', p: 'Designed and deployed a complete precision agriculture system for a 12-hectare vineyard, combining IoT sensor infrastructure, edge computing, cloud data pipelines, and predictive automation to create a fully autonomous, weather-aware irrigation system.' },
+        { h: 'Research & Agronomic Strategy', p: 'Conducted extensive research to define the Optimal Growth Window, establishing specific thresholds for nutrient and soil chemistry including ideal NPK fertilizer ratios, environmental variables covering optimal sunlight exposure and air humidity, the precise moisture level between drought stress and over-saturation to maximize sugar content, and soil pH balance assessments.' },
+        { h: 'Infrastructure & IoT Deployment', p: 'Designed hydraulic planning for a system pumping water from a low-altitude river up a mountain slope into storage reservoirs. Specified high-pressure pumps, NPK mixers, water storage tanks, and kilometers of hose droppers for gravity-fed irrigation. Deployed IoT devices in calculated locations to monitor soil NPK, moisture, and temperature in real-time. Built a low-power always-on physical server on-site as a data retrieval center ensuring connectivity in a remote area.' },
+        { h: 'Cloud Architecture & Automation', p: 'Built scalable pipelines using Azure and Databricks to sync on-site sensor data with external Weather Forecast APIs. Developed a decision-support model forecasting water needs based on upcoming weather patterns through evapotranspiration versus predicted rainfall. The system automatically controlled the pumping station, keeping the vineyard at optimal moisture while minimizing energy consumption. Result: 12 hectares of autonomous, weather-aware irrigation requiring no manual intervention.' },
+        { h: 'Technology Stack', p: 'IoT soil sensors (NPK, moisture, temperature), on-premise edge computing server, Azure cloud pipelines, Azure Databricks, Weather Forecast API integration, automated pump control systems.' },
+      ],
     },
 
     {
@@ -308,6 +336,13 @@
       },
       stack: ['Custom Data Warehouse', 'AI mapping toolchain', 'IoT sensors', 'New ERP integration', 'Google Workspace', 'HubSpot'],
       engagement: { duration: '~12 months', tco: 'On-prem + cloud hybrid; details per branch', summary: 'Migration, mapping, IoT rollout, and regulatory automation in one programme.' },
+      fullText: [
+        { h: 'Executive Summary', p: 'Led the end-to-end modernization of a 6-store pharmacy chain\'s infrastructure to align with evolving Georgian healthcare regulations. The project involved a complex migration of 20 years of legacy data, implementation of an AI-driven product mapping library, and deployment of a centralized IoT monitoring system to ensure Good Distribution Practice (GDP) compliance.' },
+        { h: 'The Challenge', p: 'The primary hurdle was extracting and normalizing two decades of fragmented data from a 20-year-old legacy ERP system. Product naming, logistical info, and categorization varied wildly across different sources. To meet strict new regulations, 100% accuracy was required in how medicines were identified and tracked across the supply chain.' },
+        { h: 'Technical Solution', p: 'Implemented a Central Product Library pulling data from the Ministry of Healthcare, Revenue Service, logistical databases, and historical purchase invoices, using AI tools to parse and match medicinal names across disparate sources. Built a custom Data Warehouse with sales prediction models and an automated procurement system generating purchase orders per branch based on real-time sales velocity. Deployed a centralized IoT network monitoring temperature and humidity across all 6 locations for GDP-compliant pharmaceutical storage. Deployed Google Workspace for all SOPs and regulatory documents, and HubSpot for sales, marketing, and purchasing operations.' },
+        { h: 'Business Impact', p: 'Achieved total regulatory compliance. Unified 6 stores and 20 years of data into a single GDP-compliant infrastructure. Reduced procurement waste through automated demand forecasting. Established a scalable foundation for future growth. Centralized and automated all mandatory Ministry of Healthcare reporting workflows.' },
+        { h: 'Technology Stack', p: 'Custom Data Warehouse, IoT temperature and humidity sensors, AI-powered product mapping, ERP integration, Google Workspace, HubSpot, Ministry of Healthcare API reporting.' },
+      ],
     },
 
     {
@@ -370,6 +405,13 @@
       },
       stack: ['Azure Data Factory', 'Azure Databricks', 'Azure Machine Learning', 'MSSQL', 'Shopify API', 'Amazon SP-API', 'External market trend APIs', 'Python · SQL'],
       engagement: { duration: '~8 months', tco: 'Operational on Azure-native run rates', summary: 'Outperformed human procurement specialists in backtesting against 4 years of history.' },
+      fullText: [
+        { h: 'Executive Summary', p: 'Developed an end-to-end data pipeline and machine learning solution for a large-scale e-commerce distributor managing 12,000 SKUs across 200 brands. The project automated the unification of fragmented sales channels and inventory data, replacing manual procurement processes with a predictive model that achieved 98% forecasting accuracy, significantly outperforming traditional human-led purchasing at 81%.' },
+        { h: 'The Challenge', p: 'Data was fragmented across multiple e-commerce platforms and 40 different manufacturers. Managing 12,000 products with varying logistical requirements including PZN, EAN, and GTIN codes, packaging types, and expiration dates created extreme complexity. Sales were highly sensitive to seasonality, delivery restrictions, and external market trends. Manual stock maintenance led to frequent overstocking causing capital tie-up or understocking causing lost revenue.' },
+        { h: 'Technical Solution', p: 'Orchestrated Azure Data Factory pipelines to ingest data via APIs and Databricks from disparate sales channels. Stored and structured raw data into an MSSQL Data Warehouse. Unified sales data from multiple channels into a single Golden Record table. Modeled sales data based on rolling windows of 7, 30, and 90 days, year-over-year comparisons, and category-level trends. Integrated external API data to capture broader market trends and seasonal shifts. Implemented an Azure Machine Learning model generating automated replenishment suggestions. Conducted rigorous backtesting comparing forecasts against historical inventory levels and actual sales performance.' },
+        { h: 'Business Impact', p: 'Model precision reached 98% after cleaning data externalities. Significantly outperformed human procurement specialists who averaged 81% accuracy. Automated generation of invoices and stock listings, reducing manual labor and human error in the supply chain. Eliminated overstocking and understocking cycles across 12,000 SKUs.' },
+        { h: 'Technology Stack', p: 'Azure Data Factory, Azure Databricks, MSSQL Data Warehouse, Azure Machine Learning, SQL, Python, Shopify API, Amazon SP-API, External Market Trend APIs.' },
+      ],
     },
 
     {
@@ -425,6 +467,13 @@
       },
       stack: ['SAP ERP', 'PostgreSQL', 'Python ML', 'Power BI', 'IoT (pressure & level sensors)', 'Custom REST APIs'],
       engagement: { duration: '~6 months', tco: 'Discovery, design, build, and 6-month support', summary: 'Turned a reactive century-old operation into a predictive, data-driven enterprise — without replacing SAP.' },
+      fullText: [
+        { h: 'Executive Summary', p: 'A century-old water utility serving a city of more than three million people was running its operations reactively. The SAP ERP incident management module was used as a basic task list, field teams worked without shared performance signals, and IoT data already collected was sitting unused. We redesigned the operational process end-to-end, built a unified data warehouse, deployed a machine-learning forecasting layer, and integrated predictive alerts back into SAP. Daily incident throughput more than doubled, average fix time dropped by 33%, and high-severity pipe bursts fell by 12% year-over-year.' },
+        { h: 'Root Causes Identified', p: 'A meaningful portion of the underground network was undocumented or wrongly mapped in SAP, causing field teams to discover wrong pipe specs on-site requiring second trips. Field crews, warehouse staff, and fleet maintenance operated in silos with no shared KPIs — finishing a job quickly was effectively punished. Without forecasting, every road closure request to City Hall arrived as a last-minute emergency. A significant share of pipe failures traced to over-pressure conditions and water hammer effects on sloped heritage infrastructure sections.' },
+        { h: 'Technical Solution', p: 'Built a centralized PostgreSQL data warehouse consolidating SAP incident records, live IoT telemetry from pressure gauges and reservoir levels, the asset inventory, and billing-derived consumption map. Surfaced correlations between incidents and air temperature, sediment quantity, geographic zone and elevation, pipe age and material cohort, and in-pipe pressure profiles. Built a machine learning forecasting service achieving 80% daily, 90% weekly, and 93% monthly confidence. Connected forecast-driven alerts back into SAP via custom REST API, generating work orders inside the system operators already used. Power BI dashboards covered incident volume against forecasts, fix-time distribution, team utilization, and warehouse readiness.' },
+        { h: 'Business Impact', p: 'Daily incidents resolved increased from 40–55 to 80–140 — a 100–150% improvement. Average fix time reduced from 4.5 hours to 3.0 hours — 33% faster. High-severity pipe bursts fell 12% year-over-year in a controlled comparable period. Activated operational teams increased from approximately 25 to 30 out of 82 total teams. The utility moved from being treated as a problematic neighbor to a data-driven partner in urban management, with improved permit speed and political capital with City Hall.' },
+        { h: 'Technology Stack', p: 'SAP ERP (Incident Management), PostgreSQL data warehouse, Python ML forecasting, Power BI, IoT pressure and level telemetry, custom REST APIs, Azure cloud infrastructure.' },
+      ],
     },
   ];
 
@@ -572,7 +621,7 @@
     const announce = document.getElementById('lightbox-announce');
     const hint = document.getElementById('lightbox-hint');
 
-    const SLIDE_LABELS = ['Cover', 'The Situation', 'What we built', 'Impact', 'Stack & Engagement'];
+    const SLIDE_LABELS = ['Cover', 'The Situation', 'What we built', 'Impact', 'Stack & Engagement', 'Full Case Study'];
 
     function open(slug) {
       if (isAnimating || isOpen) return;
@@ -725,7 +774,7 @@
 
       // Dots
       dotsEl.innerHTML = '';
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 6; i++) {
         const li = document.createElement('li');
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -738,13 +787,13 @@
 
       // Nav buttons
       prevBtn.disabled = slideIndex === 0;
-      nextBtn.disabled = slideIndex === 4;
+      nextBtn.disabled = slideIndex === 5;
 
       // Announce
       if (announceCase) {
         announce.textContent = `Now viewing case ${caseIndex + 1} of ${CASES.length}: ${c.title}`;
       } else {
-        announce.textContent = `Slide ${slideIndex + 1} of 5: ${SLIDE_LABELS[slideIndex]}`;
+        announce.textContent = `Slide ${slideIndex + 1} of 6: ${SLIDE_LABELS[slideIndex]}`;
       }
     }
 
@@ -755,8 +804,24 @@
         case 2: return slideBuilt(c);
         case 3: return slideImpact(c);
         case 4: return slideStack(c);
+        case 5: return slideFullCase(c);
       }
       return '';
+    }
+
+    function slideFullCase(c) {
+      if (!c.fullText) return `<article class="slide"><span class="slide__chip">${c.industry}</span><h2 class="slide__h">Full Case Study</h2><p>No extended content available.</p></article>`;
+      const sections = c.fullText.map(s => `
+        <div class="slide-full__section">
+          <h3 class="slide-full__h">${s.h}</h3>
+          <p class="slide-full__p">${s.p}</p>
+        </div>`).join('');
+      return `
+        <article class="slide slide--full">
+          <span class="slide__chip">${c.industry}</span>
+          <h2 class="slide__h">Full Case Study</h2>
+          <div class="slide-full__body">${sections}</div>
+        </article>`;
     }
 
     function slideCover(c) {

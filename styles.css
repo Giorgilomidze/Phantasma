@@ -1941,6 +1941,30 @@ kbd {
   letter-spacing: -0.01em;
 }
 
+/* Full case study slide */
+.slide--full .slide__h { margin-bottom: var(--space-4); }
+.slide-full__body {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4) var(--space-6);
+}
+.slide-full__section {}
+.slide-full__h {
+  font-family: var(--font-body);
+  font-size: var(--type-caption);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+}
+.slide-full__p {
+  font-size: var(--type-body);
+  color: var(--ink);
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* -------------------------------------------------------------------------
    19. Body lock when lightbox open
    ------------------------------------------------------------------------- */
