@@ -1450,7 +1450,7 @@ kbd {
 
 .lightbox__stage {
   overflow-y: auto;
-  padding: var(--space-7) var(--space-7);
+  padding: var(--space-5) var(--space-7);
   position: relative;
 }
 .lightbox__stage > .slide {
@@ -1555,7 +1555,7 @@ kbd {
   color: var(--accent-deep);
   border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
   border-radius: var(--radius-sm);
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-3);
 }
 .slide__h {
   font-family: var(--font-display);
@@ -1564,7 +1564,7 @@ kbd {
   font-size: clamp(1.875rem, 1.5rem + 1.4vw, 2.75rem);
   line-height: 1.05;
   letter-spacing: -0.02em;
-  margin: 0 0 var(--space-5);
+  margin: 0 0 var(--space-4);
   max-width: 22ch;
   text-wrap: balance;
 }
@@ -1572,7 +1572,7 @@ kbd {
   font-size: var(--type-body-lg);
   color: var(--ink-soft);
   max-width: 50ch;
-  margin: 0 0 var(--space-7);
+  margin: 0 0 var(--space-5);
 }
 
 /* Cover slide hero */
@@ -1921,7 +1921,7 @@ kbd {
 }
 .slide-stack__cta {
   grid-column: 1 / -1;
-  margin-top: var(--space-5);
+  margin-top: var(--space-3);
   padding: var(--space-5) var(--space-6);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--rule));
