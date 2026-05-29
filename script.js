@@ -558,6 +558,7 @@
      --------------------------------------------------------------------- */
   function renderBento() {
     const bento = document.getElementById('bento');
+    if (!bento) return;
     bento.innerHTML = '';
 
     // Render in declared order; CSS grid-area places them visually
@@ -994,6 +995,7 @@
     }
 
     function bind() {
+      if (!root) return;
       // Close handlers
       root.querySelectorAll('[data-close]').forEach((el) =>
         el.addEventListener('click', close)
