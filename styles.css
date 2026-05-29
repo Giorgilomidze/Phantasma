@@ -102,6 +102,14 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+.scroll-anchor {
+  position: absolute;
+  top: 0;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);
