@@ -1185,7 +1185,7 @@
       });
       widget.setAttribute('data-url', `${CALENDLY_URL}?${params.toString()}`);
       widget.style.minWidth = '320px';
-      widget.style.height = '780px';
+      widget.style.height = '630px';
       placeholder.appendChild(widget);
 
       // Inject Calendly's external script once
