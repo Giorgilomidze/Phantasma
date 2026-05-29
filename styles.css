@@ -416,21 +416,16 @@ kbd {
   border-radius: 2px;
 }
 .nav-home-link {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.75rem;
-  background: var(--clay);
-  color: #fff !important;
-  border-radius: 4px;
+  color: var(--ink-soft);
   font-family: var(--font-body);
   font-size: 0.8125rem;
   font-weight: 500;
   text-decoration: none;
-  letter-spacing: 0.03em;
-  transition: opacity 0.15s;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 0.15s;
 }
-.nav-home-link:hover { opacity: 0.85; }
-.nav-home-link::after { display: none !important; }
+.nav-home-link:hover { color: var(--ink); }
 
 /* -------------------------------------------------------------------------
    8. Hero
