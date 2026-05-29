@@ -375,13 +375,27 @@ kbd {
 .site-header__row > .btn       { grid-column: 3; justify-self: end; }
 
 .wordmark {
+  position: relative;
   font-family: var(--font-display);
   font-weight: 600;
   font-variation-settings: "opsz" 36, "SOFT" 30;
   font-size: 1.5rem;
   letter-spacing: -0.02em;
   color: var(--ink);
+  text-decoration: none;
 }
+.wordmark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  height: 1px;
+  width: 0;
+  background: var(--accent);
+  transform: translateX(-50%);
+  transition: width 200ms ease-out;
+}
+.wordmark:hover::after { width: 100%; }
 .wordmark--footer { font-size: 1.625rem; }
 
 .site-nav {
@@ -416,16 +430,25 @@ kbd {
   border-radius: 2px;
 }
 .nav-home-link {
+  position: relative;
   color: var(--ink-soft);
-  font-family: var(--font-body);
-  font-size: 0.8125rem;
-  font-weight: 500;
+  padding: 8px 0;
   text-decoration: none;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transition: color 0.15s;
+  transition: color 150ms ease-out;
+}
+.nav-home-link::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  height: 1px;
+  width: 0;
+  background: var(--accent);
+  transform: translateX(-50%);
+  transition: width 200ms ease-out;
 }
 .nav-home-link:hover { color: var(--ink); }
+.nav-home-link:hover::after { width: 100%; }
 
 /* -------------------------------------------------------------------------
    8. Hero
