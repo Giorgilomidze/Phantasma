@@ -482,27 +482,21 @@ kbd {
 }
 .hero__h {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-variation-settings: "opsz" 144, "SOFT" 50;
-  font-size: var(--type-hero);
-  line-height: 1.04; /* enough room for descenders ('y', 'g', 'p') */
-  letter-spacing: -0.025em;
+  font-weight: 500;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  font-size: var(--type-h1);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   margin: var(--space-5) 0 var(--space-6);
   color: var(--ink);
   max-width: 100%;
+  white-space: nowrap;
 }
 .hero__line {
-  display: block;
-  overflow: hidden;
-  /* extra room below the baseline so descenders aren't clipped by overflow:hidden */
-  padding-bottom: 0.12em;
-}
-.hero__line {
-  display: block;
-  overflow: hidden;
+  display: inline;
 }
 .hero__line span {
-  display: inline-block;
+  display: inline;
 }
 
 /* Initial state: text masked from below */
