@@ -52,7 +52,8 @@
         ],
         caption:
           'A single source of truth that pulls from your sales channels, normalises pricing per contract, and emits client-ready invoices. A small Power App lets logistics update delivery rates without touching code.',
-        image: { src: './images/Slider Thumbnail 1 - automatic invoiceing.png', alt: 'E-commerce cost engine' },
+        image: { src: './images/case1-built.jpg', alt: 'E-commerce cost engine' },
+      thumbnail: { src: './images/Slider Thumbnail 1 - automatic invoiceing.png', alt: 'E-commerce cost engine' },
       },
       impact: {
         type: 'table',
@@ -121,7 +122,8 @@
         ],
         caption:
           'Every operational task — from land acquisition to vegetation restoration — links to its financial cash flow. Weekly automated reports flag what is behind schedule before a manager has to ask.',
-        image: { src: './images/Slider Thumbnail 2 - Mining.png', alt: 'Industrial scale-up & operational intelligence' },
+        image: { src: './images/case2-built.jpg', alt: 'Industrial scale-up & operational intelligence' },
+      thumbnail: { src: './images/Slider Thumbnail 2 - Mining.png', alt: 'Industrial scale-up & operational intelligence' },
       },
       impact: {
         type: 'table',
@@ -194,7 +196,8 @@
         ],
         caption:
           'A microservices-oriented architecture: the failure of one component cannot bring down the rest. Bronze data layer means schema changes can be reprocessed without re-fetching the source.',
-        image: { src: './images/Slider Thumbnail 3 - Warehouse forecasting.png', alt: 'Monolith to microservices recovery' },
+        image: { src: './images/case3-built.jpg', alt: 'Monolith to microservices recovery' },
+      thumbnail: { src: './images/Slider Thumbnail 3 - Warehouse forecasting.png', alt: 'Monolith to microservices recovery' },
       },
       impact: {
         type: 'tiles',
@@ -255,7 +258,8 @@
         ],
         caption:
           'Agronomic research first — defining the optimal moisture window for sugar content, the ideal NPK ratios, the soil pH range. Then sensors, edge hub, cloud, and pumps wired into one closed loop.',
-        image: { src: './images/Slider Thumbnail 5 - IOT.png', alt: 'Precision viticulture IoT' },
+        image: { src: './images/case4-built.jpg', alt: 'Precision viticulture IoT' },
+      thumbnail: { src: './images/Slider Thumbnail 5 - IOT.png', alt: 'Precision viticulture IoT' },
       },
       impact: {
         type: 'tiles',
@@ -323,7 +327,8 @@
         ],
         caption:
           'AI parses and matches medicinal names across four authoritative sources, eliminating manual entry errors. IoT keeps every store within GDP-mandated environmental conditions. Reporting to the Ministry is automated.',
-        image: { src: './images/Slider Thumbnail 4 - pharmacy.png', alt: 'Pharmacy chain digital transformation' },
+        image: { src: './images/case5-built.jpg', alt: 'Pharmacy chain digital transformation' },
+      thumbnail: { src: './images/Slider Thumbnail 4 - pharmacy.png', alt: 'Pharmacy chain digital transformation' },
       },
       impact: {
         type: 'tiles',
@@ -391,7 +396,8 @@
         ],
         caption:
           'Sales channels unified into a "golden record" table. Logistical metadata standardised. Forecasts engineered against rolling windows and external market signals. Replenishment recommendations are generated automatically per SKU.',
-        image: { src: './images/Slider Thumbnail 6 - Failed project transformation.png', alt: 'Demand forecasting engine' },
+        image: { src: './images/case6-built.jpg', alt: 'Demand forecasting engine' },
+      thumbnail: { src: './images/Slider Thumbnail 6 - Failed project transformation.png', alt: 'Demand forecasting engine' },
       },
       impact: {
         type: 'table',
@@ -453,7 +459,8 @@
         ],
         caption:
           'Unified a century of fragmented operational data into a single warehouse. ML forecasting achieved 80% daily / 90% weekly / 93% monthly confidence. Alerts and work orders pushed back into SAP so field teams never had to leave the system they already used.',
-        image: { src: './images/Slider Thumbnail 7 - Water incident managment.png', alt: 'Predictive infrastructure for urban water utility' },
+        image: { src: './images/case7-built.png', alt: 'Predictive infrastructure for urban water utility' },
+      thumbnail: { src: './images/Slider Thumbnail 7 - Water incident managment.png', alt: 'Predictive infrastructure for urban water utility' },
       },
       impact: {
         type: 'table',
@@ -576,7 +583,7 @@
       slide.className = 'case-reel__slide';
       slide.innerHTML = `
         <button type="button" class="case-reel__card" aria-label="Open case study: ${c.title}">
-          <img class="case-reel__img" src="${c.built.image.src}" alt="${c.built.image.alt}" loading="lazy" />
+          <img class="case-reel__img" src="${c.thumbnail.src}" alt="${c.thumbnail.alt}" loading="lazy" />
           <div class="case-reel__overlay">
             <span class="case-reel__title">${c.title}</span>
           </div>
