@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /landing.html
+
+Sitemap: https://solvephantasma.com/sitemap.xml
