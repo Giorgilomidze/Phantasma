@@ -2189,7 +2189,7 @@ body.is-locked {
    23. Blog
    ========================================================================= */
 .blog-hero {
-  padding: var(--space-10) 0 var(--space-7);
+  padding: var(--space-6) 0 var(--space-6);
 }
 .blog-hero__h {
   grid-column: content-start / span 8;
