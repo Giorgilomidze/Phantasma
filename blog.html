@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f9f3eb" />
+  <title>Phantasma — Case Studies</title>
+  <meta name="description" content="Detailed case studies from Phantasma. Real engagements, real outcomes — data engineering, cloud transformation, IoT, and ML for mid-market operations." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&display=swap" />
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap" />
+
+  <!-- Google Ads tag -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18182297582"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'AW-18182297582');
+  </script>
+
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="grain" aria-hidden="true"></div>
+  <div id="top" aria-hidden="true" class="scroll-anchor"></div>
+
+  <!-- Header -->
+  <header class="site-header" id="site-header">
+    <div class="page-grid site-header__row">
+      <a href="./index.html" class="wordmark" aria-label="Phantasma — home">Phantasma</a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="./index.html">Home</a>
+        <a href="./index.html#what-we-do">What we do</a>
+        <a href="./index.html#work">Work</a>
+        <a href="./index.html#approach">Approach</a>
+        <a href="./blog.html" aria-current="page">Blog</a>
+        <a href="./index.html#contact">Contact</a>
+      </nav>
+      <a href="./index.html#contact" class="btn btn-primary btn-sm">Book a call</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="blog-hero page-grid">
+      <p class="eyebrow">Case studies</p>
+      <h1 class="blog-hero__h">Work we have done.<br>Numbers we can defend.</h1>
+    </div>
+
+    <div class="blog-layout page-grid">
+
+      <!-- Sidebar -->
+      <aside class="blog-sidebar" aria-label="Case study navigation">
+        <nav class="blog-sidebar__nav">
+          <p class="blog-sidebar__label eyebrow">Cases</p>
+          <ol class="blog-sidebar__list">
+            <li><a href="#case-ecommerce-cost-engine" class="blog-sidebar__item" data-target="case-ecommerce-cost-engine">E-commerce Cost Engine</a></li>
+            <li><a href="#case-mining-operational-intelligence" class="blog-sidebar__item" data-target="case-mining-operational-intelligence">Industrial Scale-Up & Operational Intelligence</a></li>
+            <li><a href="#case-monolith-recovery" class="blog-sidebar__item" data-target="case-monolith-recovery">Monolith → Microservices Recovery</a></li>
+            <li><a href="#case-precision-viticulture" class="blog-sidebar__item" data-target="case-precision-viticulture">Precision Viticulture IoT</a></li>
+            <li><a href="#case-pharmacy-digitalisation" class="blog-sidebar__item" data-target="case-pharmacy-digitalisation">Pharmacy Chain Digital Transformation</a></li>
+            <li><a href="#case-demand-forecasting" class="blog-sidebar__item" data-target="case-demand-forecasting">Demand Forecasting Engine</a></li>
+            <li><a href="#case-water-utility-predictive-ops" class="blog-sidebar__item" data-target="case-water-utility-predictive-ops">Predictive Infrastructure for Urban Water Utility</a></li>
+          </ol>
+        </nav>
+      </aside>
+
+      <!-- Articles -->
+      <div class="blog-articles">
+
+        <!-- Case 1 -->
+        <article class="blog-article" id="case-ecommerce-cost-engine">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">E-commerce</p>
+            <h2 class="blog-article__title">E-commerce Cost Engine</h2>
+            <p class="blog-article__outcome">From 80 hours of manual COGS to 5 hours, on €60/month cloud.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">93.7%</span>
+              <span class="blog-article__kpi-label">labor reduction</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Duration</dt><dd>~3 months</dd>
+              <dt>Operating cost</dt><dd>€60 / month</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">Developed an end-to-end data automation ecosystem for a multi-channel e-commerce firm managing 8,000+ SKUs and 20+ manufacturers. The project transformed a manual, error-prone accounting process involving complex contract pricing and marketplace commissions into a scalable, $60/month cloud-native solution.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">The company faced a massive operational bottleneck. Variable pricing across 20 manufacturers, multi-channel marketplace commission complexity, logistical fragmentation with diverse shipping costs, and a resource drain of 80 man-hours (3 highly skilled staff over 5 days) to calculate COGS and generate invoices.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Architected a robust ETL/ELT pipeline using Azure and Power Platform. Built a custom API retrieval platform pulling from multiple e-commerce marketplaces, implemented a multi-format Data Lake handling JSON, CSV, and Parquet, and developed a parallel validation bridge ensuring 100% data integrity. Engineered a star schema database with fact tables for transactional data and dimension tables mapping SKUs to contract terms. Created a Power App for logistics teams to update delivery rates, and configured a Google Sheets-to-Azure pipeline for business users to update contract terms without touching code. Developed Paginated Reports that automatically calculated net margins and generated client-ready invoices.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">Total labor time reduced from 80 hours to 5 hours — 93.7% reduction. Turnaround time cut from 5 days to 2 days. Operational cost moved from 3 senior FTEs to a $60 cloud fee plus 5 QA hours. Scalability shifted from linear to exponential with zero bottleneck. 75 hours of high-level employee time reclaimed per cycle.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Azure Data Factory</li>
+              <li class="blog-tag">ADLS Gen2</li>
+              <li class="blog-tag">MSSQL</li>
+              <li class="blog-tag">Power BI</li>
+              <li class="blog-tag">Power Apps</li>
+              <li class="blog-tag">Azure ML</li>
+              <li class="blog-tag">Google Sheets bridge</li>
+            </ul>
+          </section>
+        </article>
+
+        <!-- Case 2 -->
+        <article class="blog-article" id="case-mining-operational-intelligence">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Mining & raw materials</p>
+            <h2 class="blog-article__title">Industrial Scale-Up & Operational Intelligence</h2>
+            <p class="blog-article__outcome">Unified ETL, AI-driven OCR, governed dashboards across acquired sites.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">700%</span>
+              <span class="blog-article__kpi-label">monthly throughput increase</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Duration</dt><dd>~18 months</dd>
+              <dt>Total cost</dt><dd>€15K over 2 years</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">A rapidly expanding mining and raw materials producer faced severe operational bottlenecks following a series of acquisitions. Disconnected data silos — spreadsheets, local drives, and manual accounting — hindered management of the full mining lifecycle from land acquisition to ecological restoration. We designed an integrated data ecosystem that automated document processing, unified task management with financial flows, and provided C-level executives with real-time decision-making snapshots.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">Rapid acquisition of new companies led to non-standardized processes across different mining sites. Critical information was trapped in local computers, manual invoices, and isolated accounting software. The lifecycle involved high-stakes legal documentation, land rights, mining operations, and green-coverage regeneration. Massive human effort was required to map cash flows to specific tasks and process physical invoices.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Used Azure Data Factory and Databricks to ingest data from the Accounting API and ClickUp API. Implemented Azure Machine Learning OCR to digitize manual invoices, extract metadata, and automatically map them to project tasks. Centralized all operations in ClickUp, ensuring every task was linked to its respective financial cash flow. Developed Power Apps for structured data entry and used SharePoint as a governed document library. Implemented Row-Level Security and Active Directory integration to ensure departments only accessed relevant data.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">Monthly task capacity grew from 40 to 280 tasks — 700% increase. Raw material processing increased from 3,500 to 11,000 units — 314% increase. Labor inefficiency reduced 40%. Data accessibility expanded from under 10% siloed to 80% organization-wide. Total cost of ownership €15,000 over two years covering all cloud services and IT support.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Azure Databricks</li>
+              <li class="blog-tag">Azure Data Factory</li>
+              <li class="blog-tag">Azure Machine Learning</li>
+              <li class="blog-tag">Power BI</li>
+              <li class="blog-tag">Power Apps</li>
+              <li class="blog-tag">SharePoint</li>
+              <li class="blog-tag">ClickUp API</li>
+              <li class="blog-tag">Azure AD / RLS</li>
+            </ul>
+          </section>
+        </article>
+
+        <!-- Case 3 -->
+        <article class="blog-article" id="case-monolith-recovery">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">E-commerce platform</p>
+            <h2 class="blog-article__title">Monolith → Microservices Recovery</h2>
+            <p class="blog-article__outcome">PHP monolith decommissioned. Decoupled Azure microservices in its place.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">CI/CD</span>
+              <span class="blog-article__kpi-label">governed releases — from debugging marathons lasting weeks</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Duration</dt><dd>~6 months</dd>
+              <dt>Outcome</dt><dd>Standard Azure-native run rates</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">Engaged to perform a forensic audit of a failing e-commerce ecosystem operating across Amazon and Shopify. The client had previously attempted to centralize operations into a single PHP-based monolith. We performed a complete architectural overhaul, replacing the monolith with a modern decoupled microservices cloud architecture.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">Every function — ETL processes, API authentications, database procedures, and front-end reporting — existed within one massive codebase. A minor change in one module caused unforeseen regressions elsewhere, leading to debugging marathons lasting weeks. The system was so complex only the original author could navigate it. Reports were hard-coded in Python, requiring senior developers just to change a simple KPI. Single-threaded ETL meant data synchronization lagged as sales volume grew.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Azure Data Factory replaced hard-coded PHP scripts with visual monitoring of data pipelines, automated retries, and scheduled daily ingestion from Amazon and Shopify APIs. Azure Databricks enabled Spark for massive data processing. Azure SQL centralized all fragmented data into a Single Source of Truth. Power BI empowered non-technical stakeholders to build their own dashboards. Azure DevOps implemented CI/CD pipelines separating Development, Staging, and Production. Data Lake Storage ADLS Gen2 created a Bronze layer storing raw JSON for historical reprocessing. Terraform and Bicep ensured Infrastructure as Code. Azure AD with RBAC secured department-level data access.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">Replaced a fragile monolith with a resilient microservices architecture. Operating cost dropped to standard Azure-native run rates. Non-technical stakeholders gained self-service BI. Zero single-point-of-failure in the new architecture. Full CI/CD lifecycle with separated environments.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Azure Data Factory</li>
+              <li class="blog-tag">Azure Databricks</li>
+              <li class="blog-tag">MSSQL</li>
+              <li class="blog-tag">Azure SQL</li>
+              <li class="blog-tag">Power BI</li>
+              <li class="blog-tag">Azure DevOps</li>
+              <li class="blog-tag">Terraform / Bicep</li>
+              <li class="blog-tag">Azure AD / Entra ID</li>
+              <li class="blog-tag">ClickUp</li>
+            </ul>
+          </section>
+        </article>
+
+        <!-- Case 4 -->
+        <article class="blog-article" id="case-precision-viticulture">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Agriculture</p>
+            <h2 class="blog-article__title">Precision Viticulture IoT</h2>
+            <p class="blog-article__outcome">Closed-loop irrigation across 12 hectares — river to summit.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">12 ha</span>
+              <span class="blog-article__kpi-label">autonomous, weather-aware irrigation</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Duration</dt><dd>~9 months incl. agronomic research</dd>
+              <dt>Scope</dt><dd>Hardware + cloud + edge support</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">Designed and deployed a complete precision agriculture system for a 12-hectare vineyard, combining IoT sensor infrastructure, edge computing, cloud data pipelines, and predictive automation to create a fully autonomous, weather-aware irrigation system.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Research & Agronomic Strategy</h3>
+            <p class="blog-section__p">Conducted extensive research to define the Optimal Growth Window, establishing specific thresholds for nutrient and soil chemistry including ideal NPK fertilizer ratios, environmental variables covering optimal sunlight exposure and air humidity, the precise moisture level between drought stress and over-saturation to maximize sugar content, and soil pH balance assessments.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Infrastructure & IoT Deployment</h3>
+            <p class="blog-section__p">Designed hydraulic planning for a system pumping water from a low-altitude river up a mountain slope into storage reservoirs. Specified high-pressure pumps, NPK mixers, water storage tanks, and kilometers of hose droppers for gravity-fed irrigation. Deployed IoT devices in calculated locations to monitor soil NPK, moisture, and temperature in real-time. Built a low-power always-on physical server on-site as a data retrieval center ensuring connectivity in a remote area.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Cloud Architecture & Automation</h3>
+            <p class="blog-section__p">Built scalable pipelines using Azure and Databricks to sync on-site sensor data with external Weather Forecast APIs. Developed a decision-support model forecasting water needs based on upcoming weather patterns through evapotranspiration versus predicted rainfall. The system automatically controlled the pumping station, keeping the vineyard at optimal moisture while minimizing energy consumption. Result: 12 hectares of autonomous, weather-aware irrigation requiring no manual intervention.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">IoT (custom sensors)</li>
+              <li class="blog-tag">On-prem edge server</li>
+              <li class="blog-tag">Azure Data Factory</li>
+              <li class="blog-tag">Azure Databricks</li>
+              <li class="blog-tag">Weather APIs</li>
+              <li class="blog-tag">Predictive ML</li>
+            </ul>
+          </section>
+        </article>
+
+        <!-- Case 5 -->
+        <article class="blog-article" id="case-pharmacy-digitalisation">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Pharmacy & healthcare</p>
+            <h2 class="blog-article__title">Pharmacy Chain Digital Transformation</h2>
+            <p class="blog-article__outcome">From a 20-year-old ERP to GDP-compliant, AI-mapped, IoT-monitored.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">6 stores · 20 yrs</span>
+              <span class="blog-article__kpi-label">of legacy data unified, GDP-compliant</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Duration</dt><dd>~12 months</dd>
+              <dt>Scope</dt><dd>Migration, IoT rollout, regulatory automation</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">Led the end-to-end modernization of a 6-store pharmacy chain's infrastructure to align with evolving Georgian healthcare regulations. The project involved a complex migration of 20 years of legacy data, implementation of an AI-driven product mapping library, and deployment of a centralized IoT monitoring system to ensure Good Distribution Practice (GDP) compliance.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">The primary hurdle was extracting and normalizing two decades of fragmented data from a 20-year-old legacy ERP system. Product naming, logistical info, and categorization varied wildly across different sources. To meet strict new regulations, 100% accuracy was required in how medicines were identified and tracked across the supply chain.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Implemented a Central Product Library pulling data from the Ministry of Healthcare, Revenue Service, logistical databases, and historical purchase invoices, using AI tools to parse and match medicinal names across disparate sources. Built a custom Data Warehouse with sales prediction models and an automated procurement system generating purchase orders per branch based on real-time sales velocity. Deployed a centralized IoT network monitoring temperature and humidity across all 6 locations for GDP-compliant pharmaceutical storage. Deployed Google Workspace for all SOPs and regulatory documents, and HubSpot for sales, marketing, and purchasing operations.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">Achieved total regulatory compliance. Unified 6 stores and 20 years of data into a single GDP-compliant infrastructure. Reduced procurement waste through automated demand forecasting. Established a scalable foundation for future growth. Centralized and automated all mandatory Ministry of Healthcare reporting workflows.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Custom Data Warehouse</li>
+              <li class="blog-tag">AI mapping toolchain</li>
+              <li class="blog-tag">IoT sensors</li>
+              <li class="blog-tag">ERP integration</li>
+              <li class="blog-tag">Google Workspace</li>
+              <li class="blog-tag">HubSpot</li>
+            </ul>
+          </section>
+        </article>
+
+        <!-- Case 6 -->
+        <article class="blog-article" id="case-demand-forecasting">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">E-commerce distribution</p>
+            <h2 class="blog-article__title">Demand Forecasting Engine</h2>
+            <p class="blog-article__outcome">Predictive replenishment for 12,000 SKUs across 200 brands. Built on Azure ML, validated against four years of historical sales.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">98%</span>
+              <span class="blog-article__kpi-label">forecast accuracy — vs. 81% human baseline</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Duration</dt><dd>~8 months</dd>
+              <dt>Operating cost</dt><dd>Azure-native run rates</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">Developed an end-to-end data pipeline and machine learning solution for a large-scale e-commerce distributor managing 12,000 SKUs across 200 brands. The project automated the unification of fragmented sales channels and inventory data, replacing manual procurement processes with a predictive model that achieved 98% forecasting accuracy, significantly outperforming traditional human-led purchasing at 81%.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">Data was fragmented across multiple e-commerce platforms and 40 different manufacturers. Managing 12,000 products with varying logistical requirements including PZN, EAN, and GTIN codes, packaging types, and expiration dates created extreme complexity. Sales were highly sensitive to seasonality, delivery restrictions, and external market trends. Manual stock maintenance led to frequent overstocking causing capital tie-up or understocking causing lost revenue.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Orchestrated Azure Data Factory pipelines to ingest data via APIs and Databricks from disparate sales channels. Stored and structured raw data into an MSSQL Data Warehouse. Unified sales data from multiple channels into a single Golden Record table. Modeled sales data based on rolling windows of 7, 30, and 90 days, year-over-year comparisons, and category-level trends. Integrated external API data to capture broader market trends and seasonal shifts. Implemented an Azure Machine Learning model generating automated replenishment suggestions. Conducted rigorous backtesting comparing forecasts against historical inventory levels and actual sales performance.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">Model precision reached 98% after cleaning data externalities. Significantly outperformed human procurement specialists who averaged 81% accuracy. Automated generation of invoices and stock listings, reducing manual labor and human error in the supply chain. Eliminated overstocking and understocking cycles across 12,000 SKUs.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Azure Data Factory</li>
+              <li class="blog-tag">Azure Databricks</li>
+              <li class="blog-tag">Azure Machine Learning</li>
+              <li class="blog-tag">MSSQL</li>
+              <li class="blog-tag">Shopify API</li>
+              <li class="blog-tag">Amazon SP-API</li>
+              <li class="blog-tag">External market trend APIs</li>
+              <li class="blog-tag">Python · SQL</li>
+            </ul>
+          </section>
+        </article>
+
+        <!-- Case 7 -->
+        <article class="blog-article" id="case-water-utility-predictive-ops">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Water & Utilities</p>
+            <h2 class="blog-article__title">Predictive Infrastructure for Urban Water Utility</h2>
+            <p class="blog-article__outcome">From reactive break-fix to data-driven, predictive operations for a city of 3M+ residents.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">+100%</span>
+              <span class="blog-article__kpi-label">daily incident throughput — 40–55 → 80–140 per day</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Duration</dt><dd>~6 months</dd>
+              <dt>Scope</dt><dd>Discovery, design, build, 6-month support</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">A century-old water utility serving a city of more than three million people was running its operations reactively. The SAP ERP incident management module was used as a basic task list, field teams worked without shared performance signals, and IoT data already collected was sitting unused. We redesigned the operational process end-to-end, built a unified data warehouse, deployed a machine-learning forecasting layer, and integrated predictive alerts back into SAP. Daily incident throughput more than doubled, average fix time dropped by 33%, and high-severity pipe bursts fell by 12% year-over-year.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Root Causes Identified</h3>
+            <p class="blog-section__p">A meaningful portion of the underground network was undocumented or wrongly mapped in SAP, causing field teams to discover wrong pipe specs on-site requiring second trips. Field crews, warehouse staff, and fleet maintenance operated in silos with no shared KPIs — finishing a job quickly was effectively punished. Without forecasting, every road closure request to City Hall arrived as a last-minute emergency. A significant share of pipe failures traced to over-pressure conditions and water hammer effects on sloped heritage infrastructure sections.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Built a centralized PostgreSQL data warehouse consolidating SAP incident records, live IoT telemetry from pressure gauges and reservoir levels, the asset inventory, and billing-derived consumption map. Surfaced correlations between incidents and air temperature, sediment quantity, geographic zone and elevation, pipe age and material cohort, and in-pipe pressure profiles. Built a machine learning forecasting service achieving 80% daily, 90% weekly, and 93% monthly confidence. Connected forecast-driven alerts back into SAP via custom REST API, generating work orders inside the system operators already used. Power BI dashboards covered incident volume against forecasts, fix-time distribution, team utilization, and warehouse readiness.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">Daily incidents resolved increased from 40–55 to 80–140 — a 100–150% improvement. Average fix time reduced from 4.5 hours to 3.0 hours — 33% faster. High-severity pipe bursts fell 12% year-over-year in a controlled comparable period. Activated operational teams increased from approximately 25 to 30 out of 82 total teams. The utility moved from being treated as a problematic neighbor to a data-driven partner in urban management, with improved permit speed and political capital with City Hall.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">SAP ERP</li>
+              <li class="blog-tag">PostgreSQL</li>
+              <li class="blog-tag">Python ML</li>
+              <li class="blog-tag">Power BI</li>
+              <li class="blog-tag">IoT (pressure & level sensors)</li>
+              <li class="blog-tag">Custom REST APIs</li>
+            </ul>
+          </section>
+        </article>
+
+      </div><!-- /blog-articles -->
+    </div><!-- /blog-layout -->
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="page-grid site-footer__inner">
+      <hr class="rule rule--footer" />
+      <div class="site-footer__row">
+        <a href="./index.html" class="wordmark wordmark--footer">Phantasma</a>
+        <a href="./index.html#contact" class="link-quiet">Book a discovery call →</a>
+      </div>
+      <div class="site-footer__row site-footer__row--meta">
+        <p class="site-footer__tagline">Tangible solutions for abstract problems.</p>
+        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+        <a class="link-quiet" href="./index.html">Full site</a>
+        <p class="site-footer__copy">© Phantasma 2026</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      /* Scroll-spy: highlight active sidebar item */
+      const items = document.querySelectorAll('.blog-sidebar__item');
+      const articles = document.querySelectorAll('.blog-article');
+
+      function setActive(id) {
+        items.forEach(function (el) {
+          el.classList.toggle('is-active', el.dataset.target === id);
+        });
+      }
+
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) setActive(entry.target.id);
+          });
+        }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+
+        articles.forEach(function (el) { observer.observe(el); });
+      }
+
+      /* Smooth scroll on sidebar click */
+      items.forEach(function (el) {
+        el.addEventListener('click', function (e) {
+          e.preventDefault();
+          const target = document.getElementById(el.dataset.target);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+
+      /* Header scroll state */
+      const header = document.getElementById('site-header');
+      if (header) {
+        window.addEventListener('scroll', function () {
+          header.classList.toggle('is-scrolled', window.scrollY > 80);
+        }, { passive: true });
+      }
+    })();
+  </script>
+</body>
+</html>
