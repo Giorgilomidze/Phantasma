@@ -255,7 +255,7 @@
         ],
         caption:
           'Agronomic research first — defining the optimal moisture window for sugar content, the ideal NPK ratios, the soil pH range. Then sensors, edge hub, cloud, and pumps wired into one closed loop.',
-        image: { src: './images/Slider Thumbnail 4 - pharmacy.png', alt: 'Precision viticulture IoT' },
+        image: { src: './images/Slider Thumbnail 5 - IOT.png', alt: 'Precision viticulture IoT' },
       },
       impact: {
         type: 'tiles',
@@ -323,7 +323,7 @@
         ],
         caption:
           'AI parses and matches medicinal names across four authoritative sources, eliminating manual entry errors. IoT keeps every store within GDP-mandated environmental conditions. Reporting to the Ministry is automated.',
-        image: { src: './images/Slider Thumbnail 5 - IOT.png', alt: 'Pharmacy chain digital transformation' },
+        image: { src: './images/Slider Thumbnail 4 - pharmacy.png', alt: 'Pharmacy chain digital transformation' },
       },
       impact: {
         type: 'tiles',
@@ -635,7 +635,7 @@
     nextBtn.addEventListener('click', () => { resetAuto(); advance(1); });
 
     function startAuto() {
-      autoTimer = setInterval(() => advance(1), 3500);
+      autoTimer = setInterval(() => advance(1), 5000);
     }
     function resetAuto() {
       clearInterval(autoTimer);
