@@ -455,7 +455,7 @@ kbd {
    ------------------------------------------------------------------------- */
 .hero {
   position: relative;
-  padding: var(--space-7) 0 var(--space-6);
+  padding: var(--space-4) 0 var(--space-5);
   display: flex;
   align-items: flex-start;
   overflow: hidden;
@@ -560,7 +560,7 @@ kbd {
   transition: opacity 500ms ease-out 360ms, transform 500ms ease-out 360ms;
 }
 .hero__strip .metric__num {
-  font-size: var(--type-h2);
+  font-size: var(--type-h3);
 }
 .hero__strip .eyebrow--strip { align-self: stretch; text-align: right; }
 .hero__strip .metric { align-items: flex-end; text-align: right; }
@@ -2189,7 +2189,7 @@ body.is-locked {
   margin-bottom: var(--space-6);
 }
 .case-reel__header .eyebrow { grid-column: content-start / content-end; }
-.case-reel__header .section-title { grid-column: content-start / content-end; margin: var(--space-2) 0 0; }
+.case-reel__header .section-title { grid-column: content-start / content-end; margin: var(--space-2) 0 0; font-size: var(--type-h2); white-space: nowrap; }
 
 .case-reel__viewport {
   position: relative;
