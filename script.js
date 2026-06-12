@@ -554,51 +554,103 @@
   }
 
   /* ---------------------------------------------------------------------
-     Bento — render tiles
+     Case Reel — horizontal infinite auto-scrolling carousel
      --------------------------------------------------------------------- */
-  function renderBento() {
-    const bento = document.getElementById('bento');
-    if (!bento) return;
-    bento.innerHTML = '';
+  function bootCaseReel() {
+    const track = document.getElementById('case-reel-track');
+    const dotsEl = document.getElementById('case-reel-dots');
+    const prevBtn = document.querySelector('.case-reel__arrow--prev');
+    const nextBtn = document.querySelector('.case-reel__arrow--next');
+    if (!track) return;
 
-    // Render in declared order; CSS grid-area places them visually
-    CASES.forEach((c) => {
-      const tile = document.createElement('button');
-      tile.type = 'button';
-      tile.className = 'tile';
-      tile.dataset.area = c.area;
-      tile.dataset.caseSlug = c.slug;
-      tile.setAttribute('aria-label', `Open case study: ${c.title}`);
+    const VISIBLE = 4;
+    const total = CASES.length;
+    let pos = total; // start at first real slide (after leading clones)
+    let isAnimating = false;
+    let autoTimer;
 
-      let kpiHtml;
-      if (c.kpiFoil) {
-        kpiHtml = `<span class="tile__kpi"><strong>${c.kpiNum}</strong>${c.kpiLabel}</span>`;
-      } else {
-        kpiHtml = `<span class="tile__kpi"><strong>${c.kpiNum}</strong>${c.kpiLabel}</span>`;
-      }
-
-      const heroPair =
-        c.tileSize === '2x2'
-          ? `<div class="tile__hero-pair">
-               <span class="tile__hero-num">${c.kpiNum}</span>
-               <span class="tile__hero-foil">${c.kpiFoil || ''}</span>
-             </div>`
-          : '';
-
-      tile.innerHTML = `
-        <span class="tile__chip">${c.industry}</span>
-        <h3 class="tile__title">${c.title}</h3>
-        <p class="tile__outcome">${c.outcome}</p>
-        ${heroPair}
-        <div class="tile__bottom">
-          ${kpiHtml}
-          <span class="tile__open" aria-hidden="true">Open →</span>
-        </div>
-      `;
-
-      tile.addEventListener('click', () => Lightbox.open(c.slug));
-      bento.appendChild(tile);
+    // Build: [clones of last VISIBLE] + [real slides] + [clones of first VISIBLE]
+    const allSlides = [...CASES, ...CASES, ...CASES]; // triple for safety
+    allSlides.forEach((c, i) => {
+      const slide = document.createElement('div');
+      slide.className = 'case-reel__slide';
+      slide.innerHTML = `
+        <button type="button" class="case-reel__card" aria-label="Open case study: ${c.title}">
+          <img class="case-reel__img" src="${c.built.image.src}" alt="${c.built.image.alt}" loading="lazy" />
+          <div class="case-reel__overlay">
+            <span class="case-reel__title">${c.title}</span>
+          </div>
+        </button>`;
+      slide.querySelector('.case-reel__card').addEventListener('click', () => {
+        Lightbox.open(c.slug);
+      });
+      track.appendChild(slide);
     });
+
+    // Dots (one per real case)
+    CASES.forEach((c, i) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'case-reel__dot';
+      dot.setAttribute('aria-label', `Go to ${c.title}`);
+      dot.addEventListener('click', () => goTo(i + total));
+      dotsEl.appendChild(dot);
+    });
+
+    function slideWidth() {
+      const slide = track.querySelector('.case-reel__slide');
+      return slide ? slide.offsetWidth : 0;
+    }
+
+    function render(instant) {
+      const x = -(pos * slideWidth());
+      track.style.transition = instant ? 'none' : 'transform 500ms cubic-bezier(0.4, 0, 0.2, 1)';
+      track.style.transform = `translateX(${x}px)`;
+      // Update dots against real index
+      const realIndex = ((pos - total) % total + total) % total;
+      dotsEl.querySelectorAll('.case-reel__dot').forEach((d, i) => {
+        d.classList.toggle('is-active', i === realIndex);
+      });
+    }
+
+    function goTo(newPos) {
+      if (isAnimating) return;
+      pos = newPos;
+      isAnimating = true;
+      render(false);
+    }
+
+    function advance(dir) {
+      goTo(pos + dir);
+    }
+
+    // After transition: jump to real equivalent if in clone zone
+    track.addEventListener('transitionend', () => {
+      isAnimating = false;
+      if (pos >= total * 2) { pos -= total; render(true); }
+      if (pos < total)      { pos += total; render(true); }
+    });
+
+    prevBtn.addEventListener('click', () => { resetAuto(); advance(-1); });
+    nextBtn.addEventListener('click', () => { resetAuto(); advance(1); });
+
+    function startAuto() {
+      autoTimer = setInterval(() => advance(1), 3500);
+    }
+    function resetAuto() {
+      clearInterval(autoTimer);
+      startAuto();
+    }
+
+    // Pause on hover
+    const viewport = document.querySelector('.case-reel__viewport');
+    if (viewport) {
+      viewport.addEventListener('mouseenter', () => clearInterval(autoTimer));
+      viewport.addEventListener('mouseleave', startAuto);
+    }
+
+    render(true);
+    startAuto();
   }
 
   /* ---------------------------------------------------------------------
@@ -1261,7 +1313,7 @@
   function init() {
     bootHeroReveal();
     bootHeader();
-    renderBento();
+    bootCaseReel();
     Lightbox.bind();
     bootApproachStrip();
     bootCalendly();

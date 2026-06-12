@@ -2186,7 +2186,148 @@ body.is-locked {
 }
 
 /* =========================================================================
-   23. Blog
+   23. Case Reel
+   ========================================================================= */
+.case-reel {
+  padding: var(--space-7) 0 var(--space-8);
+}
+.case-reel__header {
+  margin-bottom: var(--space-6);
+}
+.case-reel__header .eyebrow { grid-column: content-start / content-end; }
+.case-reel__header .section-title { grid-column: content-start / content-end; margin: var(--space-2) 0 0; }
+
+.case-reel__viewport {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.case-reel__track-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+/* Edge fade */
+.case-reel__track-wrap::before,
+.case-reel__track-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  z-index: 2;
+  pointer-events: none;
+}
+.case-reel__track-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg), transparent);
+}
+.case-reel__track-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg), transparent);
+}
+.case-reel__track {
+  display: flex;
+  will-change: transform;
+}
+.case-reel__slide {
+  flex: 0 0 calc(100% / 4);
+  padding: 0 var(--space-2);
+  box-sizing: border-box;
+}
+.case-reel__card {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+}
+.case-reel__card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-tile-hover);
+}
+.case-reel__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 300ms ease-out;
+}
+.case-reel__card:hover .case-reel__img {
+  transform: scale(1.04);
+}
+.case-reel__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(20,14,10,0.72) 0%, rgba(20,14,10,0.1) 55%, transparent 100%);
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-4);
+  transition: background 200ms ease-out;
+}
+.case-reel__card:hover .case-reel__overlay {
+  background: linear-gradient(to top, rgba(20,14,10,0.82) 0%, rgba(20,14,10,0.25) 60%, transparent 100%);
+}
+.case-reel__title {
+  font-family: var(--font-display);
+  font-size: clamp(0.875rem, 1.2vw, 1.1rem);
+  font-weight: 500;
+  color: #fff;
+  line-height: 1.3;
+  text-align: left;
+}
+.case-reel__arrow {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  transition: background 150ms, border-color 150ms, color 150ms;
+}
+.case-reel__arrow:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.case-reel__arrow--prev { margin-right: var(--space-3); }
+.case-reel__arrow--next { margin-left: var(--space-3); }
+.case-reel__dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+.case-reel__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: var(--rule);
+  cursor: pointer;
+  padding: 0;
+  transition: background 200ms, transform 200ms;
+}
+.case-reel__dot.is-active {
+  background: var(--accent);
+  transform: scale(1.3);
+}
+
+/* =========================================================================
+   24. Blog — case-studies page
    ========================================================================= */
 .blog-hero {
   padding: var(--space-6) 0 var(--space-6);
