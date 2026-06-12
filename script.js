@@ -686,7 +686,6 @@
       lastFocused = document.activeElement;
 
       const tile = document.querySelector(`[data-case-slug="${slug}"]`);
-      const tileRect = tile.getBoundingClientRect();
 
       // Render content first so we can measure
       render();
@@ -695,7 +694,14 @@
       root.hidden = false;
       document.body.classList.add('is-locked');
 
+      if (!tile || prefersReducedMotion) {
+        root.classList.add('is-open');
+        finishOpen();
+        return;
+      }
+
       // Compute FLIP transform: lightbox -> tile rect on initial frame
+      const tileRect = tile.getBoundingClientRect();
       requestAnimationFrame(() => {
         const targetRect = container.getBoundingClientRect();
         const sx = tileRect.width / targetRect.width;
@@ -703,28 +709,23 @@
         const tx = (tileRect.left + tileRect.width / 2) - (targetRect.left + targetRect.width / 2);
         const ty = (tileRect.top + tileRect.height / 2) - (targetRect.top + targetRect.height / 2);
 
-        if (prefersReducedMotion) {
-          root.classList.add('is-open');
-          finishOpen();
-        } else {
-          isAnimating = true;
-          container.style.transform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
-          container.style.transformOrigin = 'center';
-          // Force reflow
-          // eslint-disable-next-line no-unused-expressions
-          container.offsetHeight;
-          requestAnimationFrame(() => {
-            root.classList.add('is-open', 'is-animating');
-            container.style.transform = 'translate(0, 0) scale(1, 1)';
-            container.addEventListener('transitionend', function once() {
-              container.removeEventListener('transitionend', once);
-              container.style.transform = '';
-              root.classList.remove('is-animating');
-              isAnimating = false;
-              finishOpen();
-            }, { once: true });
-          });
-        }
+        isAnimating = true;
+        container.style.transform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
+        container.style.transformOrigin = 'center';
+        // Force reflow
+        // eslint-disable-next-line no-unused-expressions
+        container.offsetHeight;
+        requestAnimationFrame(() => {
+          root.classList.add('is-open', 'is-animating');
+          container.style.transform = 'translate(0, 0) scale(1, 1)';
+          container.addEventListener('transitionend', function once() {
+            container.removeEventListener('transitionend', once);
+            container.style.transform = '';
+            root.classList.remove('is-animating');
+            isAnimating = false;
+            finishOpen();
+          }, { once: true });
+        });
       });
     }
 
