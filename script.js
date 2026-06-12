@@ -583,7 +583,7 @@
       slide.className = 'case-reel__slide';
       slide.innerHTML = `
         <button type="button" class="case-reel__card" aria-label="Open case study: ${c.title}">
-          <img class="case-reel__img" src="${c.thumbnail.src}" alt="${c.thumbnail.alt}" loading="lazy" />
+          <img class="case-reel__img" src="${c.built.thumbnail.src}" alt="${c.built.thumbnail.alt}" loading="lazy" />
           <div class="case-reel__overlay">
             <span class="case-reel__title">${c.title}</span>
           </div>
