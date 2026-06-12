@@ -65,21 +65,38 @@
     href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap"
   />
 
-  <!-- Google Ads tag -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18182297582"></script>
+  <!-- Consent mode: deny by default until user accepts (GDPR) -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
+    gtag('consent', 'default', {
+      analytics_storage: 'denied',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied'
+    });
+    if (localStorage.getItem('phantasma_cookie_consent') === 'accepted') {
+      gtag('consent', 'update', {
+        analytics_storage: 'granted',
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted'
+      });
+    }
+  </script>
+  <!-- Google Ads tag (loads but respects consent state above) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18182297582"></script>
+  <script>
     gtag('js', new Date());
     gtag('config', 'AW-18182297582');
-  </script>
-  <!-- Event snippet: page view conversion -->
-  <script>
-    gtag('event', 'conversion', {
-      'send_to': 'AW-18182297582/4NM8CKTh37EcEO6v_91D',
-      'value': 1.0,
-      'currency': 'USD'
-    });
+    if (localStorage.getItem('phantasma_cookie_consent') === 'accepted') {
+      gtag('event', 'conversion', {
+        send_to: 'AW-18182297582/4NM8CKTh37EcEO6v_91D',
+        value: 1.0,
+        currency: 'USD'
+      });
+    }
+    /* GA4: add gtag('config', 'G-XXXXXXXXXX') here once measurement ID is ready */
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
@@ -456,6 +473,17 @@
       </footer>
     </div>
     <p class="visually-hidden" id="lightbox-announce" aria-live="polite"></p>
+  </div>
+
+  <!-- Cookie Consent Banner -->
+  <div class="cookie-banner" id="cookie-banner" hidden>
+    <p class="cookie-banner__text">
+      We use cookies for advertising and analytics to understand how our site is used and to show relevant ads to potential clients.
+    </p>
+    <div class="cookie-banner__actions">
+      <button type="button" class="cookie-banner__decline" id="cookie-decline">Decline</button>
+      <button type="button" class="cookie-banner__accept" id="cookie-accept">Accept</button>
+    </div>
   </div>
 
   <script src="./script.js" defer></script>
