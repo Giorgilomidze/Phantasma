@@ -2183,7 +2183,7 @@ body.is-locked {
    23. Case Reel
    ========================================================================= */
 .case-reel {
-  padding: var(--space-7) 0 var(--space-8);
+  padding: var(--space-3) 0 var(--space-8);
 }
 .case-reel__header {
   margin-bottom: var(--space-6);
