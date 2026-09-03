@@ -191,7 +191,7 @@
         caption:
           'A microservices-oriented architecture: the failure of one component cannot bring down the rest. Bronze data layer means schema changes can be reprocessed without re-fetching the source.',
         image: { src: './images/case3-built.webp', alt: 'Monolith to microservices recovery' },
-      thumbnail: { src: './images/Slider Thumbnail 3 - Warehouse forecasting.webp', alt: 'Monolith to microservices recovery' },
+      thumbnail: { src: './images/Slider Thumbnail 6 - Failed project transformation.webp', alt: 'Monolith to microservices recovery' },
       },
       impact: {
         type: 'tiles',
@@ -385,7 +385,7 @@
         caption:
           'Sales channels unified into a "golden record" table. Logistical metadata standardised. Forecasts engineered against rolling windows and external market signals. Replenishment recommendations are generated automatically per SKU.',
         image: { src: './images/case6-built.webp', alt: 'Demand forecasting engine' },
-      thumbnail: { src: './images/Slider Thumbnail 6 - Failed project transformation.webp', alt: 'Demand forecasting engine' },
+      thumbnail: { src: './images/Slider Thumbnail 3 - Warehouse forecasting.webp', alt: 'Demand forecasting engine' },
       },
       impact: {
         type: 'table',
