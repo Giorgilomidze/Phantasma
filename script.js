@@ -14,8 +14,6 @@
   const CASES = [
     {
       slug: 'ecommerce-cost-engine',
-      area: 'case1',
-      tileSize: '1x1',
       industry: 'E-commerce',
       title: 'E-commerce Cost Engine',
       outcome: 'From 80 hours of manual COGS to 5 hours, on €60/month cloud.',
@@ -78,8 +76,6 @@
 
     {
       slug: 'mining-operational-intelligence',
-      area: 'case2',
-      tileSize: '2x1',
       industry: 'Mining & raw materials',
       title: 'Industrial Scale-Up & Operational Intelligence',
       outcome: 'Unified ETL, AI-driven OCR, governed dashboards across acquired sites.',
@@ -148,8 +144,6 @@
 
     {
       slug: 'monolith-recovery',
-      area: 'case3',
-      tileSize: '2x1',
       industry: 'E-commerce platform',
       title: 'Monolith → Microservices Recovery',
       outcome: 'PHP monolith decommissioned. Decoupled Azure microservices in its place.',
@@ -221,8 +215,6 @@
 
     {
       slug: 'precision-viticulture',
-      area: 'case4',
-      tileSize: '1x1',
       industry: 'Agriculture',
       title: 'Precision Viticulture IoT',
       outcome: 'Closed-loop irrigation across 12 hectares — river to summit.',
@@ -283,8 +275,6 @@
 
     {
       slug: 'pharmacy-digitalisation',
-      area: 'case5',
-      tileSize: '2x1',
       industry: 'Pharmacy & healthcare',
       title: 'Pharmacy Chain Digital Transformation',
       outcome: 'From a 20-year-old ERP to GDP-compliant, AI-mapped, IoT-monitored.',
@@ -352,8 +342,6 @@
 
     {
       slug: 'demand-forecasting',
-      area: 'case6',
-      tileSize: '2x2',
       industry: 'E-commerce distribution',
       title: 'Demand Forecasting Engine',
       outcome:
@@ -422,8 +410,6 @@
 
     {
       slug: 'water-utility-predictive-ops',
-      area: 'case7',
-      tileSize: '2x1',
       industry: 'Water & Utilities',
       title: 'Predictive Infrastructure for Urban Water Utility',
       outcome: 'From reactive break-fix to data-driven, predictive operations for a city of 3M+ residents.',
