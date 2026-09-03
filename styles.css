@@ -2290,6 +2290,108 @@ body.is-locked {
   margin-bottom: 0;
 }
 
+/* Pricing tiers — same card + hover language as .cap-col */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  align-items: stretch;
+  margin-top: var(--space-2);
+}
+.pricing-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  transition: background-color 200ms ease-out, transform 200ms ease-out,
+              box-shadow 200ms ease-out;
+  box-shadow: var(--shadow-tile-rest);
+}
+.pricing-card:hover {
+  background: var(--surface-raised);
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-tile-hover);
+}
+.pricing-card__tier {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--type-eyebrow);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  margin: 0 0 var(--space-2);
+}
+.pricing-card__name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 72, "SOFT" 30;
+  font-size: var(--type-h3);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 var(--space-3);
+}
+.pricing-card__price {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 var(--space-4);
+}
+.pricing-card__price span {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--type-body-sm);
+  color: var(--ink-soft);
+}
+.pricing-card__plus {
+  font-size: var(--type-body-sm);
+  font-style: italic;
+  color: var(--ink-soft);
+  margin: 0 0 var(--space-3);
+}
+.pricing-card__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-5);
+}
+.pricing-card__list li {
+  position: relative;
+  padding-left: var(--space-5);
+  font-size: var(--type-body-sm);
+  color: var(--ink);
+  line-height: 1.5;
+}
+.pricing-card__list li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+.pricing-card__cta {
+  margin-top: auto;
+}
+.pricing-card__cta .btn {
+  width: 100%;
+}
+.pricing-note {
+  font-size: var(--type-body-sm);
+  color: var(--ink-soft);
+  margin: var(--space-4) 0 0;
+}
+
+@media (max-width: 767px) {
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+  .pricing-card {
+    padding: var(--space-5);
+  }
+}
+
 /* -------------------------------------------------------------------------
    Cookie Consent Banner
    ------------------------------------------------------------------------- */
