@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"c:/Users/PC/Desktop/Fantasma WEB\" && echo \"---.claude---\" && ls -R .claude 2>/dev/null | head -40 && echo \"---MEMORY DIR---\" && ls -la \"/c/Users/PC/.claude/projects/c--Users-PC-Desktop-Fantasma-WEB/memory/\" 2>/dev/null && echo \"---images---\" && ls images | head -40 && echo \"---pkg---\" && cat package.json && echo \"---CNAME---\" && cat CNAME && echo \"---gitignore---\" && cat .gitignore)",
+      "Read(//c/Users/PC/.claude/projects/c--Users-PC-Desktop-Fantasma-WEB/memory//**)",
+      "Bash(grep -nE '^\\(const|let|var|function|class|/\\\\*|//\\) ' script.js)",
+      "Bash(grep -nE '^\\(=|\\\\s*/\\\\* ?=|const [A-Za-z_]+ =|function |\\\\s{0,2}\\\\/\\\\/ ---\\)' script.js)",
+      "Bash(grep -nE '^\\\\s*\\(\\\\/\\\\*|const|let|function|\\\\}\\\\\\)\\\\\\(\\\\\\)|\\\\\\(function\\)' script.js)"
+    ]
+  }
+}
