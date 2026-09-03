@@ -2246,8 +2246,8 @@ body.is-locked {
    25. Projects page
    ========================================================================= */
 .project-hero {
-  padding-top: var(--space-8);
-  padding-bottom: var(--space-6);
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-4);
 }
 .project-hero__title {
   font-family: var(--font-display);
@@ -2261,14 +2261,14 @@ body.is-locked {
 }
 .project-hero__sub {
   font-size: var(--type-body-lg);
-  line-height: 1.55;
+  line-height: 1.5;
   color: var(--ink-soft);
-  max-width: 60ch;
-  margin: var(--space-4) 0 0;
+  max-width: 92ch;
+  margin: var(--space-3) 0 0;
 }
 .project-section {
-  padding-top: var(--space-4);
-  padding-bottom: var(--space-8);
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-5);
 }
 .project-section__h {
   font-family: var(--font-body);
@@ -2277,14 +2277,14 @@ body.is-locked {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--ink-soft);
-  margin: 0 0 var(--space-4);
+  margin: 0 0 var(--space-3);
 }
 .project-prose p {
   font-size: var(--type-body);
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--ink);
-  max-width: 68ch;
-  margin: 0 0 var(--space-4);
+  max-width: 96ch;
+  margin: 0 0 var(--space-3);
 }
 .project-prose p:last-child {
   margin-bottom: 0;
