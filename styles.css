@@ -98,6 +98,10 @@ html[lang="ka"] {
 /* Mkhedruli has no case; browsers map uppercase to Mtavruli, which reads
    as a different script to most Georgians. Keep eyebrows/nav as typed. */
 html[lang="ka"] * { text-transform: none; }
+/* Georgian nav labels run ~40% wider than English; tighten so the row
+   still fits beside the language toggle at laptop widths. */
+html[lang="ka"] .site-header__row > .site-nav { gap: var(--space-5); }
+html[lang="ka"] .site-header__row > .site-nav a { font-size: 0.6875rem; letter-spacing: 0.04em; }
 
 /* -------------------------------------------------------------------------
    2. Reset & Base
@@ -490,39 +494,45 @@ kbd {
 .site-header__row--lang > .btn         { grid-column: 4; }
 
 .lang-switch {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  padding: 2px;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
   font-family: var(--font-body);
   font-weight: 500;
   font-size: var(--type-eyebrow);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+/* Segmented toggle: the current language is the filled, high-contrast
+   segment (ink on cream); the other is quiet until hovered. */
 .lang-switch a {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
   color: var(--ink-soft);
   text-decoration: none;
   transition: color 150ms ease-out, background-color 150ms ease-out;
 }
 .lang-switch a:hover { color: var(--ink); }
 .lang-switch a[aria-current="page"] {
-  color: var(--ink);
-  background: var(--surface);
+  color: var(--bg);
+  background: var(--ink);
 }
 .lang-switch a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .lang-switch svg {
-  width: 20px;
-  height: 14px;
+  width: 18px;
+  height: 12px;
   border-radius: 2px;
-  box-shadow: 0 0 0 1px var(--rule);
   flex: none;
 }
 .nav-home-link {
@@ -1864,14 +1874,6 @@ body.is-locked {
    20. Responsive
    ------------------------------------------------------------------------- */
 @media (max-width: 1023px) {
-  /* Header: tighten gap and shrink nav text */
-  .site-header__row > .site-nav {
-    gap: var(--space-5);
-  }
-  .site-header__row > .site-nav a {
-    font-size: 0.625rem;
-  }
-
   .hero__lede { grid-column: content-start / content-end; }
   .hero__strip {
     grid-column: content-start / content-end;
@@ -1931,21 +1933,21 @@ body.is-locked {
   }
 }
 
-@media (max-width: 767px) {
-  :root {
-    --content-max: 100vw;
-  }
-  .page-grid {
-    max-width: 100%;
-    padding-left: var(--space-4);
-    padding-right: var(--space-4);
-    grid-template-columns: [content-start] repeat(4, minmax(0, 1fr)) [content-end];
-    column-gap: var(--space-3);
-  }
-  .page-grid > * {
-    grid-column: content-start / content-end;
-  }
+/* Small laptops: with the language toggle present the inline nav only
+   just fits, so drop the EN/KA letters (flags only) and close the gaps. */
+@media (max-width: 1199px) {
+  .site-header__row--lang > .site-nav { gap: var(--space-5); }
+  .site-header__row--lang > .site-nav a { letter-spacing: 0.04em; }
+  .site-header__row--lang .lang-switch a span { display: none; }
+  .site-header__row--lang .lang-switch a { padding: 0 8px; }
+  html[lang="ka"] .site-header__row--lang > .site-nav { gap: var(--space-4); }
+  html[lang="ka"] .site-header__row--lang > .site-nav a { font-size: 0.625rem; }
+}
 
+/* Header collapses to the hamburger from tablet down: with seven nav
+   items, the language toggle and the CTA there is no room for an inline
+   nav below ~1100px. Breakpoint must match bootNavToggle's matchMedia. */
+@media (max-width: 1023px) {
   /* Header: wordmark / CTA / menu toggle. The nav leaves the grid and becomes
      a panel hanging below the sticky header, toggled by .is-open (see
      bootNavToggle in script.js). */
@@ -1987,6 +1989,22 @@ body.is-locked {
   }
   .site-header__row > .site-nav a::after { display: none; }
   .site-header__row > .site-nav a[aria-current="page"] { color: var(--ink); }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --content-max: 100vw;
+  }
+  .page-grid {
+    max-width: 100%;
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+    grid-template-columns: [content-start] repeat(4, minmax(0, 1fr)) [content-end];
+    column-gap: var(--space-3);
+  }
+  .page-grid > * {
+    grid-column: content-start / content-end;
+  }
 
   .cap-grid { column-gap: 0; }
 

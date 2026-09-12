@@ -596,7 +596,7 @@
     });
 
     // Leaving the mobile breakpoint resets state so desktop nav is clean
-    const mq = window.matchMedia('(max-width: 767px)');
+    const mq = window.matchMedia('(max-width: 1023px)');
     mq.addEventListener('change', (ev) => {
       if (!ev.matches) setOpen(false);
     });
