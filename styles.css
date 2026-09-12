@@ -2449,11 +2449,27 @@ body.is-locked {
 /* KPI funnel — bands built by bootKpiFunnel(). Each band carries two
    custom props set inline: --w (target width %) and --mix (how far from
    --surface toward --accent, 0-100%). */
+/* Split overview: prose on the left 7 columns, funnel aside on the right 5.
+   The section heading spans the full row above both. */
+.project-section--split > .project-section__h { grid-column: content-start / content-end; }
+.project-section--split > .project-prose { grid-column: content-start / span 7; }
+.project-section--split > .project-funnel { grid-column: span 5 / content-end; }
+.project-funnel .eyebrow { margin-bottom: var(--space-2); }
+.project-funnel__h {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 48, "SOFT" 30;
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.625rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 var(--space-2);
+  text-wrap: balance;
+}
 .kpi-funnel__lede {
-  font-size: var(--type-body-sm);
+  font-size: var(--type-caption);
   color: var(--ink-soft);
-  margin: calc(-1 * var(--space-5)) 0 var(--space-5); /* pull up under the title */
-  max-width: 64ch;
+  margin: 0 0 var(--space-4);
 }
 .kpi-funnel {
   display: flex;
@@ -2604,6 +2620,10 @@ body.is-locked {
   .pricing-grid {
     grid-template-columns: 1fr;
   }
+  /* Funnel stacks under the prose; 5 of 12 columns is too narrow here */
+  .project-section--split > .project-prose,
+  .project-section--split > .project-funnel { grid-column: content-start / content-end; }
+  .project-funnel { margin-top: var(--space-6); }
 }
 
 @media (max-width: 767px) {

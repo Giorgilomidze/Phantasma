@@ -110,7 +110,7 @@
       </p>
     </header>
 
-    <section class="project-section page-grid" aria-labelledby="overview-h">
+    <section class="project-section project-section--split page-grid" aria-labelledby="overview-h">
       <h2 id="overview-h" class="project-section__h">Overview</h2>
       <div class="project-prose">
         <p>
@@ -132,15 +132,15 @@
           of where your name goes — you just don't have to do the legwork.
         </p>
       </div>
-    </section>
 
-    <!-- Live KPI funnel. Numbers come from data/kpis.json at load
-         (bootKpiFunnel in script.js); replace that file to update. -->
-    <section class="project-section page-grid" aria-labelledby="progress-h">
-      <p class="eyebrow">Progress</p>
-      <h2 id="progress-h" class="section-title">From the whole market to your inbox</h2>
-      <p class="kpi-funnel__lede" id="kpi-funnel-lede" aria-live="polite">Loading live figures…</p>
-      <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"></div>
+      <!-- Live KPI funnel. Numbers come from data/kpis.json at load
+           (bootKpiFunnel in script.js); replace that file to update. -->
+      <aside class="project-funnel" aria-labelledby="progress-h">
+        <p class="eyebrow">Progress</p>
+        <h3 id="progress-h" class="project-funnel__h">From the whole market to your inbox</h3>
+        <p class="kpi-funnel__lede" id="kpi-funnel-lede" aria-live="polite">Loading live figures…</p>
+        <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"></div>
+      </aside>
     </section>
 
     <section class="project-section page-grid" aria-labelledby="plans-h">
