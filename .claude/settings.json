@@ -5,7 +5,13 @@
       "Read(//c/Users/PC/.claude/projects/c--Users-PC-Desktop-Fantasma-WEB/memory//**)",
       "Bash(grep -nE '^\\(const|let|var|function|class|/\\\\*|//\\) ' script.js)",
       "Bash(grep -nE '^\\(=|\\\\s*/\\\\* ?=|const [A-Za-z_]+ =|function |\\\\s{0,2}\\\\/\\\\/ ---\\)' script.js)",
-      "Bash(grep -nE '^\\\\s*\\(\\\\/\\\\*|const|let|function|\\\\}\\\\\\)\\\\\\(\\\\\\)|\\\\\\(function\\)' script.js)"
+      "Bash(grep -nE '^\\\\s*\\(\\\\/\\\\*|const|let|function|\\\\}\\\\\\)\\\\\\(\\\\\\)|\\\\\\(function\\)' script.js)",
+      "WebSearch",
+      "WebFetch(domain:www.developers.keepz.me)",
+      "WebFetch(domain:quickpay.ge)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Projects page: replace Calendly CTAs with Keepz Pay now buttons, prices in GEL *)",
+      "Bash(git push *)"
     ]
   }
 }

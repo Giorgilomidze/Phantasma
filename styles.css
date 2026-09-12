@@ -522,7 +522,7 @@ kbd {
 }
 .lang-switch a:hover { color: var(--ink); }
 .lang-switch a[aria-current="page"] {
-  color: #fff;
+  color: var(--bg);
   background: var(--accent);
 }
 .lang-switch a:focus-visible {
