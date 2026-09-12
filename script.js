@@ -547,6 +547,60 @@
   }
 
   /* ---------------------------------------------------------------------
+     Mobile nav — hamburger toggle for the <=767px header.
+     The nav itself is the same <nav id="site-nav"> used on desktop; CSS
+     turns it into a drop-down panel and .is-open on the header shows it.
+     --------------------------------------------------------------------- */
+  function bootNavToggle() {
+    const header = document.getElementById('site-header');
+    const toggle = header && header.querySelector('.nav-toggle');
+    const nav = document.getElementById('site-nav');
+    if (!header || !toggle || !nav) return;
+
+    function setOpen(open) {
+      header.classList.toggle('is-open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    }
+    function isOpen() {
+      return header.classList.contains('is-open');
+    }
+
+    toggle.addEventListener('click', () => {
+      const open = !isOpen();
+      setOpen(open);
+      if (open) {
+        const first = nav.querySelector('a');
+        if (first) first.focus();
+      }
+    });
+
+    // Esc closes and hands focus back to the button
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isOpen()) {
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+
+    // Choosing a link closes the panel (in-page anchors don't reload)
+    nav.addEventListener('click', (e) => {
+      if (e.target.closest('a')) setOpen(false);
+    });
+
+    // Tap outside the header closes it
+    document.addEventListener('click', (e) => {
+      if (isOpen() && !header.contains(e.target)) setOpen(false);
+    });
+
+    // Leaving the mobile breakpoint resets state so desktop nav is clean
+    const mq = window.matchMedia('(max-width: 767px)');
+    mq.addEventListener('change', (ev) => {
+      if (!ev.matches) setOpen(false);
+    });
+  }
+
+  /* ---------------------------------------------------------------------
      Case Reel — horizontal infinite auto-scrolling carousel
      --------------------------------------------------------------------- */
   function bootCaseReel() {
@@ -1338,6 +1392,7 @@
   function init() {
     bootHeroReveal();
     bootHeader();
+    bootNavToggle();
     bootCookieBanner();
     bootCaseReel();
     Lightbox.bind();

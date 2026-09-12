@@ -68,13 +68,16 @@
   <header class="site-header" id="site-header">
     <div class="page-grid site-header__row">
       <a href="./index.html" class="wordmark" aria-label="Phantasma — go to home page">Phantasma</a>
-      <nav class="site-nav" aria-label="Primary">
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
         <a href="./index.html" class="nav-home-link">Home</a>
         <a href="#approach">Approach</a>
         <a href="./blog.html">Blog</a>
         <a href="#contact">Contact</a>
       </nav>
       <a href="#contact" class="btn btn-primary btn-sm">Book a call</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+      </button>
     </div>
   </header>
 
