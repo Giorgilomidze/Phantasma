@@ -1,0 +1,20 @@
+{
+  "as_of": "2026-09-12",
+  "profiles_researched": 358,
+  "candidates_job_market_investigated": 12,
+  "companies_searched": 2239,
+  "companies_with_live_vacancies": 2203,
+  "vacancies_in_library": 6103,
+  "vacancies_shortlisted": 345,
+  "sources": 4,
+  "leads_marked_for_processing": 0,
+  "leads_sent": 0,
+  "clients_active": 0,
+  "funnel": [
+    { "key": "vacancies_in_library",               "label": "Vacancies tracked",        "value": 6103 },
+    { "key": "companies_searched",                 "label": "Companies searched",       "value": 2239 },
+    { "key": "profiles_researched",                "label": "Profiles researched",      "value": 358 },
+    { "key": "candidates_job_market_investigated", "label": "Job markets investigated", "value": 12 },
+    { "key": "leads_sent",                         "label": "Leads sent",               "value": 0 }
+  ]
+}

@@ -134,6 +134,15 @@
       </div>
     </section>
 
+    <!-- Live KPI funnel. Numbers come from data/kpis.json at load
+         (bootKpiFunnel in script.js); replace that file to update. -->
+    <section class="project-section page-grid" aria-labelledby="progress-h">
+      <p class="eyebrow">Progress</p>
+      <h2 id="progress-h" class="section-title">From the whole market to your inbox</h2>
+      <p class="kpi-funnel__lede" id="kpi-funnel-lede" aria-live="polite">Loading live figures…</p>
+      <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"></div>
+    </section>
+
     <section class="project-section page-grid" aria-labelledby="plans-h">
       <h2 id="plans-h" class="project-section__h">Plans</h2>
 

@@ -1255,6 +1255,78 @@
   }
 
   /* ---------------------------------------------------------------------
+     KPI funnel (projects page) — reads data/kpis.json at load and renders
+     the `funnel` array as stacked bands. Stage count, order and labels
+     come from the file; nothing here is hardcoded. Band width is
+     log-scaled so a 0 still shows as a 28% band.
+     --------------------------------------------------------------------- */
+  function bootKpiFunnel() {
+    const root = document.getElementById('kpi-funnel');
+    const lede = document.getElementById('kpi-funnel-lede');
+    if (!root || !lede) return;
+
+    function unavailable() {
+      lede.textContent = 'Live figures unavailable';
+      root.innerHTML = '';
+    }
+
+    function formatDate(iso) {
+      const d = new Date(iso + 'T00:00:00');
+      if (isNaN(d)) return iso;
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function render(data) {
+      const stages = Array.isArray(data.funnel)
+        ? data.funnel.filter((s) => s && typeof s.label === 'string' && Number.isFinite(Number(s.value)))
+        : [];
+      if (!stages.length) { unavailable(); return; }
+
+      lede.textContent = 'Every number is live and comes straight from our working data.'
+        + (data.as_of ? ' Updated ' + formatDate(String(data.as_of)) + '.' : '');
+
+      const max = Math.max(...stages.map((s) => Number(s.value)), 0);
+      const denom = Math.log10(max + 1) || 1;
+      const last = stages.length - 1;
+
+      root.innerHTML = '';
+      stages.forEach((s, i) => {
+        const value = Number(s.value);
+        const width = 28 + 72 * (Math.log10(value + 1) / denom);
+        const mix = last ? (i / last) * 100 : 100;
+        const band = document.createElement('div');
+        band.className = 'kpi-band' + (mix >= 60 ? ' kpi-band--dark' : '');
+        band.style.setProperty('--w', width.toFixed(2) + '%');
+        band.style.setProperty('--mix', mix.toFixed(0) + '%');
+        band.setAttribute('role', 'group');
+        band.setAttribute('aria-label', s.label + ': ' + value.toLocaleString('en-GB'));
+        band.innerHTML =
+          '<span class="kpi-band__label"></span>' +
+          '<span class="kpi-band__value"></span>';
+        band.firstChild.textContent = s.label;
+        band.lastChild.textContent = value.toLocaleString('en-GB');
+        root.appendChild(band);
+      });
+
+      // Grow-in on first scroll into view, unless the user asked for less motion
+      if (prefersReducedMotion || !('IntersectionObserver' in window)) return;
+      root.classList.add('js-animate');
+      const io = new IntersectionObserver((entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          root.classList.add('is-in');
+          io.disconnect();
+        }
+      }, { threshold: 0.2 });
+      io.observe(root);
+    }
+
+    fetch(root.dataset.src, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then(render)
+      .catch(unavailable);
+  }
+
+  /* ---------------------------------------------------------------------
      Calendly — lazy-on-intent inline embed.
      The third-party script does not load until the booking section
      intersects the viewport (or the user activates the placeholder).
@@ -1399,6 +1471,7 @@
     bootCaseReel();
     Lightbox.bind();
     bootApproachStrip();
+    bootKpiFunnel();
     bootCalendly();
     bootImageZoom();
   }
