@@ -508,7 +508,7 @@ kbd {
   text-transform: uppercase;
 }
 /* Segmented toggle: the current language is the filled, high-contrast
-   segment (ink on cream); the other is quiet until hovered. */
+   segment (terracotta, same as .btn-primary); the other is quiet until hovered. */
 .lang-switch a {
   display: inline-flex;
   align-items: center;
@@ -522,8 +522,8 @@ kbd {
 }
 .lang-switch a:hover { color: var(--ink); }
 .lang-switch a[aria-current="page"] {
-  color: var(--bg);
-  background: var(--ink);
+  color: #fff;
+  background: var(--accent);
 }
 .lang-switch a:focus-visible {
   outline: 2px solid var(--accent);
