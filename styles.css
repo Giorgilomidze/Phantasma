@@ -88,6 +88,17 @@
   }
 }
 
+/* Georgian pages: Fraunces and General Sans have no Georgian glyphs, so the
+   Noto Georgian faces (loaded only by *.ka.html) are put first. Latin text on
+   those pages still falls through to the site fonts. */
+html[lang="ka"] {
+  --font-display: "Noto Serif Georgian", "Fraunces", "Iowan Old Style", "Baskerville", serif;
+  --font-body: "Noto Sans Georgian", "General Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+/* Mkhedruli has no case; browsers map uppercase to Mtavruli, which reads
+   as a different script to most Georgians. Keep eyebrows/nav as typed. */
+html[lang="ka"] * { text-transform: none; }
+
 /* -------------------------------------------------------------------------
    2. Reset & Base
    ------------------------------------------------------------------------- */
@@ -409,6 +420,7 @@ kbd {
   position: relative;
   color: var(--ink-soft);
   padding: 8px 0;
+  white-space: nowrap; /* Georgian labels are wider; never break a nav item */
   transition: color 150ms ease-out;
 }
 .site-nav a::after {
@@ -467,6 +479,52 @@ kbd {
 .site-header.is-open .nav-toggle::before  { transform: translateY(6px) rotate(45deg); }
 .site-header.is-open .nav-toggle__bar     { opacity: 0; }
 .site-header.is-open .nav-toggle::after   { transform: translateY(-6px) rotate(-45deg); }
+
+/* Language switch (projects pages only). Two flag+code links; the current
+   language carries aria-current="page". The header row gets the --lang
+   modifier so the switch has its own column between nav and CTA. */
+.site-header__row--lang {
+  grid-template-columns: auto 1fr auto auto;
+}
+.site-header__row--lang > .lang-switch { grid-column: 3; }
+.site-header__row--lang > .btn         { grid-column: 4; }
+
+.lang-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--type-eyebrow);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lang-switch a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: color 150ms ease-out, background-color 150ms ease-out;
+}
+.lang-switch a:hover { color: var(--ink); }
+.lang-switch a[aria-current="page"] {
+  color: var(--ink);
+  background: var(--surface);
+}
+.lang-switch a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lang-switch svg {
+  width: 20px;
+  height: 14px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--rule);
+  flex: none;
+}
 .nav-home-link {
   position: relative;
   color: var(--ink-soft);
@@ -1159,7 +1217,8 @@ kbd {
 }
 .site-footer__tagline {
   margin: 0;
-  flex: 0 0 auto;
+  flex: 0 1 auto; /* may shrink and wrap — the Georgian tagline is long */
+  min-width: 0;
 }
 .site-footer__copy {
   margin: 0;
@@ -1896,6 +1955,15 @@ body.is-locked {
   }
   .site-header__row > .btn        { grid-column: 3; }
   .site-header__row > .nav-toggle { grid-column: 4; display: block; }
+  /* With the language switch there is no room for the CTA button too;
+     the page's own Pay now buttons and the Contact link carry that. */
+  .site-header__row--lang {
+    grid-template-columns: auto 1fr auto auto;
+  }
+  .site-header__row--lang > .lang-switch { grid-column: 3; }
+  .site-header__row--lang > .btn         { display: none; }
+  .site-header__row--lang > .nav-toggle  { grid-column: 4; }
+  .lang-switch a span { display: none; } /* flags only — no room for codes */
   .site-header__row > .site-nav {
     display: none;
     position: absolute;

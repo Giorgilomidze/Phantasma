@@ -10,6 +10,9 @@
 
   <!-- Canonical -->
   <link rel="canonical" href="https://solvephantasma.com/projects.html" />
+  <link rel="alternate" hreflang="en" href="https://solvephantasma.com/projects.html" />
+  <link rel="alternate" hreflang="ka" href="https://solvephantasma.com/projects.ka.html" />
+  <link rel="alternate" hreflang="x-default" href="https://solvephantasma.com/projects.html" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -68,7 +71,7 @@
 
   <!-- Header -->
   <header class="site-header" id="site-header">
-    <div class="page-grid site-header__row">
+    <div class="page-grid site-header__row site-header__row--lang">
       <a href="./index.html" class="wordmark" aria-label="Phantasma — home">Phantasma</a>
       <nav class="site-nav" id="site-nav" aria-label="Primary">
         <a href="./index.html">Home</a>
@@ -79,8 +82,18 @@
         <a href="./projects.html" aria-current="page">Projects</a>
         <a href="./index.html#contact">Contact</a>
       </nav>
+      <div class="lang-switch" aria-label="Language">
+        <a href="./projects.html" hreflang="en" lang="en" aria-label="English" aria-current="page">
+          <svg viewBox="0 0 60 30" aria-hidden="true" focusable="false"><clipPath id="uk-c"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-c)" stroke="#C8102E" stroke-width="4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></svg>
+          <span>EN</span>
+        </a>
+        <a href="./projects.ka.html" hreflang="ka" lang="ka" aria-label="ქართული">
+          <svg viewBox="0 0 300 200" aria-hidden="true" focusable="false"><rect width="300" height="200" fill="#fff"/><path d="M130 0h40v200h-40zM0 80h300v40H0z" fill="#e8112d"/><g fill="#e8112d"><path id="ge-c" d="M59 30h12v14h14v12H71v14H59V56H45V44h14z"/><use href="#ge-c" x="170"/><use href="#ge-c" y="100"/><use href="#ge-c" x="170" y="100"/></g></svg>
+          <span>KA</span>
+        </a>
+      </div>
       <a href="./index.html#contact" class="btn btn-primary btn-sm">Book a call</a>
-      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
     </div>

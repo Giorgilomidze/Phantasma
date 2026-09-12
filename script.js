@@ -560,7 +560,9 @@
     function setOpen(open) {
       header.classList.toggle('is-open', open);
       toggle.setAttribute('aria-expanded', String(open));
-      toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      toggle.setAttribute('aria-label', open
+        ? (toggle.dataset.labelClose || 'Close menu')
+        : (toggle.dataset.labelOpen || 'Open menu'));
     }
     function isOpen() {
       return header.classList.contains('is-open');

@@ -55,6 +55,8 @@ server from the repo root, e.g. `python -m http.server 8000`.
 | `index.html` | Main site (500 lines) |
 | `landing.html` | Paid-ads landing page — hero / approach / booking only |
 | `blog.html` | Case-studies page: 7 hand-written articles, sticky sidebar, scroll-spy |
+| `projects.html` | "Personal Career Strategist" service page — 3 pricing tiers, Keepz **Pay now** links |
+| `projects.ka.html` | **Georgian translation of `projects.html`.** Same markup, translated text, `lang="ka"`, loads Noto Sans/Serif Georgian. **Any copy or price change on `projects.html` must be mirrored here by hand.** Header carries a `.lang-switch` (inline-SVG GB/GE flags) and both pages link each other with `hreflang`. |
 | `script.js` | All behaviour + the `CASES` data (1354 lines) |
 | `styles.css` | All styles, numbered sections (2313 lines) |
 | `convert-images.js` | One-off `sharp` script, PNG/JPG to WebP at quality 82 |
@@ -90,7 +92,7 @@ Single IIFE. Order of contents:
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
 
-`init()` runs on `DOMContentLoaded`. **All three pages load the same
+`init()` runs on `DOMContentLoaded`. **All pages (index, landing, blog, projects, projects.ka) load the same
 `script.js`**, so every boot function must guard against elements that do not
 exist on the current page (`if (!el) return;`). Several past bugs were exactly
 this — see commits `a2fec02` and `ca88b9c`.
