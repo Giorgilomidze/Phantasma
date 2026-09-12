@@ -1265,14 +1265,26 @@
     const lede = document.getElementById('kpi-funnel-lede');
     if (!root || !lede) return;
 
+    // Copy lives on the page so the Georgian version can supply its own
+    const locale = document.documentElement.lang || 'en-GB';
+    const ledeText = lede.dataset.text || 'Every number is live and comes straight from our working data.';
+    const updatedText = lede.dataset.updated || 'Updated {date}.';
+
     function unavailable() {
-      lede.textContent = 'Live figures unavailable';
+      lede.textContent = lede.dataset.unavailable || 'Live figures unavailable';
       root.innerHTML = '';
     }
+
+    // Browsers ship no Georgian date names, so those are spelled out here
+    const KA_MONTHS = ['იანვარი', 'თებერვალი', 'მარტი', 'აპრილი', 'მაისი', 'ივნისი',
+      'ივლისი', 'აგვისტო', 'სექტემბერი', 'ოქტომბერი', 'ნოემბერი', 'დეკემბერი'];
 
     function formatDate(iso) {
       const d = new Date(iso + 'T00:00:00');
       if (isNaN(d)) return iso;
+      if (locale.startsWith('ka')) {
+        return d.getDate() + ' ' + KA_MONTHS[d.getMonth()] + ', ' + d.getFullYear();
+      }
       return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     }
 
@@ -1282,8 +1294,8 @@
         : [];
       if (!stages.length) { unavailable(); return; }
 
-      lede.textContent = 'Every number is live and comes straight from our working data.'
-        + (data.as_of ? ' Updated ' + formatDate(String(data.as_of)) + '.' : '');
+      lede.textContent = ledeText
+        + (data.as_of ? ' ' + updatedText.replace('{date}', formatDate(String(data.as_of))) : '');
 
       const max = Math.max(...stages.map((s) => Number(s.value)), 0);
       const denom = Math.log10(max + 1) || 1;
