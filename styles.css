@@ -2363,7 +2363,7 @@ body.is-locked {
 /* Pricing tiers — same card + hover language as .cap-col */
 .pricing-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-5);
   align-items: stretch;
   margin-top: var(--space-2);
@@ -2453,10 +2453,13 @@ body.is-locked {
   margin: var(--space-4) 0 0;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .pricing-grid {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 767px) {
   .pricing-card {
     padding: var(--space-5);
   }
