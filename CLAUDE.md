@@ -57,8 +57,9 @@ server from the repo root, e.g. `python -m http.server 8000`.
 | `blog.html` | Case-studies page: 7 hand-written articles, sticky sidebar, scroll-spy |
 | `projects.html` | "Personal Career Strategist" service page — 3 pricing tiers, Keepz **Pay now** links |
 | `projects.ka.html` | **Georgian translation of `projects.html`.** Same markup, translated text, `lang="ka"`, loads Noto Sans/Serif Georgian. **Any copy or price change on `projects.html` must be mirrored here by hand.** Header carries a `.lang-switch` (inline-SVG GB/GE flags) and both pages link each other with `hreflang`. |
-| `script.js` | All behaviour + the `CASES` data (1354 lines) |
-| `styles.css` | All styles, numbered sections (2313 lines) |
+| `data/kpis.json` | **Live KPI numbers for the projects-page funnel.** Owner overwrites it and pushes; both projects pages fetch it at load (`cache: no-store`). Only the `funnel[]` array is rendered — stage count, order and labels come from the file. Live URL `https://solvephantasma.com/data/kpis.json`. |
+| `script.js` | All behaviour + the `CASES` data (~1500 lines) |
+| `styles.css` | All styles, numbered sections (~2500 lines) |
 | `convert-images.js` | One-off `sharp` script, PNG/JPG to WebP at quality 82 |
 | `favicon.svg`, `CNAME`, `robots.txt`, `sitemap.xml` | Site plumbing |
 | `images/` | Source PNG/JPG **and** the WebP the site actually references |
@@ -85,6 +86,8 @@ Single IIFE. Order of contents:
 | `bootHeroReveal()` | Per-line hero text reveal, then triggers `triggerCountUp()` |
 | `triggerCountUp()` | Animates `[data-count-to]` KPI numbers (cubic ease-out, staggered 60ms) |
 | `bootHeader()` | Adds scrolled state to `#site-header` past 80px |
+| `bootNavToggle()` | Hamburger menu, **≤1023px on every page**. `.is-open` on `#site-header`; Esc closes + refocuses button; link click / outside tap closes. Labels from `data-label-open/close` on the button (Georgian page supplies its own). Its `matchMedia('(max-width: 1023px)')` must match the CSS breakpoint. |
+| `bootKpiFunnel()` | Projects pages only. Fetches `data/kpis.json`, renders `funnel[]` as `.kpi-band`s. Width `28 + 72·log10(v+1)/log10(max+1)` % so 0 is still a 28% band. Colour via `--mix` custom prop → `color-mix(in oklch, --surface, --accent)`; text flips to `--bg` at mix ≥ 60%. Lede / "updated" / "unavailable" strings come from `data-*` on `#kpi-funnel-lede`; Georgian dates use a hardcoded month array (browsers ship no `ka` locale). Fetch failure → "Live figures unavailable", no bands. |
 | `bootCaseReel()` | Infinite auto-scrolling carousel, 4 visible, 5s interval, arrows + dots |
 | `Lightbox` | Module (IIFE) — 6-slide case-study viewer with keyboard nav |
 | `bootApproachStrip()` | Scroll-driven progress through the 5 approach stations |
@@ -166,6 +169,20 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   delete them on the assumption the old Stack & Industries section is dead.
 - Section 20 is `Responsive`, 21 is `Reduced motion`. Every animation needs a
   `prefers-reduced-motion` answer, in CSS or via the JS flag.
+- **Header breakpoints.** Inline nav ≥1024px; hamburger ≤1023px (own `@media`
+  block just before the 767 block). Pages carrying the language switch use
+  `.site-header__row--lang` (4 columns; on ≤1023 the header CTA is hidden and
+  the switch shows flags only; 1024–1199 also flags-only with tighter nav).
+  Georgian nav labels are ~40% wider — `html[lang="ka"]` rules shrink them.
+- **`.lang-switch`** — segmented toggle (cream pill, active segment
+  `--accent` bg + `--bg` text, same as `.btn-primary`). Flags are inline SVG
+  (emoji flags don't render on Windows). Only on `projects*.html`.
+- **`html[lang="ka"]`** overrides `--font-display/--font-body` to Noto
+  Serif/Sans Georgian (loaded only by `projects.ka.html`) and sets
+  `text-transform: none` everywhere — uppercase maps Mkhedruli to Mtavruli.
+- Section 25 is the Projects page: `.project-*`, `.pricing-*`, `.kpi-*`.
+  `.project-section--split` puts prose in 7 columns and `.project-funnel`
+  in the right 5; stacks ≤1023px.
 
 ---
 
@@ -184,8 +201,20 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   before the user asks. Its height is pinned to avoid an internal scrollbar
   (commits `96ff2f8`, `3c00b15`) — do not "fix" that by removing the height.
 
-The consent-mode `<head>` block is duplicated across all three HTML files. If
-you change it, change it in all three.
+- **Keepz (payments)** — merchant dashboard `app.keepz.me`, settles to the
+  owner's TBC Individual-Entrepreneur account. The three **Pay now** buttons on
+  `projects.html` / `projects.ka.html` are fixed-amount Keepz payment links,
+  used as the *direct* `app.keepz.me/pay?…productId=…` URL (the
+  `tiny.keepz.me` short links are tinyurl redirects — don't use them).
+  Detective ₾10 `productId=150bec12…`, Essential ₾50 `f51bd2a4…`, Advanced
+  ₾80 `04216b80…`. **All three links expire 31-12-2026** — recreate in Keepz
+  → Payment links and update both HTML files. Payments are one-off (no
+  recurring). The Keepz REST API needs server-side RSA/AES encryption and a
+  callback URL, so it is impossible from GitHub Pages — that is the Supabase
+  Edge Function job when the backend exists.
+
+The consent-mode `<head>` block is duplicated across **all five** HTML files. If
+you change it, change it in all of them.
 
 ---
 
@@ -225,40 +254,41 @@ the copy, not used by the site.
 
 ## 9. Known open items
 
-Still open — both blocked on information only the owner has:
+Still open — need information or a decision from the owner:
 
-1. **GA4 measurement ID missing.** The placeholder comment sits in **all three**
-   pages, not just `index.html`: `index.html:99`, `landing.html:56`,
-   `blog.html:58`. When the ID arrives, add
-   `gtag('config', 'G-XXXXXXXXXX')` in all three, behind the existing
-   consent-mode gate.
-2. **Footer LinkedIn link is `href="#"`** — `index.html:431`. Only dead link on
-   the site.
+1. **GA4 measurement ID missing.** Placeholder comment in all five pages
+   (`index.html:99`, `landing.html:56`, `blog.html:58`, both `projects*.html`
+   ~line 58). Add `gtag('config', 'G-XXXXXXXXXX')` behind the consent gate.
+2. **Footer LinkedIn link is `href="#"`** — `index.html:431`.
+3. **Owner to verify in Keepz (not a site change):** each of the three payment
+   links should be **მრავალჯერადი (multi-use)**, not one-time; commission
+   type Receiver vs Sender is a pricing choice; and add one **additional
+   field** shown to the payer (type "მომხმარებლის აიდი" or Email, prefilled
+   value `your@email.com`) so payments can be matched to a person. Last
+   screenshot seen (12 Sep 2026) still showed one-time + Sender on the ₾10 link.
+4. **Georgian copy review.** `projects.ka.html` was machine-translated by
+   Claude; the owner (native speaker) has not yet proofread it. Tier names
+   used: დეტექტივი / ძირითადი / გაფართოებული.
+5. **`career.solvephantasma.com`** — owner wants this subdomain. Recommended:
+   GoDaddy → DNS → **Forwarding** tab → subdomain `career` → 301 to
+   `https://solvephantasma.com/projects.html` (no CNAME; GitHub Pages serves
+   one custom domain per repo). Not yet done as of 12 Sep 2026.
+6. **Pre-existing:** `index.html` scrolls ~28px sideways on phones because
+   the case reel's slides extend past the viewport (`.case-reel__slide`).
+   Present before any of this work; not investigated.
+7. **Payments identity / login.** Owner cannot tell who paid. Short-term fix
+   is item 3. Real fix is Supabase Auth + an Edge Function calling the Keepz
+   API with a callback (see the `backend-and-payments-plan` memory). Not
+   started.
 
-Closed:
+Closed (12 Sep 2026): reel thumbnails swap fixed; `.gitignore` covers the
+ClickUp token file and scratch dirs; dead CSS section 10 and half of 12
+removed (`.chips`/`.chip` are live — keep them); mobile hamburger nav added;
+hero `nowrap` clipping fixed; Keepz Pay now buttons; Detective tier; Georgian
+page + language toggle; KPI funnel (right column beside Overview).
 
-3. ~~Suspected swapped reel thumbnails.~~ **Confirmed and fixed.** They *were*
-   reversed. Verified against the artwork itself: "Slider Thumbnail 3 - Warehouse
-   forecasting" depicts a sales forecast at 98% accuracy, 12k SKU segmentation
-   and a golden-record panel → that is `demand-forecasting`. "Slider Thumbnail 6
-   - Failed project transformation" depicts "THE MONOLITH", PHP, a
-   microservices-oriented cloud architecture and Azure DevOps CI/CD → that is
-   `monolith-recovery`. Swapped accordingly. Note the filenames are misleading:
-   **thumbnail numbers do not correspond to case order.** Check the image, not
-   the name. (Similar pharmacy/IoT swap was fixed in `8380b38`.)
-4. ~~ClickUp API token not git-ignored.~~ **Fixed** — `.claude/settings.local.json`
-   is now in the repo `.gitignore`. It had been ignored only via the machine's
-   *global* gitignore, which protected this checkout but would not protect a
-   clone or a collaborator. The token is still plaintext in that file, so keep
-   the ignore rule in place. `.claude/settings.json` is safe to commit.
-5. ~~Untracked scratch dirs clutter `git status`.~~ **Fixed** — `Fantasma OLD/`
-   (39 MB) and `Miscelanous trash/` (4.1 MB) are now git-ignored.
-6. ~~Dead CSS and vestigial `CASES` keys.~~ **Fixed** — removed section 10
-   (Bento: `.work*`, `.bento*`, `.tile*`), the dead half of section 12
-   (`.stack*`, `.chip__dot`), and the three orphaned `@media` blocks that
-   targeted them; plus the write-only `area` / `tileSize` keys from all 7 `CASES`
-   entries. 275 lines out of `styles.css`, 14 out of `script.js`. **`.chips` and
-   `.chip` were kept — they are live** (see section 5).
+Uncommitted in the working tree: `.claude/settings.json` (unrelated
+harness settings, left alone deliberately).
 
 ---
 
