@@ -57,6 +57,8 @@ server from the repo root, e.g. `python -m http.server 8000`.
 | `blog.html` | Case-studies page: 7 hand-written articles, sticky sidebar, scroll-spy |
 | `projects.html` | "Personal Career Strategist" service page — 3 pricing tiers, Keepz **Pay now** links |
 | `projects.ka.html` | **Georgian translation of `projects.html`.** Same markup, translated text, `lang="ka"`, loads Noto Sans/Serif Georgian. **Any copy or price change on `projects.html` must be mirrored here by hand.** Header carries a `.lang-switch` (inline-SVG GB/GE flags) and both pages link each other with `hreflang`. |
+| `account.html` | Client dashboard (EN only). Signed-out: Log in prompt. Signed-in: email/Sign out + 8 KPI tiles from `get_my_stats()`. `noindex`, disallowed in `robots.txt`. |
+| `supabase/` | **Not the schema.** `README.md` (run order + table contract), `0001-drop-site-v1.sql`, `0002-site-additions.sql`. The schema lives in `D:\Web Development\Solve Assistant\supabase\schema.sql`. |
 | `data/kpis.json` | **Live KPI numbers for the projects-page funnel.** Owner overwrites it and pushes; both projects pages fetch it at load (`cache: no-store`). Only the `funnel[]` array is rendered — stage count, order and labels come from the file. Live URL `https://solvephantasma.com/data/kpis.json`. |
 | `script.js` | All behaviour + the `CASES` data (~1500 lines) |
 | `styles.css` | All styles, numbered sections (~2500 lines) |
@@ -91,11 +93,14 @@ Single IIFE. Order of contents:
 | `bootCaseReel()` | Infinite auto-scrolling carousel, 4 visible, 5s interval, arrows + dots |
 | `Lightbox` | Module (IIFE) — 6-slide case-study viewer with keyboard nav |
 | `bootApproachStrip()` | Scroll-driven progress through the 5 approach stations |
+| `Auth` | Module. supabase-js client (`SUPABASE_URL` / publishable key constants), magic-link + Google sign-in, `requestSubscription(plan)` (inserts a `pending` row), `loadStats()`. Syncs every `.js-auth` link (Log in ↔ Account, labels from `data-label-*`) and fires `phantasma:auth`. Skips silently when `window.supabase` is absent (landing). |
+| `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: signed out → opens modal; signed in → `requestSubscription` then Keepz opens. |
+| `bootAccountPage()` | `account.html` only. Fills `[data-stat]` tiles, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
 | `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` |
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
 
-`init()` runs on `DOMContentLoaded`. **All pages (index, landing, blog, projects, projects.ka) load the same
+`init()` runs on `DOMContentLoaded`. **All pages (index, landing, blog, projects, projects.ka, account) load the same
 `script.js`**, so every boot function must guard against elements that do not
 exist on the current page (`if (!el) return;`). Several past bugs were exactly
 this — see commits `a2fec02` and `ca88b9c`.
@@ -180,6 +185,9 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 - **`html[lang="ka"]`** overrides `--font-display/--font-body` to Noto
   Serif/Sans Georgian (loaded only by `projects.ka.html`) and sets
   `text-transform: none` everywhere — uppercase maps Mkhedruli to Mtavruli.
+- Section 26 is Auth: `.auth-modal*`, `.js-auth[data-state="in"]` (outlined Account
+  look), `.site-nav__auth` (nav-panel Log in, shown ≤1023 only), and the account
+  page `.account*` / `.stat-grid` / `.stat` tiles (8 → 4 → 2 columns at 1199 / 599).
 - Section 25 is the Projects page: `.project-*`, `.pricing-*`, `.kpi-*`.
   `.project-section--split` puts prose in 7 columns and `.project-funnel`
   in the right 5; stacks ≤1023px.
@@ -213,7 +221,18 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   callback URL, so it is impossible from GitHub Pages — that is the Supabase
   Edge Function job when the backend exists.
 
-The consent-mode `<head>` block is duplicated across **all five** HTML files. If
+- **Supabase (accounts)** — project `Phantasma`, `https://muumpjtpjnoxxdkhqtik.supabase.co`,
+  eu-central-1, free tier (pauses after 7 idle days — move to Pro before real
+  clients). Auth: Email magic link + Google (Cloud project `phantasma-508619`,
+  OAuth client under `lomiddze@gmail.com`). Redirect URLs must include
+  `https://solvephantasma.com/*` and `http://localhost:8000/*`. Publishable key
+  is in `script.js` by design; the secret/service_role key never leaves
+  Supabase. supabase-js 2.58.0 UMD from jsDelivr, loaded before `script.js` on
+  every page except `landing.html`. Schema and RLS are owned by the Solve
+  Assistant repo — see `supabase/README.md`. Header CTA is now **Log in /
+  Account** on all pages except `landing.html` (kept "Book a call").
+
+The consent-mode `<head>` block is duplicated across **all six** HTML files. If
 you change it, change it in all of them.
 
 ---
@@ -276,10 +295,21 @@ Still open — need information or a decision from the owner:
 6. **Pre-existing:** `index.html` scrolls ~28px sideways on phones because
    the case reel's slides extend past the viewport (`.case-reel__slide`).
    Present before any of this work; not investigated.
-7. **Payments identity / login.** Owner cannot tell who paid. Short-term fix
-   is item 3. Real fix is Supabase Auth + an Edge Function calling the Keepz
-   API with a callback (see the `backend-and-payments-plan` memory). Not
+7. **Payments identity.** Login exists (15 Sep 2026). Pay now now writes a
+   `pending` `subscriptions` row for the signed-in user before Keepz opens, so
+   the owner matches Keepz dashboard payments by time/amount and sets the row
+   `active` by hand. Automated Keepz callback via Edge Function still not
    started.
+8. **Schema gaps to fix in Solve Assistant `schema.sql`** (reported 15 Sep
+   2026, not changed from here): `candidates` and `shortlists` update policies
+   are row-level only — add column grants so clients can write only the intake
+   columns / `client_decision`. Move the `advanced` plan seed from
+   `0002-site-additions.sql` into `schema.sql`.
+9. **Georgian `account.html`** not built; `projects.ka.html` links to the English one.
+10. **Supabase built-in email** is rate-limited (few/hour) — set SMTP
+    (Resend or Workspace) before real sign-ups. Privacy-policy page still
+    missing; Google/LinkedIn consent screens want a URL. LinkedIn provider not
+    set up (needs a Company Page).
 
 Closed (12 Sep 2026): reel thumbnails swap fixed; `.gitignore` covers the
 ClickUp token file and scratch dirs; dead CSS section 10 and half of 12

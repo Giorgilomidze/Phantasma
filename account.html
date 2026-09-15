@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f9f3eb" />
+  <title>Your account — Phantasma</title>
+  <meta name="description" content="Sign in to see your Phantasma orders and the status of your Personal Career Strategist service." />
+
+  <!-- Private page: keep out of the index -->
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://solvephantasma.com/account.html" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://solvephantasma.com/account.html" />
+  <meta property="og:title" content="Your account — Phantasma" />
+  <meta property="og:description" content="Sign in to see your orders and service status." />
+  <meta property="og:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Your account — Phantasma" />
+  <meta name="twitter:description" content="Sign in to see your orders and service status." />
+  <meta name="twitter:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&display=swap" />
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap" />
+
+  <!-- Consent mode: deny by default until user accepts (GDPR) -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('consent', 'default', {
+      analytics_storage: 'denied',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied'
+    });
+    if (localStorage.getItem('phantasma_cookie_consent') === 'accepted') {
+      gtag('consent', 'update', {
+        analytics_storage: 'granted',
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted'
+      });
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18182297582"></script>
+  <script>
+    gtag('js', new Date());
+    gtag('config', 'AW-18182297582');
+    /* GA4: add gtag('config', 'G-XXXXXXXXXX') here once measurement ID is ready */
+  </script>
+
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <div class="grain" aria-hidden="true"></div>
+  <div id="top" aria-hidden="true" class="scroll-anchor"></div>
+
+  <!-- Header -->
+  <header class="site-header" id="site-header">
+    <div class="page-grid site-header__row">
+      <a href="./index.html" class="wordmark" aria-label="Phantasma — home">Phantasma</a>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="./index.html">Home</a>
+        <a href="./index.html#what-we-do">What we do</a>
+        <a href="./index.html#work">Work</a>
+        <a href="./index.html#approach">Approach</a>
+        <a href="./blog.html">Blog</a>
+        <a href="./projects.html">Projects</a>
+        <a href="./index.html#contact">Contact</a>
+      </nav>
+      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Account">Log in</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- Client dashboard, v1: the numbers only. Filled by bootAccountPage
+         (script.js) from get_my_stats(); forms and tables come later. -->
+    <section class="account page-grid" id="account" aria-labelledby="account-h">
+      <p class="eyebrow">Account</p>
+      <h1 class="project-hero__title" id="account-h">Your account</h1>
+
+      <!-- Signed out -->
+      <div class="account__panel" id="account-signed-out">
+        <p class="project-hero__sub">
+          Sign in to follow your Personal Career Strategist service — what we processed,
+          what we sent, and what came back.
+        </p>
+        <p>
+          <a href="./account.html" class="btn btn-primary js-auth" data-label-login="Log in" data-label-account="Account">Log in</a>
+        </p>
+      </div>
+
+      <!-- Signed in -->
+      <div class="account__panel account__panel--full" id="account-signed-in" hidden>
+        <div class="account__who">
+          <p class="account__email" id="account-email"></p>
+          <button class="btn btn-sm account__signout" type="button" id="account-signout">Sign out</button>
+        </div>
+
+        <section class="account__stats" aria-labelledby="stats-h">
+          <p class="eyebrow" id="stats-h">Your service so far</p>
+          <dl class="stat-grid" id="stat-grid">
+            <div class="stat"><dt>Weekly runs</dt><dd><span data-stat="weeks">0</span><span class="stat__of"> / 4</span></dd></div>
+            <div class="stat"><dt>Vacancies processed</dt><dd data-stat="processed">0</dd></div>
+            <div class="stat"><dt>Companies reviewed</dt><dd data-stat="companies">0</dd></div>
+            <div class="stat"><dt>Selected for you</dt><dd data-stat="selected">0</dd></div>
+            <div class="stat"><dt>Applications sent</dt><dd data-stat="sent">0</dd></div>
+            <div class="stat"><dt>Interviews</dt><dd data-stat="interviews">0</dd></div>
+            <div class="stat"><dt>Offers</dt><dd data-stat="offers">0</dd></div>
+            <div class="stat"><dt>Last shortlist</dt><dd class="stat__date" data-stat="lastweek">—</dd></div>
+          </dl>
+        </section>
+
+        <div class="account__intro">
+          <h2 class="project-funnel__h">Four weeks, one run a week.</h2>
+          <p class="project-hero__sub">
+            Every week we go through the whole market, shortlist what fits your brief,
+            and send the applications you approve. The numbers above are yours and
+            update after each run.
+          </p>
+          <p class="account__stats-note" id="account-stats-note" hidden>
+            Your first shortlist is being prepared — the counters fill in after the first weekly run.
+          </p>
+          <p class="account__hint">
+            Not on a plan yet? See the tiers on the
+            <a href="./projects.html" class="link-quiet">Personal Career Strategist</a> page.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="page-grid site-footer__inner">
+      <hr class="rule rule--footer" />
+      <div class="site-footer__row">
+        <a href="./index.html" class="wordmark wordmark--footer">Phantasma</a>
+        <a href="./index.html#contact" class="link-quiet">Book a discovery call →</a>
+      </div>
+      <div class="site-footer__row site-footer__row--meta">
+        <p class="site-footer__tagline">Tangible solutions for abstract problems.</p>
+        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+        <a class="link-quiet" href="./index.html">Full site</a>
+        <p class="site-footer__copy">© Phantasma 2026</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Cookie Consent Banner -->
+  <!-- Login modal — opened by the header "Log in" link and by Pay now when
+       signed out. Behaviour in bootAuthModal (script.js). -->
+  <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <h2 class="auth-modal__title" id="auth-title">Log in or create your account</h2>
+      <p class="auth-modal__sub">One link by email, or your Google account. No password.</p>
+      <button class="btn auth-modal__google" type="button" id="auth-google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Continue with Google</button>
+      <p class="auth-modal__or" aria-hidden="true">or</p>
+      <form class="auth-modal__form" id="auth-form" novalidate
+            data-msg-sending="One moment…"
+            data-msg-sent="Check {email} for your sign-in link."
+            data-msg-error="That didn't work — please try again.">
+        <label class="auth-modal__label" for="auth-email">Email address</label>
+        <input class="auth-modal__input" id="auth-email" type="email" name="email" autocomplete="email" required inputmode="email" />
+        <button class="btn btn-primary" type="submit">Send me a link</button>
+      </form>
+      <p class="auth-modal__status" id="auth-status" role="status" aria-live="polite" hidden></p>
+    </div>
+  </div>
+
+  <div class="cookie-banner" id="cookie-banner" hidden>
+    <p class="cookie-banner__text">
+      We use cookies for advertising and analytics to understand how our site is used and to show relevant ads to potential clients.
+    </p>
+    <div class="cookie-banner__actions">
+      <button type="button" class="cookie-banner__decline" id="cookie-decline">Decline</button>
+      <button type="button" class="cookie-banner__accept" id="cookie-accept">Accept</button>
+    </div>
+  </div>
+
+  <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+  <script src="./script.js"></script>
+</body>
+</html>

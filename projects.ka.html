@@ -83,6 +83,7 @@
         <a href="./blog.html">ბლოგი</a>
         <a href="./projects.ka.html" aria-current="page">პროექტები</a>
         <a href="./index.html#contact">კონტაქტი</a>
+        <a href="./account.html" class="js-auth site-nav__auth" data-label-login="შესვლა" data-label-account="ანგარიში">შესვლა</a>
       </nav>
       <div class="lang-switch" aria-label="Language">
         <a href="./projects.html" hreflang="en" lang="en" aria-label="English">
@@ -94,7 +95,7 @@
           <span>KA</span>
         </a>
       </div>
-      <a href="./index.html#contact" class="btn btn-primary btn-sm">დაჯავშნეთ ზარი</a>
+      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="შესვლა" data-label-account="ანგარიში">შესვლა</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="მენიუს გახსნა" data-label-open="მენიუს გახსნა" data-label-close="მენიუს დახურვა">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -170,7 +171,7 @@
             <li>თქვენ გვიგზავნით CV-ს და იმ ინფორმაციას, რომლის გაზიარებაც გსურთ — ძიება მასზე იგება</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=150bec12-356c-4f0f-b4b7-243574577d35" target="_blank" rel="noopener noreferrer">გადახდა</a>
+            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=150bec12-356c-4f0f-b4b7-243574577d35" data-tier="detective" target="_blank" rel="noopener noreferrer">გადახდა</a>
           </div>
         </article>
 
@@ -185,7 +186,7 @@
             <li>სრული ანგარიშგება ყველა გაგზავნილ განაცხადსა და მის პროგრესზე</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=f51bd2a4-5ac6-4673-bd5e-d7f85bc7149f" target="_blank" rel="noopener noreferrer">გადახდა</a>
+            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=f51bd2a4-5ac6-4673-bd5e-d7f85bc7149f" data-tier="essential" target="_blank" rel="noopener noreferrer">გადახდა</a>
           </div>
         </article>
 
@@ -199,7 +200,7 @@
             <li>4 დამატებითი წყარო — სულ 9</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=04216b80-e048-4f1a-83a0-d45e89920e49" target="_blank" rel="noopener noreferrer">გადახდა</a>
+            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=04216b80-e048-4f1a-83a0-d45e89920e49" data-tier="advanced" target="_blank" rel="noopener noreferrer">გადახდა</a>
           </div>
         </article>
       </div>
@@ -230,6 +231,28 @@
   </footer>
 
   <!-- Cookie Consent Banner -->
+  <!-- Login modal — opened by the header "Log in" link and by Pay now when
+       signed out. Behaviour in bootAuthModal (script.js). -->
+  <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="დახურვა">✕</button>
+      <h2 class="auth-modal__title" id="auth-title">შესვლა ან ანგარიშის შექმნა</h2>
+      <p class="auth-modal__sub">ერთი ბმული ელფოსტით, ან თქვენი Google ანგარიშით. პაროლის გარეშე.</p>
+      <button class="btn auth-modal__google" type="button" id="auth-google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Google-ით გაგრძელება</button>
+      <p class="auth-modal__or" aria-hidden="true">ან</p>
+      <form class="auth-modal__form" id="auth-form" novalidate
+            data-msg-sending="ერთი წამით…"
+            data-msg-sent="შესვლის ბმული გამოგზავნილია: {email}"
+            data-msg-error="ვერ მოხერხდა — გთხოვთ, სცადოთ თავიდან.">
+        <label class="auth-modal__label" for="auth-email">ელფოსტის მისამართი</label>
+        <input class="auth-modal__input" id="auth-email" type="email" name="email" autocomplete="email" required inputmode="email" />
+        <button class="btn btn-primary" type="submit">ბმულის გამოგზავნა</button>
+      </form>
+      <p class="auth-modal__status" id="auth-status" role="status" aria-live="polite" hidden></p>
+    </div>
+  </div>
+
   <div class="cookie-banner" id="cookie-banner" hidden>
     <p class="cookie-banner__text">
       ჩვენ ვიყენებთ ქუქიებს რეკლამისა და ანალიტიკისთვის, რათა გავიგოთ, როგორ გამოიყენება ჩვენი საიტი და ვაჩვენოთ შესაბამისი რეკლამა პოტენციურ კლიენტებს.
@@ -240,6 +263,8 @@
     </div>
   </div>
 
+  <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
   <script src="./script.js"></script>
 </body>
 </html>

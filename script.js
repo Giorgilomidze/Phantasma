@@ -1343,6 +1343,271 @@
      The third-party script does not load until the booking section
      intersects the viewport (or the user activates the placeholder).
      --------------------------------------------------------------------- */
+
+  // ---------------------------------------------------------------------------
+  // Auth + client accounts (Supabase)
+  //
+  // supabase-js is loaded from CDN on the pages that need it (index, blog,
+  // projects, projects.ka, account) *before* script.js. Pages without it
+  // (landing) simply skip everything here. The publishable key is safe in
+  // the browser: every table has RLS, so it can only do what the policies in
+  // supabase/schema.sql allow.
+  // ---------------------------------------------------------------------------
+  const SUPABASE_URL = 'https://muumpjtpjnoxxdkhqtik.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_R6Ruxp1ehYAGVcFRqrM_Lg_n1ahoV8e';
+
+  // Keepz fixed-amount payment links, one per plan code. The same three URLs
+  // are hard-coded on projects.html / projects.ka.html — keep all in step.
+  // They expire 31-12-2026 (see CLAUDE.md §6).
+  const KEEPZ_BASE = 'https://app.keepz.me/pay?qrType=CUSTOM&receiverType=USER&receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&productId=';
+  const KEEPZ_LINKS = {
+    detective: KEEPZ_BASE + '150bec12-356c-4f0f-b4b7-243574577d35',
+    essential: KEEPZ_BASE + 'f51bd2a4-5ac6-4673-bd5e-d7f85bc7149f',
+    advanced:  KEEPZ_BASE + '04216b80-e048-4f1a-83a0-d45e89920e49',
+  };
+
+  const Auth = (() => {
+    let client = null;
+    let session = null;
+
+    function getClient() {
+      if (client) return client;
+      if (!window.supabase || !window.supabase.createClient) return null;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      return client;
+    }
+
+    // Where a magic link / OAuth round-trip should land: back on this page.
+    // Every such URL must be allow-listed in Supabase → Auth → URL Configuration.
+    function returnUrl() {
+      return location.origin + location.pathname;
+    }
+
+    function signInWithEmail(email) {
+      return getClient().auth.signInWithOtp({ email, options: { emailRedirectTo: returnUrl() } });
+    }
+
+    function signInWithGoogle() {
+      return getClient().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: returnUrl() } });
+    }
+
+    function signOut() {
+      return getClient().auth.signOut();
+    }
+
+    // ---- data access. Every call is RLS-limited to the signed-in user; see
+    // supabase/README.md for the table/column contract.
+
+    // Pay now: open a pending subscription request for this account. The
+    // owner confirms it against the Keepz dashboard and sets it active.
+    function requestSubscription(planCode) {
+      if (!session) return Promise.resolve({ error: new Error('not signed in') });
+      return getClient().from('subscriptions')
+        .insert({ account_id: session.user.id, plan_code: planCode, status: 'pending' });
+    }
+
+    // The account page numbers: get_my_stats() (one row, or none while no
+    // candidates row is linked yet) plus the shortlist weeks for "runs".
+    function loadStats() {
+      const sb = getClient();
+      return Promise.all([
+        sb.rpc('get_my_stats'),
+        sb.from('shortlists').select('week'),
+      ]).then(([stats, weeks]) => ({
+        stats: (stats.data && stats.data[0]) || null,
+        weeks: new Set((weeks.data || []).map((r) => r.week)).size,
+        errors: [stats.error, weeks.error].filter(Boolean),
+      }));
+    }
+
+    // Sync every .js-auth link (header button, mobile nav item) to the
+    // current session. Labels live on the element so the Georgian page can
+    // supply its own.
+    function paintLinks() {
+      const signedIn = !!session;
+      document.querySelectorAll('.js-auth').forEach((el) => {
+        el.textContent = signedIn ? el.dataset.labelAccount : el.dataset.labelLogin;
+        el.dataset.state = signedIn ? 'in' : 'out';
+      });
+      document.dispatchEvent(new CustomEvent('phantasma:auth', { detail: { session } }));
+    }
+
+    function boot() {
+      const sb = getClient();
+      if (!sb) return;
+      sb.auth.onAuthStateChange((_event, s) => {
+        session = s;
+        paintLinks();
+      });
+      sb.auth.getSession().then(({ data }) => {
+        session = data.session;
+        paintLinks();
+      });
+    }
+
+    return {
+      boot,
+      getSession: () => session,
+      signInWithEmail,
+      signInWithGoogle,
+      signOut,
+      requestSubscription,
+      loadStats,
+    };
+  })();
+
+  // Login modal (#auth-modal): email magic link + Google. Same open/close
+  // conventions as the lightbox: Esc closes, backdrop closes, focus restored.
+  function bootAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (!modal || !window.supabase) return;
+
+    const form     = modal.querySelector('#auth-form');
+    const email    = modal.querySelector('#auth-email');
+    const google   = modal.querySelector('#auth-google');
+    const status   = modal.querySelector('#auth-status');
+    const closeEls = modal.querySelectorAll('[data-close]');
+    let lastFocus = null;
+
+    function say(kind, text) {
+      status.textContent = text;
+      status.dataset.kind = kind;
+      status.hidden = !text;
+    }
+
+    function open() {
+      lastFocus = document.activeElement;
+      modal.hidden = false;
+      requestAnimationFrame(() => modal.classList.add('is-open'));
+      document.body.classList.add('is-locked');
+      say('', '');
+      email.focus();
+    }
+
+    function close() {
+      modal.classList.remove('is-open');
+      modal.hidden = true;
+      document.body.classList.remove('is-locked');
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+
+    closeEls.forEach((el) => el.addEventListener('click', close));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.hidden) close();
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const value = email.value.trim();
+      if (!value) return;
+      say('busy', form.dataset.msgSending);
+      const { error } = await Auth.signInWithEmail(value);
+      if (error) {
+        say('error', form.dataset.msgError);
+        return;
+      }
+      say('ok', form.dataset.msgSent.replace('{email}', value));
+    });
+
+    google.addEventListener('click', async () => {
+      say('busy', form.dataset.msgSending);
+      const { error } = await Auth.signInWithGoogle();
+      if (error) say('error', form.dataset.msgError);
+    });
+
+    // Header / nav auth links: signed out → open modal; signed in → follow
+    // the href to account.html.
+    document.querySelectorAll('.js-auth').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (Auth.getSession()) return;
+        e.preventDefault();
+        open();
+      });
+    });
+
+    // Pay now buttons: require sign-in, log a pending order, then open Keepz.
+    document.querySelectorAll('[data-tier]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        if (!Auth.getSession()) {
+          e.preventDefault();
+          open();
+          return;
+        }
+        // The browser opens the Keepz tab (user gesture); record in parallel.
+        Auth.requestSubscription(btn.dataset.tier).then(({ error }) => {
+          if (error) console.warn('subscription request not recorded', error.message);
+        });
+      });
+    });
+
+    // Session arrived while the modal was open (OAuth returns to this page
+    // in the same tab) — close it.
+    document.addEventListener('phantasma:auth', (e) => {
+      if (e.detail.session && !modal.hidden) close();
+    });
+  }
+
+  // account.html — v1 shows the client's numbers only. Values arrive from
+  // get_my_stats(); tiles reveal with a stagger and count up like the hero
+  // strip (triggerCountUp reads data-count-to). No candidates row yet →
+  // zeros plus "Your first shortlist is being prepared".
+  function bootAccountPage() {
+    const root = document.getElementById('account');
+    if (!root || !window.supabase) return;
+
+    const out  = root.querySelector('#account-signed-out');
+    const inn  = root.querySelector('#account-signed-in');
+    const grid = root.querySelector('#stat-grid');
+    const SERVICE_WEEKS = 4;
+
+    const fmtDate = (v) => new Date(v).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' });
+
+    function renderStats(d) {
+      const st = d.stats;
+      const nums = {
+        weeks:      Math.min(d.weeks, SERVICE_WEEKS),
+        processed:  st ? st.vacancies_processed : 0,
+        companies:  st ? st.companies_processed : 0,
+        selected:   st ? st.vacancies_selected  : 0,
+        sent:       st ? st.applications_sent   : 0,
+        interviews: st ? st.interviews          : 0,
+        offers:     st ? st.offers              : 0,
+      };
+      Object.keys(nums).forEach((k) => {
+        const el = root.querySelector('[data-stat="' + k + '"]');
+        el.textContent = nums[k];
+        el.dataset.countTo = String(nums[k]);
+      });
+      root.querySelector('[data-stat="lastweek"]').textContent =
+        st && st.last_shortlist_week ? fmtDate(st.last_shortlist_week) : '—';
+      root.querySelector('#account-stats-note').hidden = !!(st && st.vacancies_processed > 0);
+
+      grid.classList.remove('is-in');
+      if (prefersReducedMotion) { grid.classList.add('is-in'); return; }
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        grid.classList.add('is-in');
+        triggerCountUp();
+      }));
+    }
+
+    async function render(session) {
+      out.hidden = !!session;
+      inn.hidden = !session;
+      if (!session) return;
+      root.querySelector('#account-email').textContent = session.user.email;
+      const d = await Auth.loadStats();
+      if (d.errors.length) console.warn('account: stats query failed', d.errors.map((e) => e.message));
+      renderStats(d);
+    }
+
+    root.querySelector('#account-signout').addEventListener('click', async () => {
+      await Auth.signOut();
+      render(null);
+    });
+
+    document.addEventListener('phantasma:auth', (e) => render(e.detail.session));
+  }
+
   const CALENDLY_URL = 'https://calendly.com/lomiddze/30min';
 
   function bootCalendly() {
@@ -1484,6 +1749,9 @@
     Lightbox.bind();
     bootApproachStrip();
     bootKpiFunnel();
+    Auth.boot();
+    bootAuthModal();
+    bootAccountPage();
     bootCalendly();
     bootImageZoom();
   }
