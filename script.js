@@ -1857,6 +1857,7 @@
       liSlug.textContent = sl ? 'linkedin.com/in/' + sl : liSlug.dataset.empty;
       liSlug.classList.toggle('is-empty', !sl);
       liEdit.textContent = sl ? liEdit.dataset.labelEdit : liEdit.dataset.labelAdd;
+      liEdit.classList.toggle('is-add', !sl);   // empty → accent button
       liView.hidden = false;
       li.hidden = true;
     }
