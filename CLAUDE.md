@@ -319,7 +319,13 @@ Still open — need information or a decision from the owner:
 11. **Dashboard next steps** (backend ready): Interested / Not for me on the
     shortlist panel; client brief form + CV upload to the `cvs` bucket;
     weekly "your shortlist is ready" email (Supabase cron + Resend).
-12. **Supabase Pro** — not needed while `.github/workflows/keep-supabase-awake.yml`
+12. **Google sign-in shows `muumpjtpjnoxxdkhqtik.supabase.co`** on the consent
+    screen (the auth callback host). Fix options: (a) Google Cloud → OAuth
+    consent → Branding (name, logo, privacy URL) + Publish + brand
+    verification, so it reads "to continue to Phantasma"; (b) Supabase
+    custom auth domain `auth.solvephantasma.com` (Pro add-on). Do (a) once
+    `privacy.html` exists.
+13. **Supabase Pro** — not needed while `.github/workflows/keep-supabase-awake.yml`
     pings daily; switch when the first paying client is live (adds backups).
 
 Closed (12–17 Sep 2026): reel thumbnails; mobile nav; Keepz Pay now; Georgian
