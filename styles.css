@@ -3118,6 +3118,9 @@ button.stat[aria-expanded="true"]::after {
 
 /* Preferences questionnaire (preferences.html) */
 .pref-lede { max-width: 560px; margin: 0; }
+.account__who--flat { border-bottom: 0; padding-bottom: 0; }
+#preferences .account__panel--full { gap: var(--space-5); }
+.pref-groups { display: grid; }               /* groups sit flush; rules separate them */
 .pref-total {
   font-size: var(--type-body-sm);
   color: var(--ink-soft);
@@ -3132,7 +3135,7 @@ button.stat[aria-expanded="true"]::after {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-5) 0;
+  padding: var(--space-4) 0;
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -3171,8 +3174,8 @@ button.stat[aria-expanded="true"]::after {
 .pref-group__toggle[aria-expanded="true"] .pref-group__chev { transform: rotate(-135deg); }
 .pref-group__body {
   display: grid;
-  gap: var(--space-6);
-  padding: 0 0 var(--space-7);
+  gap: var(--space-5);
+  padding: 0 0 var(--space-6);
   max-width: 760px;
 }
 .pref-group__body[hidden] { display: none; }
