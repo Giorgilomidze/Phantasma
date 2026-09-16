@@ -117,16 +117,24 @@
 
         <section class="account__stats" aria-labelledby="stats-h">
           <p class="eyebrow" id="stats-h">Your service so far</p>
-          <dl class="stat-grid" id="stat-grid">
-            <div class="stat"><dt>Weekly runs</dt><dd><span data-stat="weeks">0</span><span class="stat__of"> / 4</span></dd></div>
-            <div class="stat"><dt>Vacancies processed</dt><dd data-stat="processed">0</dd></div>
-            <div class="stat"><dt>Companies reviewed</dt><dd data-stat="companies">0</dd></div>
-            <div class="stat"><dt>Selected for you</dt><dd data-stat="selected">0</dd></div>
-            <div class="stat"><dt>Applications sent</dt><dd data-stat="sent">0</dd></div>
-            <div class="stat"><dt>Interviews</dt><dd data-stat="interviews">0</dd></div>
-            <div class="stat"><dt>Offers</dt><dd data-stat="offers">0</dd></div>
-            <div class="stat"><dt>Last shortlist</dt><dd class="stat__date" data-stat="lastweek">—</dd></div>
-          </dl>
+          <div class="stat-grid" id="stat-grid" role="list">
+            <button class="stat" type="button" role="listitem" data-panel="weeks" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Weekly runs</span><span class="stat__value"><span data-stat="weeks">0</span><span class="stat__of"> / 4</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="processed" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Vacancies processed</span><span class="stat__value"><span data-stat="processed">0</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="companies" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Companies reviewed</span><span class="stat__value"><span data-stat="companies">0</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="selected" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Selected for you</span><span class="stat__value"><span data-stat="selected">0</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="sent" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Applications sent</span><span class="stat__value"><span data-stat="sent">0</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="interviews" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Interviews</span><span class="stat__value"><span data-stat="interviews">0</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="offers" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Offers</span><span class="stat__value"><span data-stat="offers">0</span></span></button>
+            <div class="stat stat--static" role="listitem"><span class="stat__label">Last shortlist</span><span class="stat__value stat__date" data-stat="lastweek">—</span></div>
+          </div>
+          <!-- One panel, filled by bootAccountPage for whichever tile is open. -->
+          <div class="stat-panel" id="stat-panel" hidden>
+            <div class="stat-panel__head">
+              <h2 class="project-section__h" id="stat-panel-title"></h2>
+              <button class="stat-panel__close" type="button" id="stat-panel-close" aria-label="Close">✕</button>
+            </div>
+            <div class="account-table-wrap" id="stat-panel-body"></div>
+          </div>
         </section>
 
         <div class="account__intro">

@@ -1406,17 +1406,25 @@
         .insert({ account_id: session.user.id, plan_code: planCode, status: 'pending' });
     }
 
-    // The account page numbers: get_my_stats() (one row, or none while no
-    // candidates row is linked yet) plus the shortlist weeks for "runs".
+    // The account page: get_my_stats() (one row, or none while no candidates
+    // row is linked yet), every shortlist row with its vacancy, and sends.
     function loadStats() {
       const sb = getClient();
       return Promise.all([
         sb.rpc('get_my_stats'),
-        sb.from('shortlists').select('week'),
-      ]).then(([stats, weeks]) => ({
+        sb.from('shortlists')
+          .select('id, week, rank, start_processing, client_decision, why_matches, salary_text, ' +
+                  'vacancies ( id, title, company_raw, location, source, url, deadline_at, description, companies ( name ) )')
+          .order('week', { ascending: false }).order('rank'),
+        sb.from('sends')
+          .select('vacancy_id, sent_at, outcome, outcome_at, vacancies ( title, company_raw, url, companies ( name ) )')
+          .order('sent_at', { ascending: false }),
+      ]).then(([stats, shortlists, sends]) => ({
         stats: (stats.data && stats.data[0]) || null,
-        weeks: new Set((weeks.data || []).map((r) => r.week)).size,
-        errors: [stats.error, weeks.error].filter(Boolean),
+        shortlists: shortlists.data || [],
+        sends: sends.data || [],
+        weeks: new Set((shortlists.data || []).map((r) => r.week)).size,
+        errors: [stats.error, shortlists.error, sends.error].filter(Boolean),
       }));
     }
 
@@ -1547,20 +1555,133 @@
     });
   }
 
-  // account.html — v1 shows the client's numbers only. Values arrive from
-  // get_my_stats(); tiles reveal with a stagger and count up like the hero
-  // strip (triggerCountUp reads data-count-to). No candidates row yet →
-  // zeros plus "Your first shortlist is being prepared".
+  // account.html — the client's numbers as tiles; each tile opens one panel
+  // below the grid with the rows behind it (one panel open at a time).
+  // Values arrive from get_my_stats(); tiles reveal with a stagger and count
+  // up like the hero strip (triggerCountUp reads data-count-to). No
+  // candidates row yet → zeros plus "Your first shortlist is being prepared".
   function bootAccountPage() {
     const root = document.getElementById('account');
     if (!root || !window.supabase) return;
 
-    const out  = root.querySelector('#account-signed-out');
-    const inn  = root.querySelector('#account-signed-in');
-    const grid = root.querySelector('#stat-grid');
+    const out   = root.querySelector('#account-signed-out');
+    const inn   = root.querySelector('#account-signed-in');
+    const grid  = root.querySelector('#stat-grid');
+    const panel = root.querySelector('#stat-panel');
+    const pTitle = root.querySelector('#stat-panel-title');
+    const pBody  = root.querySelector('#stat-panel-body');
     const SERVICE_WEEKS = 4;
+    let data = null;
+    let openKey = null;
 
-    const fmtDate = (v) => new Date(v).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' });
+    const fmtDate = (v) => (v ? new Date(v).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
+    const company = (v) => (v && ((v.companies && v.companies.name) || v.company_raw)) || '—';
+    const short = (t, n) => (t ? (t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t) : '');
+    const SOURCE = { 'jobs.ge': 'jobs.ge', 'hr.ge': 'hr.ge', tbc: 'TBC Bank', bog: 'Bank of Georgia' };
+    const OUTCOME = { sent: 'Sent', applied: 'Applied', interview: 'Interview', offer: 'Offer', rejected: 'Rejected', no_reply: 'No reply' };
+
+    // ---- table builders (text via textContent; only hrefs come from data)
+    function table(headers, rows, cells) {
+      if (!rows.length) {
+        const p = document.createElement('p');
+        p.className = 'account__empty';
+        p.textContent = 'Nothing here yet.';
+        return p;
+      }
+      const t = document.createElement('table');
+      t.className = 'account-table';
+      const thead = t.createTHead().insertRow();
+      headers.forEach((h) => { const th = document.createElement('th'); th.textContent = h; thead.appendChild(th); });
+      const tb = t.createTBody();
+      rows.forEach((r) => {
+        const tr = tb.insertRow();
+        cells(r).forEach((c) => {
+          const td = tr.insertCell();
+          if (c && c.href) {
+            const a = document.createElement('a');
+            a.href = c.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+            a.textContent = c.text;
+            td.appendChild(a);
+            if (c.sub) { const s = document.createElement('span'); s.className = 't-sub'; s.textContent = c.sub; td.appendChild(s); }
+          } else {
+            td.textContent = c == null ? '—' : c;
+          }
+        });
+      });
+      return t;
+    }
+
+    function vacancyRows(rows) {
+      return table(
+        ['Week', '#', 'Company', 'Position', 'Why it matches', 'Source', 'Deadline'],
+        rows,
+        (r) => {
+          const v = r.vacancies || {};
+          return [
+            fmtDate(r.week), r.rank,
+            company(v),
+            { href: v.url, text: v.title || '—', sub: [v.location, r.salary_text].filter(Boolean).join(' · ') },
+            r.why_matches || short(v.description, 140),
+            SOURCE[v.source] || v.source,
+            fmtDate(v.deadline_at),
+          ];
+        });
+    }
+
+    function sendRows(rows) {
+      return table(
+        ['Company', 'Position', 'Sent', 'Outcome', 'Updated'],
+        rows,
+        (r) => {
+          const v = r.vacancies || {};
+          return [company(v), { href: v.url, text: v.title || '—' }, fmtDate(r.sent_at), OUTCOME[r.outcome] || r.outcome, fmtDate(r.outcome_at)];
+        });
+    }
+
+    const PANELS = {
+      weeks: {
+        title: 'Weekly runs',
+        build: (d) => {
+          const byWeek = {};
+          d.shortlists.forEach((r) => { byWeek[r.week] = (byWeek[r.week] || 0) + 1; });
+          const rows = Object.keys(byWeek).sort().reverse().map((w, i, arr) => ({ n: arr.length - i, week: w, count: byWeek[w] }));
+          return table(['Run', 'Date', 'Vacancies shortlisted'], rows, (r) => [r.n + ' of ' + SERVICE_WEEKS, fmtDate(r.week), r.count]);
+        },
+      },
+      processed:  { title: 'Vacancies processed', build: (d) => vacancyRows(d.shortlists) },
+      companies:  {
+        title: 'Companies reviewed',
+        build: (d) => {
+          const by = {};
+          d.shortlists.forEach((r) => { const c = company(r.vacancies); by[c] = (by[c] || 0) + 1; });
+          const rows = Object.keys(by).sort((a, b) => by[b] - by[a]).map((c) => ({ c, n: by[c] }));
+          return table(['Company', 'Vacancies shortlisted'], rows, (r) => [r.c, r.n]);
+        },
+      },
+      selected:   { title: 'Selected for you', build: (d) => vacancyRows(d.shortlists.filter((r) => r.start_processing)) },
+      sent:       { title: 'Applications sent', build: (d) => sendRows(d.sends) },
+      interviews: { title: 'Interviews', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'interview')) },
+      offers:     { title: 'Offers', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'offer')) },
+    };
+
+    function openPanel(key) {
+      if (!data) return;
+      if (openKey === key) { closePanel(); return; }
+      openKey = key;
+      grid.querySelectorAll('[data-panel]').forEach((b) => b.setAttribute('aria-expanded', String(b.dataset.panel === key)));
+      pTitle.textContent = PANELS[key].title;
+      pBody.innerHTML = '';
+      pBody.appendChild(PANELS[key].build(data));
+      panel.hidden = false;
+      requestAnimationFrame(() => panel.classList.add('is-open'));
+    }
+
+    function closePanel() {
+      openKey = null;
+      grid.querySelectorAll('[data-panel]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+      panel.classList.remove('is-open');
+      panel.hidden = true;
+    }
 
     function renderStats(d) {
       const st = d.stats;
@@ -1593,12 +1714,20 @@
     async function render(session) {
       out.hidden = !!session;
       inn.hidden = !session;
+      closePanel();
       if (!session) return;
       root.querySelector('#account-email').textContent = session.user.email;
-      const d = await Auth.loadStats();
-      if (d.errors.length) console.warn('account: stats query failed', d.errors.map((e) => e.message));
-      renderStats(d);
+      data = await Auth.loadStats();
+      if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
+      renderStats(data);
     }
+
+    grid.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-panel]');
+      if (b) openPanel(b.dataset.panel);
+    });
+    root.querySelector('#stat-panel-close').addEventListener('click', closePanel);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openKey) closePanel(); });
 
     root.querySelector('#account-signout').addEventListener('click', async () => {
       await Auth.signOut();
