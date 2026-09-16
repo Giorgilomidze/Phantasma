@@ -1643,9 +1643,17 @@
       });
     });
 
-    // Signed in while the modal was open → close it.
+    // After an actual sign-in (modal login, or arriving back from Google /
+    // a confirmation link with tokens in the URL) go straight to the profile.
+    // Not on plain page loads with an existing session, and not when already
+    // on a profile page.
+    const arrivedWithTokens = /access_token=|[?&]code=/.test(location.hash + location.search);
     document.addEventListener('phantasma:auth', (e) => {
-      if (e.detail.session && !modal.hidden) close();
+      if (!e.detail.session) return;
+      const onProfile = /\/(account|preferences)\.html$/.test(location.pathname);
+      const fresh = e.detail.event === 'SIGNED_IN' && (!modal.hidden || arrivedWithTokens);
+      if (!modal.hidden) close();
+      if (fresh && !onProfile) location.replace('./account.html');
     });
   }
 
