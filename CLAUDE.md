@@ -280,52 +280,46 @@ the copy, not used by the site.
 
 Still open — need information or a decision from the owner:
 
-1. **GA4 measurement ID missing.** Placeholder comment in all five pages
+1. **GA4 measurement ID missing.** Placeholder comment in all pages
    (`index.html:99`, `landing.html:56`, `blog.html:58`, both `projects*.html`
-   ~line 58). Add `gtag('config', 'G-XXXXXXXXXX')` behind the consent gate.
-2. **Footer LinkedIn link is `href="#"`** — `index.html:431`.
-3. **Owner to verify in Keepz (not a site change):** each of the three payment
-   links should be **მრავალჯერადი (multi-use)**, not one-time; commission
-   type Receiver vs Sender is a pricing choice; and add one **additional
-   field** shown to the payer (type "მომხმარებლის აიდი" or Email, prefilled
-   value `your@email.com`) so payments can be matched to a person. Last
-   screenshot seen (12 Sep 2026) still showed one-time + Sender on the ₾10 link.
-4. **Georgian copy review.** `projects.ka.html` was machine-translated by
-   Claude; the owner (native speaker) has not yet proofread it. Tier names
-   used: დეტექტივი / ძირითადი / გაფართოებული.
-5. **`career.solvephantasma.com`** — owner wants this subdomain. Recommended:
-   GoDaddy → DNS → **Forwarding** tab → subdomain `career` → 301 to
-   `https://solvephantasma.com/projects.html` (no CNAME; GitHub Pages serves
-   one custom domain per repo). Not yet done as of 12 Sep 2026.
-6. **Pre-existing:** `index.html` scrolls ~28px sideways on phones because
-   the case reel's slides extend past the viewport (`.case-reel__slide`).
-   Present before any of this work; not investigated.
-7. **Payments identity.** Login exists (15 Sep 2026). Pay now now writes a
-   `pending` `subscriptions` row for the signed-in user before Keepz opens, so
-   the owner matches Keepz dashboard payments by time/amount and sets the row
-   `active` by hand. Automated Keepz callback via Edge Function still not
-   started.
-8. **Schema gaps to fix in Solve Assistant `schema.sql`** (reported 15 Sep
-   2026, not changed from here): `candidates` and `shortlists` update policies
-   are row-level only — add column grants so clients can write only the intake
-   columns / `client_decision`. Move the `advanced` plan seed from
-   `0002-site-additions.sql` into `schema.sql`.
+   ~line 58, `account.html`). Add `gtag('config', 'G-XXXXXXXXXX')` behind the consent gate.
+2. **Footer LinkedIn link is `href="#"`** on `index.html`. The career-service
+   pages link the Personal Career Strategist FB / LinkedIn / Instagram (17 Sep).
+3. **Keepz (owner action):** set the three links to multi-use, add an email
+   field for the payer, and email Keepz for integrator API access (needed for
+   the automated callback).
+4. **Georgian copy review.** `projects.ka.html` and the KA login modal were
+   machine-translated; owner has not proofread.
+5. **`hrdetective.solvephantasma.com`** — GoDaddy forward to
+   `/projects.html`, HTTPS reported OK by owner 17 Sep 2026.
+6. **Pre-existing:** `index.html` scrolls ~28px sideways on phones
+   (`.case-reel__slide`). Not investigated.
+7. **Payments identity.** Pay now writes a `pending` `subscriptions` row for
+   the signed-in user before Keepz opens; owner matches Keepz payments by
+   time/amount and sets the row `active` by hand. Automated Keepz callback via
+   Edge Function not started (blocked on item 3).
+8. **Schema drift** — the cloud schema is ahead of `Solve Assistant\supabase\schema.sql`;
+   list in `supabase/README.md`. Also still wanted there: column-level grants
+   on `candidates` / `shortlists` so clients can write only intake columns /
+   `client_decision`; `build_shortlists.py` should call `sync_local.py` last.
 9. **Georgian `account.html`** not built; `projects.ka.html` links to the English one.
-10. **Supabase built-in email** is rate-limited (few/hour) — set SMTP
-    (Resend or Workspace) before real sign-ups. Privacy-policy page still
-    missing; Google/LinkedIn consent screens want a URL. LinkedIn provider not
-    set up (needs a Company Page).
+10. **Email:** Supabase Auth sends through Resend SMTP
+    (`auth@solvephantasma.com`, key in `.env`); Resend domain verification was
+    still *Pending* at 00:30 17 Sep 2026 — until Verified, sign-up /
+    reset emails fail with "Error sending". Templates still Supabase default
+    (subjects rebranded). **Privacy-policy page** still missing (needed for
+    sign-ups and the Google consent screen). LinkedIn provider not set up.
+11. **Dashboard next steps** (backend ready): Interested / Not for me on the
+    shortlist panel; client brief form + CV upload to the `cvs` bucket;
+    weekly "your shortlist is ready" email (Supabase cron + Resend).
+12. **Supabase Pro** — not needed while `.github/workflows/keep-supabase-awake.yml`
+    pings daily; switch when the first paying client is live (adds backups).
 
-Closed (12 Sep 2026): reel thumbnails swap fixed; `.gitignore` covers the
-ClickUp token file and scratch dirs; dead CSS section 10 and half of 12
-removed (`.chips`/`.chip` are live — keep them); mobile hamburger nav added;
-hero `nowrap` clipping fixed; Keepz Pay now buttons; Detective tier; Georgian
-page + language toggle; KPI funnel (right column beside Overview).
-
-Uncommitted in the working tree: `.claude/settings.json` (unrelated
-harness settings, left alone deliberately).
-
----
+Closed (12–17 Sep 2026): reel thumbnails; mobile nav; Keepz Pay now; Georgian
+page + toggle; KPI funnel; Supabase auth (email+password, reset, Google);
+account page with 8 KPI tiles → detail panels; full local→cloud mirror
+(`sync_local.py`, `migrate.py`); cache-busted asset URLs; social links;
+pricing wording "per 4 weeks"; daily keep-awake workflow.
 
 ## 10. Working agreements
 

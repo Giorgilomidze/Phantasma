@@ -4,7 +4,7 @@
 
 -- 1. Plans: the site sells three tiers (projects.html). schema.sql seeds two.
 insert into plans (code, name, price_gel, period, sort) values
-  ('advanced', 'Advanced', 80, 'month', 3)
+  ('advanced', 'Advanced', 80, '4weeks', 3)
 on conflict (code) do nothing;
 
 

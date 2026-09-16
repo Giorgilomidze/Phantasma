@@ -56,3 +56,4 @@ Assistant copy:
 - New table `prospects` (LinkedIn register, RLS on, no policies = owner-only).
 - `runs` unique index `(source, started)`; `profiles` backfilled from `auth.users`.
 - `_migrations` bookkeeping table.
+- `plans.period` check now `once | month | 4weeks`; all three plans are `4weeks` (one payment = four weeks of service).
