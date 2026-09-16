@@ -194,7 +194,8 @@ def vacancy_map(rest):
 
 
 def sync_candidates(con, rest):
-    prof = rest.select("profiles", "id,email,linkedin_url")
+    prof = rest.select("profiles", "id,email,linkedin_url,cv_path")
+    cv_by_profile = {p["id"]: p.get("cv_path") for p in prof}
     profiles = {p["email"].lower(): p["id"] for p in prof if p.get("email")}
     # LinkedIn slug (the part after /in/) -> profile id, from what clients typed
     by_slug = {}
@@ -235,7 +236,15 @@ def sync_candidates(con, rest):
                 linked.append(f"{r['slug']} -> linkedin.com/in/{sl}")
             elif email:
                 unlinked.append(f"{r['slug']} ({email} has not signed in yet)")
+        # the CV the client uploaded on the site, once the login is linked
+        if row["account_id"] and cv_by_profile.get(row["account_id"]):
+            row["cv_url"] = cv_by_profile[row["account_id"]]
         rows.append(row)
+    # PostgREST bulk rows must share keys: give every row the cv_url key,
+    # keeping the cloud's current value where the site has nothing.
+    cur_cv = {c["slug"]: c.get("cv_url") for c in rest.select("candidates", "slug,cv_url")}
+    for row in rows:
+        row.setdefault("cv_url", cur_cv.get(row["slug"]))
     rest.upsert("candidates", rows, "slug")
     for line in linked:
         print(f"  linked  {line}")

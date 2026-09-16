@@ -1402,7 +1402,32 @@
     }
 
     function loadProfile() {
-      return getClient().from('profiles').select('linkedin_url').eq('id', session.user.id).maybeSingle();
+      return getClient().from('profiles').select('linkedin_url, cv_path, cv_uploaded_at').eq('id', session.user.id).maybeSingle();
+    }
+
+    // CV: upload the new file first, then delete the old one, then point the
+    // profile at the new path — so a failed upload never loses the old CV.
+    async function uploadCv(file, oldPath) {
+      const sb = getClient();
+      const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+      const path = session.user.id + '/cv-' + Date.now() + '.' + ext;
+      const up = await sb.storage.from('cvs').upload(path, file, { contentType: file.type || undefined });
+      if (up.error) return { error: up.error };
+      const upd = await sb.from('profiles').update({ cv_path: path, cv_uploaded_at: new Date().toISOString() }).eq('id', session.user.id);
+      if (upd.error) return { error: upd.error };
+      if (oldPath) await sb.storage.from('cvs').remove([oldPath]);
+      return { path };
+    }
+
+    async function removeCv(path) {
+      const sb = getClient();
+      if (path) await sb.storage.from('cvs').remove([path]);
+      return sb.from('profiles').update({ cv_path: null, cv_uploaded_at: null }).eq('id', session.user.id);
+    }
+
+    // Private bucket → short-lived signed URL for preview / download.
+    function cvUrl(path) {
+      return getClient().storage.from('cvs').createSignedUrl(path, 600);
     }
 
     function saveLinkedin(url) {
@@ -1502,6 +1527,9 @@
       deleteAccount,
       loadProfile,
       saveLinkedin,
+      uploadCv,
+      removeCv,
+      cvUrl,
       loadPreferences,
       savePreferences,
       signInWithGoogle,
@@ -1819,7 +1847,10 @@
       closePanel();
       if (!session) return;
       root.querySelector('#account-email').textContent = session.user.email;
-      Auth.loadProfile().then(({ data: p }) => { liUrl = (p && p.linkedin_url) || ''; paintLinkedin(); });
+      Auth.loadProfile().then(({ data: p }) => {
+        liUrl = (p && p.linkedin_url) || ''; paintLinkedin();
+        cvPath = (p && p.cv_path) || null; paintCv();
+      });
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
       renderStats(data);
@@ -1887,6 +1918,72 @@
       if (error) { note('error', li.dataset.msgError); return; }
       liUrl = url;
       paintLinkedin();
+    });
+
+    // CV upload / review
+    const cvBtn   = root.querySelector('#account-cv-btn');
+    const cvFile  = root.querySelector('#account-cv-file');
+    const cvPanel = root.querySelector('#account-cv');
+    const cvName  = root.querySelector('#account-cv-name');
+    const cvDl    = root.querySelector('#account-cv-download');
+    const cvPrev  = root.querySelector('#account-cv-preview');
+    const cvNoPrev = root.querySelector('#account-cv-nopreview');
+    const cvNote  = root.querySelector('#account-cv-status');
+    let cvPath = null;
+    const cvSay = (kind, text) => { cvNote.textContent = text; cvNote.dataset.kind = kind; cvNote.hidden = !text; };
+    const MAX_CV = 10 * 1024 * 1024;
+
+    function paintCv() {
+      cvBtn.textContent = cvPath ? cvBtn.dataset.labelReview : cvBtn.dataset.labelUpload;
+      if (!cvPath) closeCv();
+    }
+    function closeCv() {
+      cvPanel.hidden = true;
+      cvPrev.removeAttribute('src');
+      cvBtn.setAttribute('aria-expanded', 'false');
+    }
+    async function openCv() {
+      cvPanel.hidden = false;
+      cvBtn.setAttribute('aria-expanded', 'true');
+      cvSay('', '');
+      const file = cvPath.split('/').pop().replace(/^cv-\d+\./, 'cv.');
+      cvName.textContent = file;
+      const { data, error } = await Auth.cvUrl(cvPath);
+      if (error || !data) { cvSay('error', cvPanel.dataset.msgError); return; }
+      cvDl.href = data.signedUrl;
+      const isPdf = /\.pdf$/i.test(cvPath);
+      cvPrev.hidden = !isPdf;
+      cvNoPrev.hidden = isPdf;
+      if (isPdf) cvPrev.src = data.signedUrl + '#toolbar=0';
+    }
+
+    cvBtn.addEventListener('click', () => {
+      if (!cvPath) { cvFile.click(); return; }
+      if (cvPanel.hidden) openCv(); else closeCv();
+    });
+    root.querySelector('#account-cv-close').addEventListener('click', closeCv);
+    root.querySelector('#account-cv-replace').addEventListener('click', () => cvFile.click());
+    cvFile.addEventListener('change', async () => {
+      const file = cvFile.files[0];
+      cvFile.value = '';
+      if (!file) return;
+      if (!/\.(pdf|docx?)$/i.test(file.name)) { cvPanel.hidden = false; cvSay('error', cvPanel.dataset.msgType); return; }
+      if (file.size > MAX_CV) { cvPanel.hidden = false; cvSay('error', cvPanel.dataset.msgSize); return; }
+      cvPanel.hidden = false;
+      cvSay('busy', cvPanel.dataset.msgUploading);
+      const { path, error } = await Auth.uploadCv(file, cvPath);
+      if (error) { cvSay('error', cvPanel.dataset.msgError); return; }
+      cvPath = path;
+      paintCv();
+      await openCv();
+      cvSay('ok', cvPanel.dataset.msgUploaded);
+    });
+    root.querySelector('#account-cv-remove').addEventListener('click', async () => {
+      if (!window.confirm(cvPanel.dataset.confirmRemove)) return;
+      const { error } = await Auth.removeCv(cvPath);
+      if (error) { cvSay('error', cvPanel.dataset.msgError); return; }
+      cvPath = null;
+      paintCv();
     });
 
     // Delete my account

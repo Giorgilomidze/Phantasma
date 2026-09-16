@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260917k" />
+  <link rel="stylesheet" href="./styles.css?v=20260917l" />
 </head>
 <body>
 
@@ -138,9 +138,35 @@
           </div>
           <div class="account__actions">
             <a class="btn btn-sm account__quiet" href="./preferences.html">Preferences</a>
+            <!-- CV: one file per person in the private `cvs` bucket; path on
+                 profiles.cv_path. Label flips to "Review my CV" once uploaded. -->
+            <button class="btn btn-sm account__quiet" type="button" id="account-cv-btn"
+                    data-label-upload="Upload CV" data-label-review="Review my CV"
+                    aria-controls="account-cv" aria-expanded="false">Upload CV</button>
+            <input type="file" id="account-cv-file" class="visually-hidden" tabindex="-1"
+                   accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
             <button class="btn btn-sm account__quiet" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button>
             <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
           </div>
+        </div>
+
+        <!-- CV panel: preview (PDF inline, Word = name + download), Replace, Remove. -->
+        <div class="account-cv" id="account-cv" hidden
+             data-msg-uploading="Uploading…" data-msg-uploaded="CV uploaded." data-msg-removed="CV removed."
+             data-msg-type="Please choose a PDF or Word file." data-msg-size="The file must be 10 MB or smaller."
+             data-msg-error="Could not upload the CV — please try again." data-confirm-remove="Remove your CV?">
+          <div class="account-cv__head">
+            <p class="account-cv__name" id="account-cv-name"></p>
+            <div class="account__actions">
+              <a class="btn btn-sm account__quiet" id="account-cv-download" href="#" target="_blank" rel="noopener">Download</a>
+              <button class="btn btn-sm account__quiet" type="button" id="account-cv-replace">Replace</button>
+              <button class="btn btn-sm account__quiet" type="button" id="account-cv-remove">Remove</button>
+              <button class="stat-panel__close" type="button" id="account-cv-close" aria-label="Close">✕</button>
+            </div>
+          </div>
+          <p class="account-form__status" id="account-cv-status" role="status" aria-live="polite" hidden></p>
+          <iframe class="account-cv__preview" id="account-cv-preview" title="CV preview" hidden></iframe>
+          <p class="account__hint" id="account-cv-nopreview" hidden>Word files cannot be previewed here — use Download.</p>
         </div>
 
         <!-- Password form: opened by "Change password", or automatically when
@@ -280,6 +306,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917k"></script>
+  <script src="./script.js?v=20260917l"></script>
 </body>
 </html>

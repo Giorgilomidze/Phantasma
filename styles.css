@@ -2886,6 +2886,31 @@ body.is-locked {
 .account-li__edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-li__input { flex: 1 1 260px; max-width: 420px; padding: 8px 10px; font-size: var(--type-body-sm); }
 .account-li__status { flex-basis: 100%; }
+.account-cv {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+.account-cv[hidden] { display: none; }
+.account-cv__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.account-cv__name { margin: 0; font-weight: 500; word-break: break-all; }
+.account-cv__preview {
+  width: 100%;
+  height: min(70vh, 900px);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.account-cv__preview[hidden] { display: none; }
 .account-newpass {
   display: grid;
   gap: var(--space-3);

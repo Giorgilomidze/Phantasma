@@ -238,7 +238,11 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   every page except `landing.html`. Schema and RLS are owned by the Solve
   Assistant repo — see `supabase/README.md`. Header CTA is now **Log in /
   My profile** on all pages except `landing.html` (kept "Book a call").
-  `account.html` has Change password (works for Google users too — gives them
+  `account.html` has **Upload CV / Review my CV** (private bucket `cvs`, path
+  `<uid>/cv-<ts>.<ext>` on `profiles.cv_path`; PDF previews in an iframe via a
+  10-min signed URL, Word = download only; Replace uploads first then deletes
+  the old file; `sync_local.py` copies the path into `candidates.cv_url`),
+  Change password (works for Google users too — gives them
   a second way in) and **Delete my account** → RPC `request_account_deletion()`
   (see `supabase/0004-account-deletion.sql`): logs to `deletion_requests`,
   emails `consult@solvephantasma.com`, deletes the login. **Owner must then
