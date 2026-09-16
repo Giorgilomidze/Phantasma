@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260916c" />
+  <link rel="stylesheet" href="./styles.css?v=20260917a" />
 </head>
 <body>
 
@@ -230,22 +230,37 @@
 
   <!-- Cookie Consent Banner -->
   <!-- Login modal — opened by the header "Log in" link and by Pay now when
-       signed out. Behaviour in bootAuthModal (script.js). -->
+       signed out. Three modes (login / signup / forgot) switched by
+       data-mode on the form; behaviour in bootAuthModal (script.js). -->
   <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
     <div class="auth-modal__backdrop" data-close></div>
     <div class="auth-modal__panel">
       <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
-      <h2 class="auth-modal__title" id="auth-title">Log in or create your account</h2>
-      <p class="auth-modal__sub">One link by email, or your Google account. No password.</p>
+      <h2 class="auth-modal__title" id="auth-title"
+          data-title-login="Log in" data-title-signup="Create your account" data-title-forgot="Reset your password">Log in</h2>
+      <p class="auth-modal__sub">With your Google account, or email and password.</p>
       <button class="btn auth-modal__google" type="button" id="auth-google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Continue with Google</button>
       <p class="auth-modal__or" aria-hidden="true">or</p>
-      <form class="auth-modal__form" id="auth-form" novalidate
+      <form class="auth-modal__form" id="auth-form" novalidate data-mode="login"
             data-msg-sending="One moment…"
-            data-msg-sent="Check {email} for your sign-in link."
+            data-msg-signup-sent="Almost done — check {email} and click the confirmation link."
+            data-msg-forgot-sent="Check {email} for a link to set a new password."
+            data-msg-bad-login="Email or password is wrong."
+            data-msg-exists="That email already has an account — log in instead."
+            data-msg-weak="Password must be at least 8 characters."
+            data-msg-unconfirmed="Please confirm your email first — check your inbox for the link."
             data-msg-error="That didn't work — please try again.">
         <label class="auth-modal__label" for="auth-email">Email address</label>
         <input class="auth-modal__input" id="auth-email" type="email" name="email" autocomplete="email" required inputmode="email" />
-        <button class="btn btn-primary" type="submit">Send me a link</button>
+        <div class="auth-modal__pw" id="auth-pw-row">
+          <label class="auth-modal__label" for="auth-password">Password <small id="auth-pw-hint" hidden>(At least 8 characters)</small></label>
+          <input class="auth-modal__input" id="auth-password" type="password" name="password" autocomplete="current-password" minlength="8" required />
+          <button class="auth-modal__link" type="button" id="auth-forgot" data-mode-to="forgot">Forgot password?</button>
+        </div>
+        <button class="btn btn-primary" type="submit" id="auth-submit"
+                data-label-login="Log in" data-label-signup="Create account" data-label-forgot="Send reset link">Log in</button>
+        <button class="auth-modal__link auth-modal__switch" type="button" id="auth-switch"
+                data-label-login="New here? Create an account" data-label-signup="Already have an account? Log in" data-label-forgot="Already have an account? Log in">New here? Create an account</button>
       </form>
       <p class="auth-modal__status" id="auth-status" role="status" aria-live="polite" hidden></p>
     </div>
@@ -263,6 +278,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260916c"></script>
+  <script src="./script.js?v=20260917a"></script>
 </body>
 </html>

@@ -98,9 +98,9 @@ Single IIFE. Order of contents:
 | `bootCaseReel()` | Infinite auto-scrolling carousel, 4 visible, 5s interval, arrows + dots |
 | `Lightbox` | Module (IIFE) — 6-slide case-study viewer with keyboard nav |
 | `bootApproachStrip()` | Scroll-driven progress through the 5 approach stations |
-| `Auth` | Module. supabase-js client (`SUPABASE_URL` / publishable key constants), magic-link + Google sign-in, `requestSubscription(plan)` (inserts a `pending` row), `loadStats()`. Syncs every `.js-auth` link (Log in ↔ Account, labels from `data-label-*`) and fires `phantasma:auth`. Skips silently when `window.supabase` is absent (landing). |
-| `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: signed out → opens modal; signed in → `requestSubscription` then Keepz opens. |
-| `bootAccountPage()` | `account.html` only. Fills `[data-stat]` tiles, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
+| `Auth` | Module. supabase-js client (`SUPABASE_URL` / publishable key constants), email+password (`signIn`/`signUp`/`resetPassword`/`updatePassword`) + Google sign-in, `requestSubscription(plan)` (inserts a `pending` row), `loadStats()`. Syncs every `.js-auth` link (Log in ↔ Account, labels from `data-label-*`) and fires `phantasma:auth`. Skips silently when `window.supabase` is absent (landing). |
+| `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. One form, three modes via `data-mode` (login / signup / forgot); all copy in `data-*` attributes (KA page supplies its own). Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: signed out → opens modal; signed in → `requestSubscription` then Keepz opens. |
+| `bootAccountPage()` | `account.html` only. Shows `#account-newpass` on the `PASSWORD_RECOVERY` auth event (reset-link landing). Fills `[data-stat]` tiles, each a button opening one `#stat-panel` table, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
 | `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` |
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
@@ -228,7 +228,7 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 
 - **Supabase (accounts)** — project `Phantasma`, `https://muumpjtpjnoxxdkhqtik.supabase.co`,
   eu-central-1, free tier (pauses after 7 idle days — move to Pro before real
-  clients). Auth: Email magic link + Google (Cloud project `phantasma-508619`,
+  clients). Auth: email + password (confirm-email on; reset lands on `/account.html`) + Google (Cloud project `phantasma-508619`,
   OAuth client under `lomiddze@gmail.com`). Redirect URLs must include
   `https://solvephantasma.com/*` and `http://localhost:8000/*`. Publishable key
   is in `script.js` by design; the secret/service_role key never leaves

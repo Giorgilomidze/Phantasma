@@ -1383,8 +1383,22 @@
       return location.origin + location.pathname;
     }
 
-    function signInWithEmail(email) {
-      return getClient().auth.signInWithOtp({ email, options: { emailRedirectTo: returnUrl() } });
+    function signIn(email, password) {
+      return getClient().auth.signInWithPassword({ email, password });
+    }
+
+    function signUp(email, password) {
+      return getClient().auth.signUp({ email, password, options: { emailRedirectTo: returnUrl() } });
+    }
+
+    // Reset email lands on account.html, which shows the "set a new password"
+    // form when the PASSWORD_RECOVERY event fires.
+    function resetPassword(email) {
+      return getClient().auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/account.html' });
+    }
+
+    function updatePassword(password) {
+      return getClient().auth.updateUser({ password });
     }
 
     function signInWithGoogle() {
@@ -1437,14 +1451,17 @@
         el.textContent = signedIn ? el.dataset.labelAccount : el.dataset.labelLogin;
         el.dataset.state = signedIn ? 'in' : 'out';
       });
-      document.dispatchEvent(new CustomEvent('phantasma:auth', { detail: { session } }));
+      document.dispatchEvent(new CustomEvent('phantasma:auth', { detail: { session, event: lastEvent } }));
     }
+
+    let lastEvent = null;
 
     function boot() {
       const sb = getClient();
       if (!sb) return;
-      sb.auth.onAuthStateChange((_event, s) => {
+      sb.auth.onAuthStateChange((event, s) => {
         session = s;
+        lastEvent = event;
         paintLinks();
       });
       sb.auth.getSession().then(({ data }) => {
@@ -1456,7 +1473,10 @@
     return {
       boot,
       getSession: () => session,
-      signInWithEmail,
+      signIn,
+      signUp,
+      resetPassword,
+      updatePassword,
       signInWithGoogle,
       signOut,
       requestSubscription,
@@ -1464,14 +1484,22 @@
     };
   })();
 
-  // Login modal (#auth-modal): email magic link + Google. Same open/close
-  // conventions as the lightbox: Esc closes, backdrop closes, focus restored.
+  // Login modal (#auth-modal): Google, or email + password with three modes
+  // (login / signup / forgot) on one form. Same open/close conventions as
+  // the lightbox: Esc closes, backdrop closes, focus restored.
   function bootAuthModal() {
     const modal = document.getElementById('auth-modal');
     if (!modal || !window.supabase) return;
 
     const form     = modal.querySelector('#auth-form');
+    const title    = modal.querySelector('#auth-title');
     const email    = modal.querySelector('#auth-email');
+    const password = modal.querySelector('#auth-password');
+    const pwRow    = modal.querySelector('#auth-pw-row');
+    const pwHint   = modal.querySelector('#auth-pw-hint');
+    const submit   = modal.querySelector('#auth-submit');
+    const switcher = modal.querySelector('#auth-switch');
+    const forgot   = modal.querySelector('#auth-forgot');
     const google   = modal.querySelector('#auth-google');
     const status   = modal.querySelector('#auth-status');
     const closeEls = modal.querySelectorAll('[data-close]');
@@ -1483,12 +1511,26 @@
       status.hidden = !text;
     }
 
-    function open() {
+    function setMode(mode) {
+      form.dataset.mode = mode;
+      title.textContent    = title.dataset['title' + cap(mode)];
+      submit.textContent   = submit.dataset['label' + cap(mode)];
+      switcher.textContent = switcher.dataset['label' + cap(mode)];
+      pwRow.hidden   = mode === 'forgot';
+      password.required = mode !== 'forgot';
+      password.autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+      pwHint.hidden  = mode !== 'signup';
+      forgot.hidden  = mode !== 'login';
+      say('', '');
+    }
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+    function open(mode) {
       lastFocus = document.activeElement;
+      setMode(mode || 'login');
       modal.hidden = false;
       requestAnimationFrame(() => modal.classList.add('is-open'));
       document.body.classList.add('is-locked');
-      say('', '');
       email.focus();
     }
 
@@ -1503,18 +1545,43 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !modal.hidden) close();
     });
+    switcher.addEventListener('click', () => setMode(form.dataset.mode === 'login' ? 'signup' : 'login'));
+    forgot.addEventListener('click', () => setMode('forgot'));
+
+    // Map Supabase's error messages to the page's own copy.
+    function explain(error) {
+      const m = (error && error.message || '').toLowerCase();
+      if (m.includes('invalid login credentials')) return form.dataset.msgBadLogin;
+      if (m.includes('already registered') || m.includes('already exists')) return form.dataset.msgExists;
+      if (m.includes('password') && (m.includes('short') || m.includes('at least'))) return form.dataset.msgWeak;
+      if (m.includes('not confirmed')) return form.dataset.msgUnconfirmed;
+      return form.dataset.msgError;
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const value = email.value.trim();
-      if (!value) return;
+      const mode = form.dataset.mode;
+      const mail = email.value.trim();
+      const pw = password.value;
+      if (!mail) { email.focus(); return; }
+      if (mode !== 'forgot' && pw.length < 8) { say('error', form.dataset.msgWeak); password.focus(); return; }
       say('busy', form.dataset.msgSending);
-      const { error } = await Auth.signInWithEmail(value);
-      if (error) {
-        say('error', form.dataset.msgError);
-        return;
+
+      if (mode === 'login') {
+        const { error } = await Auth.signIn(mail, pw);
+        if (error) say('error', explain(error));   // success closes via phantasma:auth
+      } else if (mode === 'signup') {
+        const { data, error } = await Auth.signUp(mail, pw);
+        if (error) { say('error', explain(error)); return; }
+        // Supabase returns a user with no identities when the email already exists.
+        if (data.user && data.user.identities && data.user.identities.length === 0) { say('error', form.dataset.msgExists); return; }
+        if (data.session) return;                  // confirmations off → signed in already
+        say('ok', form.dataset.msgSignupSent.replace('{email}', mail));
+      } else {
+        const { error } = await Auth.resetPassword(mail);
+        if (error) { say('error', explain(error)); return; }
+        say('ok', form.dataset.msgForgotSent.replace('{email}', mail));
       }
-      say('ok', form.dataset.msgSent.replace('{email}', value));
     });
 
     google.addEventListener('click', async () => {
@@ -1529,16 +1596,16 @@
       el.addEventListener('click', (e) => {
         if (Auth.getSession()) return;
         e.preventDefault();
-        open();
+        open('login');
       });
     });
 
-    // Pay now buttons: require sign-in, log a pending order, then open Keepz.
+    // Pay now buttons: require sign-in, log a pending subscription, then open Keepz.
     document.querySelectorAll('[data-tier]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         if (!Auth.getSession()) {
           e.preventDefault();
-          open();
+          open('signup');
           return;
         }
         // The browser opens the Keepz tab (user gesture); record in parallel.
@@ -1548,8 +1615,7 @@
       });
     });
 
-    // Session arrived while the modal was open (OAuth returns to this page
-    // in the same tab) — close it.
+    // Signed in while the modal was open → close it.
     document.addEventListener('phantasma:auth', (e) => {
       if (e.detail.session && !modal.hidden) close();
     });
@@ -1728,6 +1794,26 @@
     });
     root.querySelector('#stat-panel-close').addEventListener('click', closePanel);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openKey) closePanel(); });
+
+    // Arrived from a password-reset email: show the new-password form.
+    const newpass = root.querySelector('#account-newpass');
+    document.addEventListener('phantasma:auth', (e) => {
+      if (e.detail.event === 'PASSWORD_RECOVERY') {
+        newpass.hidden = false;
+        newpass.querySelector('input').focus();
+      }
+    });
+    newpass.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const st = root.querySelector('#newpass-status');
+      const pw = newpass.password.value;
+      const note = (kind, text) => { st.textContent = text; st.dataset.kind = kind; st.hidden = !text; };
+      if (pw.length < 8) { note('error', newpass.dataset.msgWeak); return; }
+      note('busy', newpass.dataset.msgSaving);
+      const { error } = await Auth.updatePassword(pw);
+      note(error ? 'error' : 'ok', error ? newpass.dataset.msgError : newpass.dataset.msgSaved);
+      if (!error) setTimeout(() => { newpass.hidden = true; }, 2500);
+    });
 
     root.querySelector('#account-signout').addEventListener('click', async () => {
       await Auth.signOut();
