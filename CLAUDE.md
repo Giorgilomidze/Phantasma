@@ -46,6 +46,11 @@ server from the repo root, e.g. `python -m http.server 8000`.
 
 `git push` to `main`. GitHub Pages publishes automatically. There is no CI.
 
+**Cache-busting:** every page links `styles.css?v=YYYYMMDDx` and
+`script.js?v=YYYYMMDDx`. **Bump the value in all six HTML files whenever CSS
+or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
+`sed -i -E 's#(styles\.css|script\.js)\?v=[^"]*#?v=NEW#' *.html`.
+
 ---
 
 ## 3. File map
