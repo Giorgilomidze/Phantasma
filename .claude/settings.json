@@ -11,7 +11,16 @@
       "WebFetch(domain:quickpay.ge)",
       "Bash(git add *)",
       "Bash(git commit -q -m 'Projects page: replace Calendly CTAs with Keepz Pay now buttons, prices in GEL *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Read(//d/Web Development/Solve Assistant/docs/**)",
+      "Bash(printf '__pycache__/\\\\n')",
+      "Bash(rm -rf supabase/__pycache__)",
+      "Read(//d/Web Development/Solve Assistant/**)",
+      "Bash(PYTHONIOENCODING=utf-8 python -)",
+      "Bash(python -)",
+      "Bash(printf 'supabase access.txt\\\\n')",
+      "Bash(git check-ignore *)",
+      "Bash(python supabase/sb.py)"
     ]
   }
 }

@@ -32,3 +32,27 @@ What the site (publishable key, RLS-limited) touches:
 | payments        | own  | —                                    |
 | get_my_stats()  | own  | —                                    |
 | storage `cvs`   | own folder `{user_id}/…` | same           |
+
+## Scripts (from 16 Sep 2026)
+
+Credentials live in `../.env` (git-ignored): `SUPABASE_ACCESS_TOKEN` (personal
+access token, Management API) and `SUPABASE_SERVICE_ROLE_KEY` (fetched and
+cached automatically by `sb.py`).
+
+| Script | Does |
+|---|---|
+| `sb.py` | helper: `.env`, `sql()` via Management API, `service_key()` |
+| `migrate.py` | applies `NNNN-*.sql` in order, records them in `_migrations`. **This is how schema changes go in now** — add a new numbered file, run `python supabase/migrate.py`. |
+| `sync_local.py` | full one-way mirror of `vacancies.db` + the Excel workbooks → cloud. Idempotent. Run after every pipeline run: `python supabase/sync_local.py` (`--dry-run`, `--only table,table`). |
+
+## Schema drift vs `Solve Assistant\supabase\schema.sql`
+
+Applied by `0003-mirror-local.sql`, not yet merged back into the Solve
+Assistant copy:
+
+- `vacancies.status` check now includes `gone`; `candidates.status` includes `lead`.
+- `candidates` + `email`, `workbook_notes jsonb` (Notes tab of the shortlist workbook).
+- `shortlists` + `why_matches`, `salary_text`, `updated_at` (+ touch trigger).
+- New table `prospects` (LinkedIn register, RLS on, no policies = owner-only).
+- `runs` unique index `(source, started)`; `profiles` backfilled from `auth.users`.
+- `_migrations` bookkeeping table.

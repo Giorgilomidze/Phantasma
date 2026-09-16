@@ -5,3 +5,8 @@ convert-images.js
 .claude/settings.local.json
 Fantasma OLD/
 Miscelanous trash/
+
+# Local secrets (Supabase service_role key for supabase/sync_local.py)
+.env
+__pycache__/
+supabase access.txt
