@@ -2883,7 +2883,7 @@ body.is-locked {
 .auth-modal__status[data-kind="busy"]  { color: var(--ink-soft); }
 
 /* Account page — v1: the numbers */
-.account { padding-block: var(--space-9) var(--space-10); }
+.account { padding-block: var(--space-9) var(--space-8); }
 .account__panel {
   max-width: 640px;
   display: grid;
@@ -2901,12 +2901,24 @@ body.is-locked {
   border-bottom: 1px solid var(--rule);
 }
 .account__email { font-weight: 500; margin: 0; word-break: break-all; }
-.account__signout {
+.account__actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.account__quiet {
   background: transparent;
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--rule);
 }
-.account__signout:hover { background: var(--surface); }
+.account__quiet:hover { background: var(--surface); }
+.account__quiet[aria-expanded="true"] { background: var(--surface); }
+.account__quiet:disabled { opacity: 0.5; cursor: wait; }
+.account__danger {
+  max-width: 640px;
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+.account__delete:hover { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
 .account__intro { max-width: 640px; }
 .account__intro .project-hero__sub { margin-bottom: var(--space-4); }

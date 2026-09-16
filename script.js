@@ -1401,6 +1401,11 @@
       return getClient().auth.updateUser({ password });
     }
 
+    // Server-side: records the request, emails the owner, deletes the login.
+    function deleteAccount() {
+      return getClient().rpc('request_account_deletion');
+    }
+
     function signInWithGoogle() {
       return getClient().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: returnUrl() } });
     }
@@ -1477,6 +1482,7 @@
       signUp,
       resetPassword,
       updatePassword,
+      deleteAccount,
       signInWithGoogle,
       signOut,
       requestSubscription,
@@ -1796,13 +1802,42 @@
     root.querySelector('#stat-panel-close').addEventListener('click', closePanel);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openKey) closePanel(); });
 
-    // Arrived from a password-reset email: show the new-password form.
-    const newpass = root.querySelector('#account-newpass');
+    // Password form: "Change password" toggles it; a reset-email landing
+    // (PASSWORD_RECOVERY) opens it with the recovery title.
+    const newpass  = root.querySelector('#account-newpass');
+    const npTitle  = root.querySelector('#newpass-title');
+    const npToggle = root.querySelector('#account-changepass');
+    function showNewpass(kind) {
+      npTitle.textContent = npTitle.dataset['title' + kind.charAt(0).toUpperCase() + kind.slice(1)];
+      newpass.hidden = false;
+      npToggle.setAttribute('aria-expanded', 'true');
+      newpass.querySelector('input').focus();
+    }
+    function hideNewpass() {
+      newpass.hidden = true;
+      npToggle.setAttribute('aria-expanded', 'false');
+    }
+    npToggle.addEventListener('click', () => (newpass.hidden ? showNewpass('change') : hideNewpass()));
     document.addEventListener('phantasma:auth', (e) => {
-      if (e.detail.event === 'PASSWORD_RECOVERY') {
-        newpass.hidden = false;
-        newpass.querySelector('input').focus();
+      if (e.detail.event === 'PASSWORD_RECOVERY') showNewpass('recovery');
+    });
+
+    // Delete my account
+    const del = root.querySelector('#account-delete');
+    del.addEventListener('click', async () => {
+      if (!window.confirm(del.dataset.confirm)) return;
+      const st = root.querySelector('#delete-status');
+      st.textContent = del.dataset.msgBusy; st.dataset.kind = 'busy'; st.hidden = false;
+      del.disabled = true;
+      const { error } = await Auth.deleteAccount();
+      if (error) {
+        st.textContent = del.dataset.msgError; st.dataset.kind = 'error';
+        del.disabled = false;
+        return;
       }
+      try { await Auth.signOut(); } catch (_) { /* user is already gone */ }
+      root.querySelector('#account-deleted').hidden = false;
+      render(null);
     });
     newpass.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1813,7 +1848,7 @@
       note('busy', newpass.dataset.msgSaving);
       const { error } = await Auth.updatePassword(pw);
       note(error ? 'error' : 'ok', error ? newpass.dataset.msgError : newpass.dataset.msgSaved);
-      if (!error) setTimeout(() => { newpass.hidden = true; }, 2500);
+      if (!error) setTimeout(hideNewpass, 2500);
     });
 
     root.querySelector('#account-signout').addEventListener('click', async () => {

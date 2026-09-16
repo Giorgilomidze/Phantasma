@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260917b" />
+  <link rel="stylesheet" href="./styles.css?v=20260917c" />
 </head>
 <body>
 
@@ -82,7 +82,7 @@
         <a href="./projects.html">Projects</a>
         <a href="./index.html#contact">Contact</a>
       </nav>
-      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Account">Log in</a>
+      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="My profile">Log in</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -99,23 +99,35 @@
 
       <!-- Signed out -->
       <div class="account__panel" id="account-signed-out">
+        <p class="account__stats-note" id="account-deleted" hidden>
+          Your account has been deleted. We will remove your remaining data within 7 days and email you when it is done.
+        </p>
         <p class="project-hero__sub">
           Sign in to follow your Personal Career Strategist service — what we processed,
           what we sent, and what came back.
         </p>
         <p>
-          <a href="./account.html" class="btn btn-primary js-auth" data-label-login="Log in" data-label-account="Account">Log in</a>
+          <a href="./account.html" class="btn btn-primary js-auth" data-label-login="Log in" data-label-account="My profile">Log in</a>
         </p>
       </div>
 
       <!-- Signed in -->
       <div class="account__panel account__panel--full" id="account-signed-in" hidden>
-        <!-- Shown only when the user arrives from a password-reset email
-             (PASSWORD_RECOVERY event); bootAccountPage handles it. -->
+        <div class="account__who">
+          <p class="account__email" id="account-email"></p>
+          <div class="account__actions">
+            <button class="btn btn-sm account__quiet" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button>
+            <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
+          </div>
+        </div>
+
+        <!-- Password form: opened by "Change password", or automatically when
+             the user arrives from a reset email (PASSWORD_RECOVERY). -->
         <form class="account-newpass" id="account-newpass" novalidate hidden
-              data-msg-saving="Saving…" data-msg-saved="Password updated. You are signed in."
+              data-msg-saving="Saving…" data-msg-saved="Password updated."
               data-msg-weak="Password must be at least 8 characters." data-msg-error="Could not update the password — please try again.">
-          <h2 class="project-funnel__h">Set a new password</h2>
+          <h2 class="project-funnel__h" id="newpass-title" data-title-recovery="Set a new password" data-title-change="Change password">Change password</h2>
+          <p class="account__hint" id="newpass-hint">Signed in with Google? Setting a password lets you log in either way.</p>
           <label class="auth-modal__label" for="newpass">New password <small>(at least 8 characters)</small></label>
           <input class="auth-modal__input" id="newpass" type="password" name="password" autocomplete="new-password" minlength="8" required />
           <div class="account-form__actions">
@@ -124,10 +136,6 @@
           </div>
         </form>
 
-        <div class="account__who">
-          <p class="account__email" id="account-email"></p>
-          <button class="btn btn-sm account__signout" type="button" id="account-signout">Sign out</button>
-        </div>
 
         <section class="account__stats" aria-labelledby="stats-h">
           <p class="eyebrow" id="stats-h">Your service so far</p>
@@ -165,6 +173,17 @@
             Not on a plan yet? See the tiers on the
             <a href="./projects.html" class="link-quiet">Personal Career Strategist</a> page.
           </p>
+        </div>
+
+        <div class="account__danger">
+          <p class="account__hint">
+            Want to leave? Deleting your account removes your login at once; we then erase
+            your CV, brief and shortlists by hand within 7 days and confirm by email.
+          </p>
+          <button class="btn btn-sm account__quiet account__delete" type="button" id="account-delete"
+                  data-confirm="Delete your account? This cannot be undone."
+                  data-msg-busy="Deleting…" data-msg-error="Could not delete the account — please email consult@solvephantasma.com.">Delete my account</button>
+          <p class="account-form__status" id="delete-status" role="status" aria-live="polite" hidden></p>
         </div>
       </div>
     </section>
@@ -239,6 +258,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917b"></script>
+  <script src="./script.js?v=20260917c"></script>
 </body>
 </html>

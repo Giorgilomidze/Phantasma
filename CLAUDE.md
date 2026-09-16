@@ -235,7 +235,12 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   Supabase. supabase-js 2.58.0 UMD from jsDelivr, loaded before `script.js` on
   every page except `landing.html`. Schema and RLS are owned by the Solve
   Assistant repo — see `supabase/README.md`. Header CTA is now **Log in /
-  Account** on all pages except `landing.html` (kept "Book a call").
+  My profile** on all pages except `landing.html` (kept "Book a call").
+  `account.html` has Change password (works for Google users too — gives them
+  a second way in) and **Delete my account** → RPC `request_account_deletion()`
+  (see `supabase/0004-account-deletion.sql`): logs to `deletion_requests`,
+  emails `consult@solvephantasma.com`, deletes the login. **Owner must then
+  remove the CV / candidate rows by hand** and set `handled_at`.
 
 The consent-mode `<head>` block is duplicated across **all six** HTML files. If
 you change it, change it in all of them.

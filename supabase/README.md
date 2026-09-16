@@ -56,4 +56,5 @@ Assistant copy:
 - New table `prospects` (LinkedIn register, RLS on, no policies = owner-only).
 - `runs` unique index `(source, started)`; `profiles` backfilled from `auth.users`.
 - `_migrations` bookkeeping table.
+- `0004`: `deletion_requests` table + `request_account_deletion()` RPC (emails the owner via pg_net → Resend; key in Vault as `resend_api_key`), then deletes the auth user.
 - `plans.period` check now `once | month | 4weeks`; all three plans are `4weeks` (one payment = four weeks of service).
