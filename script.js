@@ -1401,6 +1401,14 @@
       return getClient().auth.updateUser({ password });
     }
 
+    function loadProfile() {
+      return getClient().from('profiles').select('linkedin_url').eq('id', session.user.id).maybeSingle();
+    }
+
+    function saveLinkedin(url) {
+      return getClient().from('profiles').update({ linkedin_url: url || null }).eq('id', session.user.id);
+    }
+
     // Server-side: records the request, emails the owner, deletes the login.
     function deleteAccount() {
       return getClient().rpc('request_account_deletion');
@@ -1483,6 +1491,8 @@
       resetPassword,
       updatePassword,
       deleteAccount,
+      loadProfile,
+      saveLinkedin,
       signInWithGoogle,
       signOut,
       requestSubscription,
@@ -1790,6 +1800,7 @@
       closePanel();
       if (!session) return;
       root.querySelector('#account-email').textContent = session.user.email;
+      Auth.loadProfile().then(({ data: p }) => { li.linkedin_url.value = (p && p.linkedin_url) || ''; });
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
       renderStats(data);
@@ -1820,6 +1831,19 @@
     npToggle.addEventListener('click', () => (newpass.hidden ? showNewpass('change') : hideNewpass()));
     document.addEventListener('phantasma:auth', (e) => {
       if (e.detail.event === 'PASSWORD_RECOVERY') showNewpass('recovery');
+    });
+
+    // LinkedIn profile URL
+    const li = root.querySelector('#account-linkedin');
+    li.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const st = root.querySelector('#linkedin-status');
+      const note = (kind, text) => { st.textContent = text; st.dataset.kind = kind; st.hidden = !text; };
+      const url = li.linkedin_url.value.trim();
+      if (url && !/linkedin\.com\/in\/[^/?#]+/i.test(url)) { note('error', li.dataset.msgBad); return; }
+      note('busy', li.dataset.msgSaving);
+      const { error } = await Auth.saveLinkedin(url);
+      note(error ? 'error' : 'ok', error ? li.dataset.msgError : li.dataset.msgSaved);
     });
 
     // Delete my account

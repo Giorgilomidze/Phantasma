@@ -2853,6 +2853,17 @@ body.is-locked {
 .auth-modal__link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .auth-modal__link[hidden] { display: none; }
 .auth-modal__switch { justify-self: center; margin-top: var(--space-2); }
+.account-linkedin {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 640px;
+}
+.account-linkedin__row {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.account-linkedin__row input { flex: 1 1 280px; }
 .account-newpass {
   display: grid;
   gap: var(--space-3);

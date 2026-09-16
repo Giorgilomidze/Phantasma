@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260917c" />
+  <link rel="stylesheet" href="./styles.css?v=20260917d" />
 </head>
 <body>
 
@@ -120,6 +120,21 @@
             <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
           </div>
         </div>
+
+        <!-- LinkedIn profile — how we match a login to the research done for
+             that person (candidates.profile_url). Saved to profiles.linkedin_url. -->
+        <form class="account-linkedin" id="account-linkedin" novalidate
+              data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-bad="Please paste a linkedin.com/in/… address."
+              data-msg-error="Could not save — please try again.">
+          <label class="auth-modal__label" for="linkedin-url">Your LinkedIn profile
+            <small>— we use it to connect your login to the research we do for you</small></label>
+          <div class="account-linkedin__row">
+            <input class="auth-modal__input" id="linkedin-url" type="url" name="linkedin_url" autocomplete="url"
+                   placeholder="https://www.linkedin.com/in/your-name/" inputmode="url" />
+            <button class="btn btn-primary btn-sm" type="submit">Save</button>
+          </div>
+          <p class="account-form__status" id="linkedin-status" role="status" aria-live="polite" hidden></p>
+        </form>
 
         <!-- Password form: opened by "Change password", or automatically when
              the user arrives from a reset email (PASSWORD_RECOVERY). -->
@@ -258,6 +273,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917c"></script>
+  <script src="./script.js?v=20260917d"></script>
 </body>
 </html>

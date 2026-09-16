@@ -116,6 +116,19 @@ class Rest:
         print(f"  {table:<12} upserted {len(rows)} rows")
 
 
+def workbooks():
+    """Every shortlist workbook, skipping Excel's ~$ lock files (workbook open)."""
+    return sorted(p for p in glob.glob(SHORTLIST_GLOB) if not os.path.basename(p).startswith("~$"))
+
+
+def linkedin_slug(url):
+    """'https://www.linkedin.com/in/Giorgi-Lomidze-00425972/' -> 'giorgi-lomidze-00425972'"""
+    if not url:
+        return None
+    m = re.search(r"linkedin\.com/in/([^/?#]+)", url, re.I)
+    return m.group(1).strip().lower() if m else None
+
+
 def rows_of(con, sql, args=()):
     return [dict(r) for r in con.execute(sql, args)]
 
@@ -181,7 +194,14 @@ def vacancy_map(rest):
 
 
 def sync_candidates(con, rest):
-    profiles = {p["email"].lower(): p["id"] for p in rest.select("profiles", "id,email") if p.get("email")}
+    prof = rest.select("profiles", "id,email,linkedin_url")
+    profiles = {p["email"].lower(): p["id"] for p in prof if p.get("email")}
+    # LinkedIn slug (the part after /in/) -> profile id, from what clients typed
+    by_slug = {}
+    for p in prof:
+        sl = linkedin_slug(p.get("linkedin_url"))
+        if sl:
+            by_slug[sl] = p["id"]
     existing = {c["slug"]: c for c in rest.select("candidates", "slug,account_id,status")}
     cols = ["name", "headline", "function", "seniority", "started_at", "sheet_no", "profile_url",
             "company_current", "folder", "match_rules", "notes"]
@@ -205,11 +225,15 @@ def sync_candidates(con, rest):
         # column is always sent — with the existing value when there is one.)
         prev = existing.get(r["slug"]) or {}
         row["account_id"] = prev.get("account_id")
-        if email and not row["account_id"]:
-            if email in profiles:
+        if not row["account_id"]:
+            sl = linkedin_slug(r.get("profile_url")) or r["slug"].lower()
+            if email and email in profiles:
                 row["account_id"] = profiles[email]
                 linked.append(f"{r['slug']} -> {email}")
-            else:
+            elif sl in by_slug:
+                row["account_id"] = by_slug[sl]
+                linked.append(f"{r['slug']} -> linkedin.com/in/{sl}")
+            elif email:
                 unlinked.append(f"{r['slug']} ({email} has not signed in yet)")
         rows.append(row)
     rest.upsert("candidates", rows, "slug")
@@ -265,7 +289,7 @@ def sync_prospects(rest):
 def read_workbook_notes():
     """The Notes tab of every shortlist workbook -> {folder: {label: text}}."""
     out = {}
-    for path in glob.glob(SHORTLIST_GLOB):
+    for path in workbooks():
         folder = os.path.basename(os.path.dirname(path))
         wb = openpyxl.load_workbook(path, read_only=True)
         if "Notes" not in wb.sheetnames:
@@ -282,7 +306,7 @@ def read_shortlists(con, by_local, by_url):
     """Parse every workbook. Returns (rows, unmatched) where rows are cloud-ready."""
     folder_to_slug = {r["folder"]: r["slug"] for r in rows_of(con, "select slug, folder from candidates") if r["folder"]}
     rows, unmatched = [], []
-    for path in sorted(glob.glob(SHORTLIST_GLOB)):
+    for path in workbooks():
         folder = os.path.basename(os.path.dirname(path))
         slug = folder_to_slug.get(folder)
         if not slug:
