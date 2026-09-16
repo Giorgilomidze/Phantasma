@@ -13,6 +13,7 @@
   --bg: oklch(97% 0.018 70);
   --bg-rgb: #f9f3eb;
   --surface: oklch(94% 0.025 60);
+  --surface-soft: oklch(93.4% 0.026 64);   /* #f6e6d8 - quiet account buttons */
   --surface-rgb: #f1e6d4;
   --surface-raised: oklch(99% 0.012 75);
   --surface-raised-rgb: #fdf9f1;
@@ -78,6 +79,7 @@
   :root {
     --bg: #f9f3eb;
     --surface: #f1e6d4;
+    --surface-soft: #f6e6d8;
     --surface-raised: #fdf9f1;
     --ink: #2a221a;
     --ink-soft: #615448;
@@ -2713,15 +2715,7 @@ body.is-locked {
 
 /* Header link doubles as "Log in" (opens modal) and "Account" (link). */
 .site-nav__auth { display: none; }
-.js-auth[data-state="in"] {
-  background: transparent;
-  color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--rule);
-}
-.js-auth[data-state="in"]:hover {
-  background: var(--surface);
-  transform: none;
-}
+/* Signed-in state (My profile) keeps the primary button look. */
 
 /* Modal — same layering conventions as the lightbox (section 17). */
 .auth-modal {
@@ -2942,7 +2936,7 @@ body.is-locked {
 .account__email { font-weight: 500; margin: 0; word-break: break-all; }
 .account__actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 .account__quiet {
-  background: transparent;
+  background: var(--surface-soft);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--rule);
 }
