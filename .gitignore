@@ -10,3 +10,4 @@ Miscelanous trash/
 .env
 __pycache__/
 supabase access.txt
+exports/
