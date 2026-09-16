@@ -47,7 +47,7 @@ server from the repo root, e.g. `python -m http.server 8000`.
 `git push` to `main`. GitHub Pages publishes automatically. There is no CI.
 
 **Cache-busting:** every page links `styles.css?v=YYYYMMDDx` and
-`script.js?v=YYYYMMDDx`. **Bump the value in all six HTML files whenever CSS
+`script.js?v=YYYYMMDDx`. **Bump the value in all seven HTML files whenever CSS
 or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 `sed -i -E 's#(styles\.css|script\.js)\?v=[^"]*#?v=NEW#' *.html`.
 
@@ -63,6 +63,7 @@ or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 | `projects.html` | "Personal Career Strategist" service page — 3 pricing tiers, Keepz **Pay now** links |
 | `projects.ka.html` | **Georgian translation of `projects.html`.** Same markup, translated text, `lang="ka"`, loads Noto Sans/Serif Georgian. **Any copy or price change on `projects.html` must be mirrored here by hand.** Header carries a `.lang-switch` (inline-SVG GB/GE flags) and both pages link each other with `hreflang`. |
 | `account.html` | Client dashboard (EN only). Signed-out: Log in prompt. Signed-in: email/Sign out + 8 KPI tiles from `get_my_stats()`. `noindex`, disallowed in `robots.txt`. |
+| `preferences.html` | Client questionnaire: 5 collapsible groups (salary, role, geography, where to search, applications), 23 questions, Save per group, answered-counters. Table `preferences` (salary typed + `answers` jsonb `q1..q24`, no q3). `noindex`. |
 | `supabase/` | **Not the schema.** `README.md` (run order + table contract), `0001-drop-site-v1.sql`, `0002-site-additions.sql`. The schema lives in `D:\Web Development\Solve Assistant\supabase\schema.sql`. |
 | `data/kpis.json` | **Live KPI numbers for the projects-page funnel.** Owner overwrites it and pushes; both projects pages fetch it at load (`cache: no-store`). Only the `funnel[]` array is rendered — stage count, order and labels come from the file. Live URL `https://solvephantasma.com/data/kpis.json`. |
 | `script.js` | All behaviour + the `CASES` data (~1500 lines) |
@@ -101,6 +102,7 @@ Single IIFE. Order of contents:
 | `Auth` | Module. supabase-js client (`SUPABASE_URL` / publishable key constants), email+password (`signIn`/`signUp`/`resetPassword`/`updatePassword`) + Google sign-in, `requestSubscription(plan)` (inserts a `pending` row), `loadStats()`. Syncs every `.js-auth` link (Log in ↔ Account, labels from `data-label-*`) and fires `phantasma:auth`. Skips silently when `window.supabase` is absent (landing). |
 | `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. One form, three modes via `data-mode` (login / signup / forgot); all copy in `data-*` attributes (KA page supplies its own). Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: signed out → opens modal; signed in → `requestSubscription` then Keepz opens. |
 | `bootAccountPage()` | `account.html` only. Shows `#account-newpass` on the `PASSWORD_RECOVERY` auth event (reset-link landing). Fills `[data-stat]` tiles, each a button opening one `#stat-panel` table, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
+| `bootPreferencesPage()` | `preferences.html` only. Fill / count / per-group save via `Auth.loadPreferences` / `savePreferences` (upsert on `user_id`). Warns on leaving with unsaved edits. |
 | `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` |
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
@@ -242,7 +244,7 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   emails `consult@solvephantasma.com`, deletes the login. **Owner must then
   remove the CV / candidate rows by hand** and set `handled_at`.
 
-The consent-mode `<head>` block is duplicated across **all six** HTML files. If
+The consent-mode `<head>` block is duplicated across **all seven** HTML files. If
 you change it, change it in all of them.
 
 ---

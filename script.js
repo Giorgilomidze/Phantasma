@@ -1409,6 +1409,15 @@
       return getClient().from('profiles').update({ linkedin_url: url || null }).eq('id', session.user.id);
     }
 
+    function loadPreferences() {
+      return getClient().from('preferences').select('salary_min, salary_max, currency, answers').eq('user_id', session.user.id).maybeSingle();
+    }
+
+    // Upsert the whole row; `answers` is merged client-side before calling.
+    function savePreferences(row) {
+      return getClient().from('preferences').upsert(Object.assign({ user_id: session.user.id }, row), { onConflict: 'user_id' });
+    }
+
     // Server-side: records the request, emails the owner, deletes the login.
     function deleteAccount() {
       return getClient().rpc('request_account_deletion');
@@ -1493,6 +1502,8 @@
       deleteAccount,
       loadProfile,
       saveLinkedin,
+      loadPreferences,
+      savePreferences,
       signInWithGoogle,
       signOut,
       requestSubscription,
@@ -1906,6 +1917,93 @@
     document.addEventListener('phantasma:auth', (e) => render(e.detail.session));
   }
 
+  // preferences.html — the questionnaire. Groups collapse/expand; each has
+  // its own Save. Counters = answered / total per group and overall.
+  function bootPreferencesPage() {
+    const root = document.getElementById('preferences');
+    if (!root || !window.supabase) return;
+
+    const out = root.querySelector('#account-signed-out');
+    const inn = root.querySelector('#account-signed-in');
+    const total = root.querySelector('#pref-total');
+    const groups = Array.from(root.querySelectorAll('.pref-group'));
+    let saved = { salary_min: null, salary_max: null, currency: 'GEL', answers: {} };
+    let dirty = false;
+
+    const filled = (el) => el.type === 'radio' ? false : String(el.value || '').trim() !== '';
+
+    // A question counts as answered when its control has a value. The salary
+    // question counts once if either number is filled.
+    function countGroup(g) {
+      const qs = Array.from(g.querySelectorAll('.pref-q'));
+      const n = qs.filter((q) => Array.from(q.querySelectorAll('[data-q]')).some(filled)).length;
+      g.querySelector('[data-count]').textContent = n + ' / ' + qs.length;
+      g.classList.toggle('is-complete', n === qs.length);
+      return [n, qs.length];
+    }
+    function countAll() {
+      let n = 0, m = 0;
+      groups.forEach((g) => { const [a, b] = countGroup(g); n += a; m += b; });
+      total.textContent = n + ' / ' + m + ' answered';
+    }
+
+    function fill() {
+      groups.forEach((g) => {
+        const f = g.querySelector('form');
+        Array.from(f.elements).forEach((el) => {
+          if (!el.name) return;
+          if (el.name === 'currency') el.checked = el.value === saved.currency;
+          else if (el.name === 'salary_min' || el.name === 'salary_max') el.value = saved[el.name] == null ? '' : saved[el.name];
+          else if (el.hasAttribute('data-q')) el.value = saved.answers[el.name] || '';
+        });
+      });
+      countAll();
+    }
+
+    groups.forEach((g) => {
+      const btn = g.querySelector('.pref-group__toggle');
+      const body = g.querySelector('.pref-group__body');
+      btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!open));
+        body.hidden = open;
+      });
+      body.addEventListener('input', () => { dirty = true; countGroup(g); });
+      body.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const st = body.querySelector('.account-form__status');
+        const note = (kind, text) => { st.textContent = text; st.dataset.kind = kind; st.hidden = !text; };
+        const row = { answers: Object.assign({}, saved.answers) };
+        Array.from(body.elements).forEach((el) => {
+          if (!el.name) return;
+          if (el.name === 'currency') { if (el.checked) row.currency = el.value; }
+          else if (el.name === 'salary_min' || el.name === 'salary_max') row[el.name] = el.value === '' ? null : Number(el.value);
+          else if (el.hasAttribute('data-q')) row.answers[el.name] = el.value.trim();
+        });
+        if (row.salary_min != null && row.salary_max != null && row.salary_min > row.salary_max) { note('error', body.dataset.msgSalary); return; }
+        note('busy', body.dataset.msgSaving);
+        const { error } = await Auth.savePreferences(row);
+        if (error) { note('error', body.dataset.msgError); return; }
+        saved = Object.assign({}, saved, row);
+        dirty = false;
+        note('ok', body.dataset.msgSaved);
+        countAll();
+      });
+    });
+
+    window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+    async function render(session) {
+      out.hidden = !!session;
+      inn.hidden = !session;
+      if (!session) return;
+      const { data } = await Auth.loadPreferences();
+      if (data) saved = { salary_min: data.salary_min, salary_max: data.salary_max, currency: data.currency || 'GEL', answers: data.answers || {} };
+      fill();
+    }
+    document.addEventListener('phantasma:auth', (e) => render(e.detail.session));
+  }
+
   const CALENDLY_URL = 'https://calendly.com/lomiddze/30min';
 
   function bootCalendly() {
@@ -2050,6 +2148,7 @@
     Auth.boot();
     bootAuthModal();
     bootAccountPage();
+    bootPreferencesPage();
     bootCalendly();
     bootImageZoom();
   }

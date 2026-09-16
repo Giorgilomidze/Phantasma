@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /landing.html
 Disallow: /account.html
+Disallow: /preferences.html
 
 Sitemap: https://solvephantasma.com/sitemap.xml

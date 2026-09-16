@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f9f3eb" />
+  <title>Preferences — Phantasma</title>
+  <meta name="description" content="Tell us what to look for: salary, titles, locations, where to search and how to apply." />
+
+  <!-- Private page: keep out of the index -->
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://solvephantasma.com/preferences.html" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://solvephantasma.com/preferences.html" />
+  <meta property="og:title" content="Preferences — Phantasma" />
+  <meta property="og:description" content="Sign in to see your orders and service status." />
+  <meta property="og:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Preferences — Phantasma" />
+  <meta name="twitter:description" content="Sign in to see your orders and service status." />
+  <meta name="twitter:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&display=swap" />
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap" />
+
+  <!-- Consent mode: deny by default until user accepts (GDPR) -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('consent', 'default', {
+      analytics_storage: 'denied',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied'
+    });
+    if (localStorage.getItem('phantasma_cookie_consent') === 'accepted') {
+      gtag('consent', 'update', {
+        analytics_storage: 'granted',
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted'
+      });
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18182297582"></script>
+  <script>
+    gtag('js', new Date());
+    gtag('config', 'AW-18182297582');
+    /* GA4: add gtag('config', 'G-XXXXXXXXXX') here once measurement ID is ready */
+  </script>
+
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="stylesheet" href="./styles.css?v=20260917f" />
+</head>
+<body>
+
+  <div class="grain" aria-hidden="true"></div>
+  <div id="top" aria-hidden="true" class="scroll-anchor"></div>
+
+  <!-- Header -->
+  <header class="site-header" id="site-header">
+    <div class="page-grid site-header__row">
+      <a href="./index.html" class="wordmark" aria-label="Phantasma — home">Phantasma</a>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="./index.html">Home</a>
+        <a href="./index.html#what-we-do">What we do</a>
+        <a href="./index.html#work">Work</a>
+        <a href="./index.html#approach">Approach</a>
+        <a href="./blog.html">Blog</a>
+        <a href="./projects.html">Projects</a>
+        <a href="./index.html#contact">Contact</a>
+      </nav>
+      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="My profile">Log in</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- Preferences questionnaire. 5 collapsible groups, one Save per group.
+         Answers -> table `preferences` (salary typed, the rest in `answers`
+         jsonb keyed q1..q24). Filled by bootPreferencesPage (script.js). -->
+    <section class="account page-grid" id="preferences" aria-labelledby="pref-h">
+      <p class="eyebrow">Account</p>
+      <h1 class="project-hero__title" id="pref-h">Preferences</h1>
+
+      <div class="account__panel" id="account-signed-out">
+        <p class="project-hero__sub">Sign in to tell us what to look for.</p>
+        <p><a href="./account.html" class="btn btn-primary js-auth" data-label-login="Log in" data-label-account="My profile">Log in</a></p>
+      </div>
+
+      <div class="account__panel account__panel--full" id="account-signed-in" hidden>
+        <div class="account__who">
+          <p class="project-hero__sub pref-lede">
+            The brief we search from every week. Fill in what you can — every answer
+            tightens the match. Salary is net, per month.
+          </p>
+          <div class="account__actions">
+            <span class="pref-total" id="pref-total" aria-live="polite">0 / 23 answered</span>
+            <a class="btn btn-sm account__quiet" href="./account.html">Back to my profile</a>
+          </div>
+        </div>
+
+        <section class="pref-group" data-group="salary">
+          <h2 class="pref-group__h">
+            <button class="pref-group__toggle" type="button" aria-expanded="true" aria-controls="pref-salary">
+              <span class="pref-group__title">Salary &amp; compensation</span>
+              <span class="pref-group__count" data-count>0 / 3</span>
+              <span class="pref-group__chev" aria-hidden="true"></span>
+            </button>
+          </h2>
+          <form class="pref-group__body" id="pref-salary" novalidate
+                data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-error="Could not save — please try again."
+                data-msg-salary="Minimum cannot be higher than maximum.">
+          <div class="pref-q">
+            <label class="pref-q__label" for="q1">Salary floor</label>
+            <p class="pref-q__help" id="q1-help">Net, per month. Roles paying less than the minimum are not shown to you. The maximum is what you would realistically aim for.</p>
+            <div class="pref-salary">
+              <input class="auth-modal__input pref-salary__num" id="q1" name="salary_min" type="number" inputmode="numeric" min="0" step="50" placeholder="from" aria-describedby="q1-help" data-q />
+              <span class="pref-salary__dash" aria-hidden="true">–</span>
+              <input class="auth-modal__input pref-salary__num" name="salary_max" type="number" inputmode="numeric" min="0" step="50" placeholder="to" aria-label="Salary maximum" data-q />
+              <div class="pref-currency" role="radiogroup" aria-label="Currency">
+                <label><input type="radio" name="currency" value="GEL" checked /><span>GEL</span></label>
+                <label><input type="radio" name="currency" value="EUR" /><span>EUR</span></label>
+                <label><input type="radio" name="currency" value="USD" /><span>USD</span></label>
+              </div>
+            </div>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q2">Does the floor change by role type?</label>
+            <p class="pref-q__help" id="q2-help">For example a different minimum for a project-management role than for a data role. Leave blank if it is the same.</p>
+            <textarea class="auth-modal__input pref-q__input" id="q2" name="q2" rows="2" aria-describedby="q2-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q4">Default salary figure for forms</label>
+            <p class="pref-q__help" id="q4-help">Some application forms require an expected salary even when the ad states none. What number should we enter?</p>
+            <input class="auth-modal__input pref-q__input pref-q__input--short" id="q4" name="q4" type="number" inputmode="numeric" min="0" step="50" aria-describedby="q4-help" data-q />
+          </div>
+            <div class="account-form__actions">
+              <button class="btn btn-primary btn-sm" type="submit">Save</button>
+              <p class="account-form__status" role="status" aria-live="polite" hidden></p>
+            </div>
+          </form>
+        </section>
+
+        <section class="pref-group" data-group="role">
+          <h2 class="pref-group__h">
+            <button class="pref-group__toggle" type="button" aria-expanded="false" aria-controls="pref-role">
+              <span class="pref-group__title">Role &amp; seniority</span>
+              <span class="pref-group__count" data-count>0 / 5</span>
+              <span class="pref-group__chev" aria-hidden="true"></span>
+            </button>
+          </h2>
+          <form class="pref-group__body" id="pref-role" novalidate hidden
+                data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-error="Could not save — please try again."
+                data-msg-salary="Minimum cannot be higher than maximum.">
+          <div class="pref-q">
+            <label class="pref-q__label" for="q5">Job titles you are targeting</label>
+            <p class="pref-q__help" id="q5-help">The exact titles, not just the field. Separate with commas.</p>
+            <textarea class="auth-modal__input pref-q__input" id="q5" name="q5" rows="2" aria-describedby="q5-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q6">Rank those titles</label>
+            <p class="pref-q__help" id="q6-help">Dream roles / solid fits / backup options.</p>
+            <textarea class="auth-modal__input pref-q__input" id="q6" name="q6" rows="2" aria-describedby="q6-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q7">Years of experience and current title</label>
+            <p class="pref-q__help" id="q7-help">The number we should state, and what &quot;current role&quot; should say on standard forms.</p>
+            <input class="auth-modal__input pref-q__input" id="q7" name="q7" type="text" aria-describedby="q7-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q8">Notice period / availability</label>
+            <p class="pref-q__help" id="q8-help">When could you start?</p>
+            <input class="auth-modal__input pref-q__input" id="q8" name="q8" type="text" aria-describedby="q8-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q9">Roles you are overqualified for but still open to</label>
+            <p class="pref-q__help" id="q9-help">Some ads set a low minimum (e.g. &quot;1+ year&quot;). Should we include those?</p>
+            <textarea class="auth-modal__input pref-q__input" id="q9" name="q9" rows="2" aria-describedby="q9-help" data-q></textarea>
+          </div>
+            <div class="account-form__actions">
+              <button class="btn btn-primary btn-sm" type="submit">Save</button>
+              <p class="account-form__status" role="status" aria-live="polite" hidden></p>
+            </div>
+          </form>
+        </section>
+
+        <section class="pref-group" data-group="geo">
+          <h2 class="pref-group__h">
+            <button class="pref-group__toggle" type="button" aria-expanded="false" aria-controls="pref-geo">
+              <span class="pref-group__title">Geography &amp; work arrangement</span>
+              <span class="pref-group__count" data-count>0 / 4</span>
+              <span class="pref-group__chev" aria-hidden="true"></span>
+            </button>
+          </h2>
+          <form class="pref-group__body" id="pref-geo" novalidate hidden
+                data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-error="Could not save — please try again."
+                data-msg-salary="Minimum cannot be higher than maximum.">
+          <div class="pref-q">
+            <label class="pref-q__label" for="q10">Where are you searching?</label>
+            <p class="pref-q__help" id="q10-help">Georgia only, international remote, or both.</p>
+            <input class="auth-modal__input pref-q__input" id="q10" name="q10" type="text" aria-describedby="q10-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q11">Relocation</label>
+            <p class="pref-q__help" id="q11-help">If you would move: which countries or regions, specifically?</p>
+            <textarea class="auth-modal__input pref-q__input" id="q11" name="q11" rows="2" aria-describedby="q11-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q12">Work authorisation outside Georgia</label>
+            <p class="pref-q__help" id="q12-help">Anywhere you can work without visa sponsorship?</p>
+            <input class="auth-modal__input pref-q__input" id="q12" name="q12" type="text" aria-describedby="q12-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q13">Work format</label>
+            <p class="pref-q__help" id="q13-help">Remote, hybrid, on-site — or open to all three?</p>
+            <input class="auth-modal__input pref-q__input" id="q13" name="q13" type="text" aria-describedby="q13-help" data-q />
+          </div>
+            <div class="account-form__actions">
+              <button class="btn btn-primary btn-sm" type="submit">Save</button>
+              <p class="account-form__status" role="status" aria-live="polite" hidden></p>
+            </div>
+          </form>
+        </section>
+
+        <section class="pref-group" data-group="search">
+          <h2 class="pref-group__h">
+            <button class="pref-group__toggle" type="button" aria-expanded="false" aria-controls="pref-search">
+              <span class="pref-group__title">Where to search</span>
+              <span class="pref-group__count" data-count>0 / 4</span>
+              <span class="pref-group__chev" aria-hidden="true"></span>
+            </button>
+          </h2>
+          <form class="pref-group__body" id="pref-search" novalidate hidden
+                data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-error="Could not save — please try again."
+                data-msg-salary="Minimum cannot be higher than maximum.">
+          <div class="pref-q">
+            <label class="pref-q__label" for="q14">Job boards to check regularly</label>
+            <p class="pref-q__help" id="q14-help">jobs.ge, hr.ge, ss.ge, LinkedIn, others.</p>
+            <input class="auth-modal__input pref-q__input" id="q14" name="q14" type="text" aria-describedby="q14-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q15">Employers to check directly</label>
+            <p class="pref-q__help" id="q15-help">Companies whose career pages we should always look at, not just the boards.</p>
+            <textarea class="auth-modal__input pref-q__input" id="q15" name="q15" rows="2" aria-describedby="q15-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q16">LinkedIn approach</label>
+            <p class="pref-q__help" id="q16-help">Should we browse LinkedIn directly, or rely on alerts / digests?</p>
+            <input class="auth-modal__input pref-q__input" id="q16" name="q16" type="text" aria-describedby="q16-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q17">How fresh, how often</label>
+            <p class="pref-q__help" id="q17-help">Daily, weekly, or only on request — and how far back should a sweep look?</p>
+            <input class="auth-modal__input pref-q__input" id="q17" name="q17" type="text" aria-describedby="q17-help" data-q />
+          </div>
+            <div class="account-form__actions">
+              <button class="btn btn-primary btn-sm" type="submit">Save</button>
+              <p class="account-form__status" role="status" aria-live="polite" hidden></p>
+            </div>
+          </form>
+        </section>
+
+        <section class="pref-group" data-group="apply">
+          <h2 class="pref-group__h">
+            <button class="pref-group__toggle" type="button" aria-expanded="false" aria-controls="pref-apply">
+              <span class="pref-group__title">Applications</span>
+              <span class="pref-group__count" data-count>0 / 7</span>
+              <span class="pref-group__chev" aria-hidden="true"></span>
+            </button>
+          </h2>
+          <form class="pref-group__body" id="pref-apply" novalidate hidden
+                data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-error="Could not save — please try again."
+                data-msg-salary="Minimum cannot be higher than maximum.">
+          <div class="pref-q">
+            <label class="pref-q__label" for="q18">Companies to exclude</label>
+            <p class="pref-q__help" id="q18-help">Any employer we should never apply to — for every role there, or only certain ones?</p>
+            <textarea class="auth-modal__input pref-q__input" id="q18" name="q18" rows="2" aria-describedby="q18-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q19">Dealbreakers</label>
+            <p class="pref-q__help" id="q19-help">Industries or role types you would never take, whatever the salary.</p>
+            <textarea class="auth-modal__input pref-q__input" id="q19" name="q19" rows="2" aria-describedby="q19-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q20">Languages and levels</label>
+            <p class="pref-q__help" id="q20-help">For each language you speak, the level we should list.</p>
+            <input class="auth-modal__input pref-q__input" id="q20" name="q20" type="text" aria-describedby="q20-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q21">Achievements to always emphasise</label>
+            <p class="pref-q__help" id="q21-help">Projects or results that are your strongest differentiators for cover letters.</p>
+            <textarea class="auth-modal__input pref-q__input" id="q21" name="q21" rows="2" aria-describedby="q21-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q22">Email addresses</label>
+            <p class="pref-q__help" id="q22-help">Which address applications should be sent from, and which should appear as your contact — are they the same?</p>
+            <input class="auth-modal__input pref-q__input" id="q22" name="q22" type="text" aria-describedby="q22-help" data-q />
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q23">Approval before sending</label>
+            <p class="pref-q__help" id="q23-help">Pause every submission for your go-ahead, or pre-authorise some low-stakes cases?</p>
+            <textarea class="auth-modal__input pref-q__input" id="q23" name="q23" rows="2" aria-describedby="q23-help" data-q></textarea>
+          </div>
+          <div class="pref-q">
+            <label class="pref-q__label" for="q24">Duplicate or expired listings</label>
+            <p class="pref-q__help" id="q24-help">Just flag them, or exclude them from future sweeps?</p>
+            <input class="auth-modal__input pref-q__input" id="q24" name="q24" type="text" aria-describedby="q24-help" data-q />
+          </div>
+            <div class="account-form__actions">
+              <button class="btn btn-primary btn-sm" type="submit">Save</button>
+              <p class="account-form__status" role="status" aria-live="polite" hidden></p>
+            </div>
+          </form>
+        </section>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="page-grid site-footer__inner">
+      <hr class="rule rule--footer" />
+      <div class="site-footer__row">
+        <a href="./index.html" class="wordmark wordmark--footer">Phantasma</a>
+        <a href="./index.html#contact" class="link-quiet">Book a discovery call →</a>
+      </div>
+      <div class="site-footer__row site-footer__row--meta">
+        <p class="site-footer__tagline">Tangible solutions for abstract problems.</p>
+        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+        <a class="link-quiet" href="./index.html">Full site</a>
+        <p class="site-footer__copy">© Phantasma 2026</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Cookie Consent Banner -->
+  <!-- Login modal — opened by the header "Log in" link and by Pay now when
+       signed out. Three modes (login / signup / forgot) switched by
+       data-mode on the form; behaviour in bootAuthModal (script.js). -->
+  <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <h2 class="auth-modal__title" id="auth-title"
+          data-title-login="Log in" data-title-signup="Create your account" data-title-forgot="Reset your password">Log in</h2>
+      <p class="auth-modal__sub">With your Google account, or email and password.</p>
+      <button class="btn auth-modal__google" type="button" id="auth-google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Continue with Google</button>
+      <p class="auth-modal__or" aria-hidden="true">or</p>
+      <form class="auth-modal__form" id="auth-form" novalidate data-mode="login"
+            data-msg-sending="One moment…"
+            data-msg-signup-sent="Almost done — check {email} and click the confirmation link."
+            data-msg-forgot-sent="Check {email} for a link to set a new password."
+            data-msg-bad-login="Email or password is wrong."
+            data-msg-exists="That email already has an account — log in instead."
+            data-msg-weak="Password must be at least 8 characters."
+            data-msg-unconfirmed="Please confirm your email first — check your inbox for the link."
+            data-msg-rate-limit="Too many emails sent in the last hour — please try again a little later."
+            data-msg-error="That didn't work — please try again.">
+        <label class="auth-modal__label" for="auth-email">Email address</label>
+        <input class="auth-modal__input" id="auth-email" type="email" name="email" autocomplete="email" required inputmode="email" />
+        <div class="auth-modal__pw" id="auth-pw-row">
+          <label class="auth-modal__label" for="auth-password">Password <small id="auth-pw-hint" hidden>(At least 8 characters)</small></label>
+          <input class="auth-modal__input" id="auth-password" type="password" name="password" autocomplete="current-password" minlength="8" required />
+          <button class="auth-modal__link" type="button" id="auth-forgot" data-mode-to="forgot">Forgot password?</button>
+        </div>
+        <button class="btn btn-primary" type="submit" id="auth-submit"
+                data-label-login="Log in" data-label-signup="Create account" data-label-forgot="Send reset link">Log in</button>
+        <button class="auth-modal__link auth-modal__switch" type="button" id="auth-switch"
+                data-label-login="New here? Create an account" data-label-signup="Already have an account? Log in" data-label-forgot="Already have an account? Log in">New here? Create an account</button>
+      </form>
+      <p class="auth-modal__status" id="auth-status" role="status" aria-live="polite" hidden></p>
+    </div>
+  </div>
+
+  <div class="cookie-banner" id="cookie-banner" hidden>
+    <p class="cookie-banner__text">
+      We use cookies for advertising and analytics to understand how our site is used and to show relevant ads to potential clients.
+    </p>
+    <div class="cookie-banner__actions">
+      <button type="button" class="cookie-banner__decline" id="cookie-decline">Decline</button>
+      <button type="button" class="cookie-banner__accept" id="cookie-accept">Accept</button>
+    </div>
+  </div>
+
+  <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+  <script src="./script.js?v=20260917f"></script>
+</body>
+</html>
