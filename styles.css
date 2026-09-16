@@ -2853,17 +2853,33 @@ body.is-locked {
 .auth-modal__link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .auth-modal__link[hidden] { display: none; }
 .auth-modal__switch { justify-self: center; margin-top: var(--space-2); }
-.account-linkedin {
-  display: grid;
-  gap: var(--space-3);
-  max-width: 640px;
-}
-.account-linkedin__row {
+.account__identity { display: grid; gap: var(--space-2); min-width: 0; }
+.account-li {
   display: flex;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
   flex-wrap: wrap;
+  font-size: var(--type-body-sm);
+  color: var(--ink-soft);
 }
-.account-linkedin__row input { flex: 1 1 280px; }
+.account-li[hidden] { display: none; }
+.account-li__icon { width: 16px; height: 16px; flex: none; color: var(--ink-soft); }
+.account-li__slug.is-empty { font-style: italic; }
+.account-li__edit {
+  font: inherit;
+  font-size: var(--type-body-sm);
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.account-li__edit:hover { color: var(--ink); }
+.account-li__edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.account-li__input { flex: 1 1 260px; max-width: 420px; padding: 8px 10px; font-size: var(--type-body-sm); }
+.account-li__status { flex-basis: 100%; }
 .account-newpass {
   display: grid;
   gap: var(--space-3);

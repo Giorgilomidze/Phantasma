@@ -1800,7 +1800,7 @@
       closePanel();
       if (!session) return;
       root.querySelector('#account-email').textContent = session.user.email;
-      Auth.loadProfile().then(({ data: p }) => { li.linkedin_url.value = (p && p.linkedin_url) || ''; });
+      Auth.loadProfile().then(({ data: p }) => { liUrl = (p && p.linkedin_url) || ''; paintLinkedin(); });
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
       renderStats(data);
@@ -1833,17 +1833,40 @@
       if (e.detail.event === 'PASSWORD_RECOVERY') showNewpass('recovery');
     });
 
-    // LinkedIn profile URL
-    const li = root.querySelector('#account-linkedin');
+    // LinkedIn profile URL — collapsed view (icon + slug + Edit) / inline form.
+    const li      = root.querySelector('#account-linkedin');
+    const liView  = root.querySelector('#account-linkedin-view');
+    const liSlug  = root.querySelector('#linkedin-slug');
+    const liEdit  = root.querySelector('#linkedin-edit');
+    const liNote  = root.querySelector('#linkedin-status');
+    let liUrl = '';
+    const slugOf = (u) => { const m = /linkedin\.com\/in\/([^/?#]+)/i.exec(u || ''); return m ? m[1] : ''; };
+    function paintLinkedin() {
+      const sl = slugOf(liUrl);
+      liSlug.textContent = sl ? 'linkedin.com/in/' + sl : liSlug.dataset.empty;
+      liSlug.classList.toggle('is-empty', !sl);
+      liEdit.textContent = sl ? liEdit.dataset.labelEdit : liEdit.dataset.labelAdd;
+      liView.hidden = false;
+      li.hidden = true;
+    }
+    liEdit.addEventListener('click', () => {
+      li.linkedin_url.value = liUrl;
+      liNote.hidden = true;
+      liView.hidden = true;
+      li.hidden = false;
+      li.linkedin_url.focus();
+    });
+    root.querySelector('#linkedin-cancel').addEventListener('click', paintLinkedin);
     li.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const st = root.querySelector('#linkedin-status');
-      const note = (kind, text) => { st.textContent = text; st.dataset.kind = kind; st.hidden = !text; };
+      const note = (kind, text) => { liNote.textContent = text; liNote.dataset.kind = kind; liNote.hidden = !text; };
       const url = li.linkedin_url.value.trim();
-      if (url && !/linkedin\.com\/in\/[^/?#]+/i.test(url)) { note('error', li.dataset.msgBad); return; }
+      if (url && !slugOf(url)) { note('error', li.dataset.msgBad); return; }
       note('busy', li.dataset.msgSaving);
       const { error } = await Auth.saveLinkedin(url);
-      note(error ? 'error' : 'ok', error ? li.dataset.msgError : li.dataset.msgSaved);
+      if (error) { note('error', li.dataset.msgError); return; }
+      liUrl = url;
+      paintLinkedin();
     });
 
     // Delete my account

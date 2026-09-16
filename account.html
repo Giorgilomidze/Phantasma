@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260917d" />
+  <link rel="stylesheet" href="./styles.css?v=20260917e" />
 </head>
 <body>
 
@@ -114,27 +114,33 @@
       <!-- Signed in -->
       <div class="account__panel account__panel--full" id="account-signed-in" hidden>
         <div class="account__who">
-          <p class="account__email" id="account-email"></p>
+          <div class="account__identity">
+            <p class="account__email" id="account-email"></p>
+            <!-- LinkedIn profile — how we match a login to the research done for
+                 that person (candidates.profile_url). Saved to profiles.linkedin_url.
+                 Collapsed: icon + slug + Edit. Open: input + Save / Cancel. -->
+            <div class="account-li" id="account-linkedin-view">
+              <svg class="account-li__icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
+              <span class="account-li__slug" id="linkedin-slug" data-empty="Add your LinkedIn profile"></span>
+              <button class="account-li__edit" type="button" id="linkedin-edit" data-label-edit="Edit" data-label-add="Add">Edit</button>
+            </div>
+            <form class="account-li account-li--form" id="account-linkedin" novalidate hidden
+                  data-msg-saving="Saving…" data-msg-bad="Please paste a linkedin.com/in/… address."
+                  data-msg-error="Could not save — please try again.">
+              <svg class="account-li__icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
+              <label class="visually-hidden" for="linkedin-url">Your LinkedIn profile URL</label>
+              <input class="auth-modal__input account-li__input" id="linkedin-url" type="url" name="linkedin_url"
+                     autocomplete="url" placeholder="https://www.linkedin.com/in/your-name/" inputmode="url" />
+              <button class="btn btn-primary btn-sm" type="submit">Save</button>
+              <button class="account-li__edit" type="button" id="linkedin-cancel">Cancel</button>
+              <p class="account-form__status account-li__status" id="linkedin-status" role="status" aria-live="polite" hidden></p>
+            </form>
+          </div>
           <div class="account__actions">
             <button class="btn btn-sm account__quiet" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button>
             <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
           </div>
         </div>
-
-        <!-- LinkedIn profile — how we match a login to the research done for
-             that person (candidates.profile_url). Saved to profiles.linkedin_url. -->
-        <form class="account-linkedin" id="account-linkedin" novalidate
-              data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-bad="Please paste a linkedin.com/in/… address."
-              data-msg-error="Could not save — please try again.">
-          <label class="auth-modal__label" for="linkedin-url">Your LinkedIn profile
-            <small>— we use it to connect your login to the research we do for you</small></label>
-          <div class="account-linkedin__row">
-            <input class="auth-modal__input" id="linkedin-url" type="url" name="linkedin_url" autocomplete="url"
-                   placeholder="https://www.linkedin.com/in/your-name/" inputmode="url" />
-            <button class="btn btn-primary btn-sm" type="submit">Save</button>
-          </div>
-          <p class="account-form__status" id="linkedin-status" role="status" aria-live="polite" hidden></p>
-        </form>
 
         <!-- Password form: opened by "Change password", or automatically when
              the user arrives from a reset email (PASSWORD_RECOVERY). -->
@@ -273,6 +279,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917d"></script>
+  <script src="./script.js?v=20260917e"></script>
 </body>
 </html>
