@@ -101,7 +101,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 
-  <link rel="stylesheet" href="./styles.css?v=20260917a" />
+  <link rel="stylesheet" href="./styles.css?v=20260917b" />
 </head>
 <body>
 
@@ -498,6 +498,7 @@
             data-msg-exists="That email already has an account — log in instead."
             data-msg-weak="Password must be at least 8 characters."
             data-msg-unconfirmed="Please confirm your email first — check your inbox for the link."
+            data-msg-rate-limit="Too many emails sent in the last hour — please try again a little later."
             data-msg-error="That didn't work — please try again.">
         <label class="auth-modal__label" for="auth-email">Email address</label>
         <input class="auth-modal__input" id="auth-email" type="email" name="email" autocomplete="email" required inputmode="email" />
@@ -527,7 +528,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917a" defer></script>
+  <script src="./script.js?v=20260917b" defer></script>
 
   <!-- SEO: Full case study content, visually hidden, indexed by Google -->
   <section class="visually-hidden">

@@ -1555,6 +1555,7 @@
       if (m.includes('already registered') || m.includes('already exists')) return form.dataset.msgExists;
       if (m.includes('password') && (m.includes('short') || m.includes('at least'))) return form.dataset.msgWeak;
       if (m.includes('not confirmed')) return form.dataset.msgUnconfirmed;
+      if (m.includes('rate limit')) return form.dataset.msgRateLimit;
       return form.dataset.msgError;
     }
 
