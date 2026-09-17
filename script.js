@@ -2165,7 +2165,7 @@
       });
       widget.setAttribute('data-url', `${CALENDLY_URL}?${params.toString()}`);
       widget.style.minWidth = '320px';
-      widget.style.height = '680px';
+      widget.style.height = '760px';   // Calendly added a time-zone row; 680 showed an inner scrollbar (17 Sep 2026)
       placeholder.appendChild(widget);
 
       // Inject Calendly's external script once

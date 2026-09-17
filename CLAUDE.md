@@ -214,7 +214,8 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 - **Calendly**: `https://calendly.com/lomiddze/30min`, constant `CALENDLY_URL`
   in `script.js`. Deliberately lazy-loaded so no third-party request fires
   before the user asks. Its height is pinned to avoid an internal scrollbar
-  (commits `96ff2f8`, `3c00b15`) — do not "fix" that by removing the height.
+  (commits `96ff2f8`, `3c00b15`; raised 680→760px on 17 Sep 2026 when Calendly
+  added a time-zone row) — do not "fix" that by removing the height; raise it.
 
 - **Keepz (payments)** — merchant dashboard `app.keepz.me`, settles to the
   owner's TBC Individual-Entrepreneur account. The three **Pay now** buttons on

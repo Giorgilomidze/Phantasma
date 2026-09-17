@@ -1171,7 +1171,7 @@ kbd {
   background: var(--bg);
   border-color: var(--rule);
   padding: 0;
-  min-height: 680px;
+  min-height: 760px;
   overflow: hidden;
 }
 .booking__placeholder.is-loaded .calendly-inline-widget {
