@@ -22,10 +22,8 @@ create policy "open own pending subscription" on subscriptions
 
 -- 3. CV uploads: private bucket, each user confined to their own folder.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('cvs', 'cvs', false, 10485760,
-        array['application/pdf',
-              'application/msword',
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
+values ('cvs', 'cvs', false, 5242880,
+        array['application/pdf'])
 on conflict (id) do update
   set public = excluded.public,
       file_size_limit = excluded.file_size_limit,

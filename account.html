@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260917m" />
+  <link rel="stylesheet" href="./styles.css?v=20260917n" />
 </head>
 <body>
 
@@ -115,58 +115,26 @@
       <div class="account__panel account__panel--full" id="account-signed-in" hidden>
         <div class="account__who">
           <div class="account__identity">
+            <p class="account__name" id="account-name" hidden></p>
             <p class="account__email" id="account-email"></p>
-            <!-- LinkedIn profile — how we match a login to the research done for
-                 that person (candidates.profile_url). Saved to profiles.linkedin_url.
-                 Collapsed: icon + slug + Edit. Open: input + Save / Cancel. -->
+            <!-- LinkedIn: read-only line; editing happens in the profile modal. -->
             <div class="account-li" id="account-linkedin-view">
               <svg class="account-li__icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
               <span class="account-li__slug" id="linkedin-slug" data-empty="Add your LinkedIn profile"></span>
               <button class="account-li__edit" type="button" id="linkedin-edit" data-label-edit="Edit" data-label-add="Add">Edit</button>
             </div>
-            <form class="account-li account-li--form" id="account-linkedin" novalidate hidden
-                  data-msg-saving="Saving…" data-msg-bad="Please paste a linkedin.com/in/… address."
-                  data-msg-error="Could not save — please try again.">
-              <svg class="account-li__icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
-              <label class="visually-hidden" for="linkedin-url">Your LinkedIn profile URL</label>
-              <input class="auth-modal__input account-li__input" id="linkedin-url" type="url" name="linkedin_url"
-                     autocomplete="url" placeholder="https://www.linkedin.com/in/your-name/" inputmode="url" />
-              <button class="btn btn-primary btn-sm" type="submit">Save</button>
-              <button class="account-li__edit" type="button" id="linkedin-cancel">Cancel</button>
-              <p class="account-form__status account-li__status" id="linkedin-status" role="status" aria-live="polite" hidden></p>
-            </form>
           </div>
           <div class="account__actions">
+            <button class="btn btn-sm account__quiet" type="button" id="account-profile-btn">Profile details</button>
             <a class="btn btn-sm account__quiet" href="./preferences.html">Preferences</a>
             <!-- CV: one file per person in the private `cvs` bucket; path on
                  profiles.cv_path. Label flips to "Review my CV" once uploaded. -->
             <button class="btn btn-sm account__quiet" type="button" id="account-cv-btn"
-                    data-label-upload="Upload CV" data-label-review="Review my CV"
-                    aria-controls="account-cv" aria-expanded="false">Upload CV</button>
-            <input type="file" id="account-cv-file" class="visually-hidden" tabindex="-1"
-                   accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                    data-label-upload="Upload CV" data-label-review="Review my CV">Upload CV</button>
+            <input type="file" id="account-cv-file" class="visually-hidden" tabindex="-1" accept=".pdf,application/pdf" />
             <button class="btn btn-sm account__quiet" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button>
             <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
           </div>
-        </div>
-
-        <!-- CV panel: preview (PDF inline, Word = name + download), Replace, Remove. -->
-        <div class="account-cv" id="account-cv" hidden
-             data-msg-uploading="Uploading…" data-msg-uploaded="CV uploaded." data-msg-removed="CV removed."
-             data-msg-type="Please choose a PDF or Word file." data-msg-size="The file must be 10 MB or smaller."
-             data-msg-error="Could not upload the CV — please try again." data-confirm-remove="Remove your CV?">
-          <div class="account-cv__head">
-            <p class="account-cv__name" id="account-cv-name"></p>
-            <div class="account__actions">
-              <a class="btn btn-sm account__quiet" id="account-cv-download" href="#" target="_blank" rel="noopener">Download</a>
-              <button class="btn btn-sm account__quiet" type="button" id="account-cv-replace">Replace</button>
-              <button class="btn btn-sm account__quiet" type="button" id="account-cv-remove">Remove</button>
-              <button class="stat-panel__close" type="button" id="account-cv-close" aria-label="Close">✕</button>
-            </div>
-          </div>
-          <p class="account-form__status" id="account-cv-status" role="status" aria-live="polite" hidden></p>
-          <iframe class="account-cv__preview" id="account-cv-preview" title="CV preview" hidden></iframe>
-          <p class="account__hint" id="account-cv-nopreview" hidden>Word files cannot be previewed here — use Download.</p>
         </div>
 
         <!-- Password form: opened by "Change password", or automatically when
@@ -256,6 +224,52 @@
   </footer>
 
   <!-- Cookie Consent Banner -->
+  <!-- Profile details modal — names + LinkedIn → profiles. -->
+  <div class="auth-modal" id="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <h2 class="auth-modal__title" id="profile-title">Profile details</h2>
+      <p class="auth-modal__sub">How you'd like to appear on applications, and the LinkedIn profile we match our research to.</p>
+      <form class="auth-modal__form" id="profile-form" novalidate
+            data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-bad="Please paste a linkedin.com/in/… address."
+            data-msg-error="Could not save — please try again.">
+        <label class="auth-modal__label" for="pf-first">First name</label>
+        <input class="auth-modal__input" id="pf-first" name="first_name" type="text" autocomplete="given-name" />
+        <label class="auth-modal__label" for="pf-middle">Middle name <small>(optional)</small></label>
+        <input class="auth-modal__input" id="pf-middle" name="middle_name" type="text" autocomplete="additional-name" />
+        <label class="auth-modal__label" for="pf-last">Surname</label>
+        <input class="auth-modal__input" id="pf-last" name="last_name" type="text" autocomplete="family-name" />
+        <label class="auth-modal__label" for="pf-linkedin">LinkedIn profile</label>
+        <input class="auth-modal__input" id="pf-linkedin" name="linkedin_url" type="url" autocomplete="url" inputmode="url"
+               placeholder="https://www.linkedin.com/in/your-name/" />
+        <button class="btn btn-primary" type="submit">Save</button>
+      </form>
+      <p class="auth-modal__status" id="profile-status" role="status" aria-live="polite" hidden></p>
+    </div>
+  </div>
+
+  <!-- CV modal — preview, download, replace, remove. PDF only, ≤ 5 MB. -->
+  <div class="auth-modal" id="cv-modal" role="dialog" aria-modal="true" aria-labelledby="cv-title" hidden
+       data-msg-uploading="Uploading…" data-msg-uploaded="CV uploaded." data-msg-type="PDF only, please."
+       data-msg-size="The file must be 5 MB or smaller." data-msg-error="Could not upload the CV — please try again."
+       data-confirm-remove="Remove your CV?">
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel auth-modal__panel--wide">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <h2 class="auth-modal__title" id="cv-title">Your CV</h2>
+      <p class="auth-modal__sub" id="account-cv-name"></p>
+      <p class="account__hint">PDF format, maximum 5 MB. One file is kept — uploading a new one replaces the old.</p>
+      <div class="account__actions account-cv__actions">
+        <a class="btn btn-sm account__quiet" id="account-cv-download" href="#" target="_blank" rel="noopener">Download</a>
+        <button class="btn btn-sm account__quiet" type="button" id="account-cv-replace">Replace</button>
+        <button class="btn btn-sm account__quiet" type="button" id="account-cv-remove">Remove</button>
+      </div>
+      <p class="auth-modal__status" id="account-cv-status" role="status" aria-live="polite" hidden></p>
+      <iframe class="account-cv__preview" id="account-cv-preview" title="CV preview" hidden></iframe>
+    </div>
+  </div>
+
   <!-- Login modal — opened by the header "Log in" link and by Pay now when
        signed out. Three modes (login / signup / forgot) switched by
        data-mode on the form; behaviour in bootAuthModal (script.js). -->
@@ -306,6 +320,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917m"></script>
+  <script src="./script.js?v=20260917n"></script>
 </body>
 </html>

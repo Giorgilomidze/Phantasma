@@ -57,4 +57,5 @@ Assistant copy:
 - `runs` unique index `(source, started)`; `profiles` backfilled from `auth.users`.
 - `_migrations` bookkeeping table.
 - `0004`: `deletion_requests` table + `request_account_deletion()` RPC (emails the owner via pg_net → Resend; key in Vault as `resend_api_key`), then deletes the auth user.
+- `0005`–`0008`: `profiles` + `linkedin_url`, `cv_path`, `cv_uploaded_at`, `first_name`, `middle_name`, `last_name`; `preferences` table (0006); `cvs` bucket now PDF only, 5 MB.
 - `plans.period` check now `once | month | 4weeks`; all three plans are `4weeks` (one payment = four weeks of service).
