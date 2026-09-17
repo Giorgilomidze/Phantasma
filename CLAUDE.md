@@ -340,6 +340,18 @@ account page with 8 KPI tiles → detail panels; full local→cloud mirror
 (`sync_local.py`, `migrate.py`); cache-busted asset URLs; social links;
 pricing wording "per 4 weeks"; daily keep-awake workflow.
 
+### Reversible changes (owner asked to be able to undo)
+
+- **17 Sep 2026 — home-page nav trimmed.** Removed three anchors from the
+  `index.html` header nav (sections themselves untouched). To restore, put
+  these back before the Blog link inside `<nav class="site-nav" id="site-nav">`:
+  ```html
+  <a href="#what-we-do">What we do</a>
+  <a href="#work">Work</a>
+  <a href="#approach">Approach</a>
+  ```
+  Reference copy: `git show 914a926:index.html`.
+
 ## 10. Working agreements
 
 - Match the surrounding code. This codebase is plain, commented, and
