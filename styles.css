@@ -3034,14 +3034,14 @@ button.stat::before {
   position: absolute;
   right: var(--space-4);
   bottom: calc(var(--space-4) + 6px);
-  width: 8px;
-  height: 8px;
-  border-right: 1.5px solid var(--ink-soft);
-  border-bottom: 1.5px solid var(--ink-soft);
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
   transform: rotate(45deg);
   transition: transform 200ms ease-out, border-color 150ms ease-out;
 }
-button.stat:hover::before { border-color: var(--accent); }
+button.stat:hover::before { border-color: var(--accent-deep); }
 button.stat[aria-expanded="true"]::before { transform: rotate(-135deg); border-color: var(--accent); }
 button.stat[aria-expanded="true"]::after {
   content: "";
