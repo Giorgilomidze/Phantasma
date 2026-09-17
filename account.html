@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260917p" />
+  <link rel="stylesheet" href="./styles.css?v=20260917q" />
 </head>
 <body>
 
@@ -257,14 +257,18 @@
     <div class="auth-modal__backdrop" data-close></div>
     <div class="auth-modal__panel auth-modal__panel--wide">
       <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
-      <h2 class="auth-modal__title" id="cv-title">Your CV</h2>
-      <p class="auth-modal__sub" id="account-cv-name"></p>
-      <p class="account__hint">PDF format, maximum 5 MB. One file is kept — uploading a new one replaces the old.</p>
-      <div class="account__actions account-cv__actions">
-        <a class="btn btn-sm account__quiet" id="account-cv-download" href="#" target="_blank" rel="noopener">Download</a>
-        <button class="btn btn-sm account__quiet" type="button" id="account-cv-replace">Replace</button>
-        <button class="btn btn-sm account__quiet" type="button" id="account-cv-remove">Remove</button>
+      <div class="account-cv__head">
+        <div>
+          <h2 class="auth-modal__title" id="cv-title">Your CV</h2>
+          <p class="account__hint">PDF format, maximum 5 MB. Uploading a new one replaces the old.</p>
+        </div>
+        <div class="account__actions account-cv__actions">
+          <a class="btn btn-sm account__quiet" id="account-cv-download" href="#" target="_blank" rel="noopener">Download</a>
+          <button class="btn btn-sm account__quiet" type="button" id="account-cv-replace">Replace</button>
+          <button class="btn btn-sm account__quiet" type="button" id="account-cv-remove">Remove</button>
+        </div>
       </div>
+      <span class="visually-hidden" id="account-cv-name"></span>
       <p class="auth-modal__status" id="account-cv-status" role="status" aria-live="polite" hidden></p>
       <iframe class="account-cv__preview" id="account-cv-preview" title="CV preview" hidden></iframe>
     </div>
@@ -320,6 +324,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917p"></script>
+  <script src="./script.js?v=20260917q"></script>
 </body>
 </html>
