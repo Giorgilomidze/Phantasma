@@ -2081,6 +2081,13 @@ body.is-locked {
   position: relative;
   display: flex;
   align-items: center;
+  /* Same frame as .page-grid — the reel used to run edge to edge, which
+     also caused the sideways scroll on phones. */
+  width: 100%;
+  max-width: calc(var(--content-max) + 2 * var(--space-5));
+  margin-inline: auto;
+  padding-inline: var(--space-5);
+  box-sizing: border-box;
 }
 .case-reel__track-wrap {
   flex: 1;

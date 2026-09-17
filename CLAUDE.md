@@ -305,8 +305,8 @@ Still open — need information or a decision from the owner:
    machine-translated; owner has not proofread.
 5. **`hrdetective.solvephantasma.com`** — GoDaddy forward to
    `/projects.html`, HTTPS reported OK by owner 17 Sep 2026.
-6. **Pre-existing:** `index.html` scrolls ~28px sideways on phones
-   (`.case-reel__slide`). Not investigated.
+6. ~~Sideways scroll on phones~~ — likely fixed 17 Sep 2026: the reel
+   viewport is now constrained to the `.page-grid` frame. Verify on a phone.
 7. **Payments identity.** Pay now writes a `pending` `subscriptions` row for
    the signed-in user before Keepz opens; owner matches Keepz payments by
    time/amount and sets the row `active` by hand. Automated Keepz callback via
