@@ -1910,9 +1910,9 @@
 
     // ---- profile details modal (names + LinkedIn)
     let profile = {};
-    const pfModal = modalCtl(root.querySelector('#profile-modal'));
-    const pfForm  = root.querySelector('#profile-form');
-    const pfNote  = root.querySelector('#profile-status');
+    const pfModal = modalCtl(document.getElementById('profile-modal'));
+    const pfForm  = document.getElementById('profile-form');
+    const pfNote  = document.getElementById('profile-status');
     const liSlug  = root.querySelector('#linkedin-slug');
     const liEdit  = root.querySelector('#linkedin-edit');
     const nameEl  = root.querySelector('#account-name');
@@ -1955,14 +1955,14 @@
     });
 
     // ---- CV modal (PDF only, ≤ 5 MB)
-    const cvModalEl = root.querySelector('#cv-modal');
+    const cvModalEl = document.getElementById('cv-modal');
     const cvModal = modalCtl(cvModalEl);
     const cvBtn   = root.querySelector('#account-cv-btn');
     const cvFile  = root.querySelector('#account-cv-file');
-    const cvName  = root.querySelector('#account-cv-name');
-    const cvDl    = root.querySelector('#account-cv-download');
-    const cvPrev  = root.querySelector('#account-cv-preview');
-    const cvNote  = root.querySelector('#account-cv-status');
+    const cvName  = document.getElementById('account-cv-name');
+    const cvDl    = document.getElementById('account-cv-download');
+    const cvPrev  = document.getElementById('account-cv-preview');
+    const cvNote  = document.getElementById('account-cv-status');
     const MAX_CV  = 5 * 1024 * 1024;
     let cvPath = null;
     const cvSay = (kind, text) => { cvNote.textContent = text; cvNote.dataset.kind = kind; cvNote.hidden = !text; };
@@ -1983,7 +1983,7 @@
       cvPrev.hidden = false;
     }
     cvBtn.addEventListener('click', () => { if (cvPath) showCv(); else cvFile.click(); });
-    root.querySelector('#account-cv-replace').addEventListener('click', () => cvFile.click());
+    document.getElementById('account-cv-replace').addEventListener('click', () => cvFile.click());
     cvFile.addEventListener('change', async () => {
       const file = cvFile.files[0];
       cvFile.value = '';
@@ -2004,7 +2004,7 @@
       await showCv();
       cvSay('ok', cvModalEl.dataset.msgUploaded);
     });
-    root.querySelector('#account-cv-remove').addEventListener('click', async () => {
+    document.getElementById('account-cv-remove').addEventListener('click', async () => {
       if (!window.confirm(cvModalEl.dataset.confirmRemove)) return;
       const { error } = await Auth.removeCv(cvPath);
       if (error) { cvSay('error', cvModalEl.dataset.msgError); return; }
