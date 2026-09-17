@@ -342,15 +342,17 @@ pricing wording "per 4 weeks"; daily keep-awake workflow.
 
 ### Reversible changes (owner asked to be able to undo)
 
-- **17 Sep 2026 — home-page nav trimmed.** Removed three anchors from the
-  `index.html` header nav (sections themselves untouched). To restore, put
-  these back before the Blog link inside `<nav class="site-nav" id="site-nav">`:
+- **17 Sep 2026 — header nav trimmed on every page.** Removed the three
+  anchors (sections on `index.html` untouched). On `index.html` restore them
+  before the Blog link inside `<nav class="site-nav" id="site-nav">`; on the
+  other pages the same three with `./index.html#…` hrefs (Georgian labels on
+  `projects.ka.html`: რას ვაკეთებთ / ნამუშევრები / მიდგომა):
   ```html
   <a href="#what-we-do">What we do</a>
   <a href="#work">Work</a>
   <a href="#approach">Approach</a>
   ```
-  Reference copy: `git show 914a926:index.html`.
+  Reference copy: `git show 914a926:index.html` (and `:projects.ka.html` for KA).
 
 ## 10. Working agreements
 
