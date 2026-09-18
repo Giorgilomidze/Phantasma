@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260918a" />
+  <link rel="stylesheet" href="./styles.css?v=20260918b" />
 </head>
 <body>
 
@@ -156,7 +156,7 @@
             <button class="stat" type="button" role="listitem" data-panel="weeks" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Weekly runs</span><span class="stat__value"><span data-stat="weeks">0</span><span class="stat__of"> / 4</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="processed" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Vacancies processed</span><span class="stat__value"><span data-stat="processed">0</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="companies" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Companies reviewed</span><span class="stat__value"><span data-stat="companies">0</span></span></button>
-            <button class="stat" type="button" role="listitem" data-panel="selected" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Selected for you</span><span class="stat__value"><span data-stat="selected">0</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="selected" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Selected by you</span><span class="stat__value"><span data-stat="selected">0</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="sent" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Applications sent</span><span class="stat__value"><span data-stat="sent">0</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="interviews" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Interviews</span><span class="stat__value"><span data-stat="interviews">0</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="offers" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Offers</span><span class="stat__value"><span data-stat="offers">0</span></span></button>
@@ -171,6 +171,10 @@
             <div class="account-table-wrap" id="stat-panel-body"></div>
           </div>
         </section>
+
+        <p class="account__hint" id="account-send-hint">
+          In the vacancy lists, tick <strong>Send</strong> on any role you want us to apply for — we send your CV and a letter only where you have ticked.
+        </p>
 
         <div class="account__intro">
           <h2 class="project-funnel__h">Four weeks, one run a week.</h2>
@@ -321,6 +325,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260918a"></script>
+  <script src="./script.js?v=20260918b"></script>
 </body>
 </html>

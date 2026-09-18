@@ -1464,6 +1464,8 @@
 
     // Pay now: open a pending subscription request for this account. The
     // owner confirms it against the Keepz dashboard and sets it active.
+    function db() { return getClient(); }
+
     function requestSubscription(planCode) {
       if (!session) return Promise.resolve({ error: new Error('not signed in') });
       return getClient().from('subscriptions')
@@ -1539,6 +1541,7 @@
       signOut,
       requestSubscription,
       loadStats,
+      db,
     };
   })();
 
@@ -1765,13 +1768,30 @@
       const t = document.createElement('table');
       t.className = 'account-table';
       const thead = t.createTHead().insertRow();
-      headers.forEach((h) => { const th = document.createElement('th'); th.textContent = h; thead.appendChild(th); });
+      headers.forEach((h) => {
+        const th = document.createElement('th');
+        th.textContent = typeof h === 'string' ? h : h.text;
+        if (h.cls) th.className = h.cls;
+        if (h.title) th.title = h.title;
+        thead.appendChild(th);
+      });
       const tb = t.createTBody();
       rows.forEach((r) => {
         const tr = tb.insertRow();
         cells(r).forEach((c) => {
           const td = tr.insertCell();
-          if (c && c.href) {
+          if (c && c.check) {
+            td.className = 't-send';
+            const lab = document.createElement('label');
+            lab.className = 'send-check';
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = !!c.on;
+            box.dataset.id = c.id;
+            box.setAttribute('aria-label', 'Send my application for this vacancy');
+            lab.appendChild(box);
+            td.appendChild(lab);
+          } else if (c && c.href) {
             const a = document.createElement('a');
             a.href = c.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
             a.textContent = c.text;
@@ -1787,7 +1807,8 @@
 
     function vacancyRows(rows) {
       return table(
-        ['Week', '#', 'Company', 'Position', 'Why it matches', 'Source', 'Deadline'],
+        ['Week', '#', 'Company', 'Position', 'Why it matches', 'Source', 'Deadline',
+         { text: 'Send', cls: 't-send', title: 'Tick to have us send your application, with your CV, to this company.' }],
         rows,
         (r) => {
           const v = r.vacancies || {};
@@ -1798,9 +1819,31 @@
             r.why_matches || short(v.description, 140),
             SOURCE[v.source] || v.source,
             fmtDate(v.deadline_at),
+            { check: true, id: r.id, on: r.client_decision === 'interested' },
           ];
         });
     }
+
+    // "Selected by you" = rows the client ticked (client_decision = interested).
+    const selectedRows = (d) => d.shortlists.filter((r) => r.client_decision === 'interested');
+
+    // Checkbox → shortlists.client_decision (the only column a client may write).
+    pBody.addEventListener('change', async (e) => {
+      const box = e.target;
+      if (box.type !== 'checkbox' || !box.dataset.id) return;
+      const row = data.shortlists.find((r) => String(r.id) === box.dataset.id);
+      if (!row) return;
+      const next = box.checked ? 'interested' : null;
+      box.disabled = true;
+      const { error } = await Auth.db().from('shortlists').update({ client_decision: next }).eq('id', row.id);
+      box.disabled = false;
+      if (error) { box.checked = !box.checked; console.warn('decision not saved', error.message); return; }
+      row.client_decision = next;
+      const n = selectedRows(data).length;
+      const el = root.querySelector('[data-stat="selected"]');
+      el.textContent = n; el.dataset.countTo = String(n);
+      if (openKey === 'selected' && !box.checked) box.closest('tr').remove();
+    });
 
     function sendRows(rows) {
       return table(
@@ -1832,7 +1875,7 @@
           return table(['Company', 'Vacancies shortlisted'], rows, (r) => [r.c, r.n]);
         },
       },
-      selected:   { title: 'Selected for you', build: (d) => vacancyRows(d.shortlists.filter((r) => r.start_processing)) },
+      selected:   { title: 'Selected by you', build: (d) => vacancyRows(selectedRows(d)) },
       sent:       { title: 'Applications sent', build: (d) => sendRows(d.sends) },
       interviews: { title: 'Interviews', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'interview')) },
       offers:     { title: 'Offers', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'offer')) },
@@ -1863,7 +1906,7 @@
         weeks:      Math.min(d.weeks, SERVICE_WEEKS),
         processed:  st ? st.vacancies_processed : 0,
         companies:  st ? st.companies_processed : 0,
-        selected:   st ? st.vacancies_selected  : 0,
+        selected:   selectedRows(d).length,
         sent:       st ? st.applications_sent   : 0,
         interviews: st ? st.interviews          : 0,
         offers:     st ? st.offers              : 0,

@@ -3159,6 +3159,24 @@ button.stat[aria-expanded="true"]::after {
   color: var(--ink-soft);
   white-space: nowrap;
 }
+/* Narrow columns stay narrow; "Why it matches" takes the slack so Source /
+   Deadline / Send sit next to the position instead of at the far right. */
+.account-table .t-week, .account-table .t-rank, .account-table .t-loc,
+.account-table .t-deadline, .account-table .t-send { white-space: nowrap; width: 1%; }
+.account-table td:nth-child(3) { min-width: 120px; }
+.account-table td:nth-child(4) { min-width: 200px; max-width: 320px; }
+.account-table td:nth-child(5) { min-width: 200px; }
+.account-table td:nth-child(6), .account-table td:nth-child(7) { white-space: nowrap; width: 1%; }
+.account-table th.t-send, .account-table td.t-send { text-align: center; padding-right: 0; }
+.send-check { display: inline-flex; padding: var(--space-1); cursor: pointer; }
+.send-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.send-check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-table a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .account-table .t-sub { display: block; color: var(--ink-soft); }
 
