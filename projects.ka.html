@@ -64,7 +64,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260917s" />
+  <link rel="stylesheet" href="./styles.css?v=20260918a" />
 </head>
 <body>
 
@@ -231,6 +231,22 @@
   </footer>
 
   <!-- Cookie Consent Banner -->
+  <!-- Pay-now pre-step (signed out): log in, create account, or pay as guest.
+       Behaviour in bootAuthModal (script.js). -->
+  <div class="auth-modal" id="pay-modal" role="dialog" aria-modal="true" aria-labelledby="pay-title" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="დახურვა">✕</button>
+      <h2 class="auth-modal__title" id="pay-title">გადახდამდე</h2>
+      <p class="auth-modal__sub">ანგარიშით მიიღებთ პირად კაბინეტს, სადაც ხედავთ ყველა დამუშავებულ ვაკანსიას. გადახდა ანგარიშის გარეშეც შეგიძლიათ.</p>
+      <div class="pay-choice">
+        <button class="btn btn-primary" type="button" id="pay-login">შესვლა</button>
+        <button class="btn auth-modal__google pay-choice__signup" type="button" id="pay-signup">ანგარიშის შექმნა</button>
+        <a class="auth-modal__link pay-choice__guest" id="pay-guest" href="#" target="_blank" rel="noopener noreferrer">გადახდა ანგარიშის გარეშე →</a>
+      </div>
+    </div>
+  </div>
+
   <!-- Login modal — opened by the header "Log in" link and by Pay now when
        signed out. Three modes (login / signup / forgot) switched by
        data-mode on the form; behaviour in bootAuthModal (script.js). -->
@@ -281,6 +297,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260917s"></script>
+  <script src="./script.js?v=20260918a"></script>
 </body>
 </html>

@@ -1659,20 +1659,60 @@
       });
     });
 
-    // Pay now buttons: require sign-in, log a pending subscription, then open Keepz.
+    // Pay now buttons. Signed in: record a pending subscription, Keepz opens
+    // (user gesture). Signed out: #pay-modal offers Log in / Create account /
+    // pay as guest; the chosen tier is remembered (sessionStorage survives the
+    // Google round-trip) and the payment continues right after sign-in.
+    const payModal = document.getElementById('pay-modal');
+    const PENDING_KEY = 'phantasma_pending_tier';
+    const keepzFor = (tier) => document.querySelector('[data-tier="' + tier + '"]');
+
+    function resumePayment() {
+      const tier = sessionStorage.getItem(PENDING_KEY);
+      if (!tier) return false;
+      sessionStorage.removeItem(PENDING_KEY);
+      const btn = keepzFor(tier);
+      if (!btn) return false;
+      Auth.requestSubscription(tier).then(({ error }) => {
+        if (error) console.warn('subscription request not recorded', error.message);
+        location.href = btn.href;          // no user gesture here → same tab, not a popup
+      });
+      return true;
+    }
+
     document.querySelectorAll('[data-tier]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
-        if (!Auth.getSession()) {
-          e.preventDefault();
-          open('signup');
+        if (Auth.getSession()) {
+          Auth.requestSubscription(btn.dataset.tier).then(({ error }) => {
+            if (error) console.warn('subscription request not recorded', error.message);
+          });
           return;
         }
-        // The browser opens the Keepz tab (user gesture); record in parallel.
-        Auth.requestSubscription(btn.dataset.tier).then(({ error }) => {
-          if (error) console.warn('subscription request not recorded', error.message);
-        });
+        e.preventDefault();
+        if (!payModal) { open('signup'); return; }
+        sessionStorage.setItem(PENDING_KEY, btn.dataset.tier);
+        payModal.querySelector('#pay-guest').href = btn.href;
+        lastFocus = document.activeElement;
+        payModal.hidden = false;
+        requestAnimationFrame(() => payModal.classList.add('is-open'));
+        document.body.classList.add('is-locked');
+        payModal.querySelector('#pay-login').focus();
       });
     });
+
+    if (payModal) {
+      const closePay = (keepTier) => {
+        payModal.classList.remove('is-open');
+        payModal.hidden = true;
+        document.body.classList.remove('is-locked');
+        if (!keepTier) sessionStorage.removeItem(PENDING_KEY);
+      };
+      payModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closePay(false)));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !payModal.hidden) closePay(false); });
+      payModal.querySelector('#pay-login').addEventListener('click', () => { closePay(true); open('login'); });
+      payModal.querySelector('#pay-signup').addEventListener('click', () => { closePay(true); open('signup'); });
+      payModal.querySelector('#pay-guest').addEventListener('click', () => closePay(false));
+    }
 
     // After an actual sign-in (modal login, or arriving back from Google /
     // a confirmation link with tokens in the URL) go straight to the profile.
@@ -1684,6 +1724,7 @@
       const onProfile = /\/(account|preferences)\.html$/.test(location.pathname);
       const fresh = e.detail.event === 'SIGNED_IN' && (!modal.hidden || arrivedWithTokens);
       if (!modal.hidden) close();
+      if (fresh && resumePayment()) return;      // came here to pay → Keepz, not the profile
       if (fresh && !onProfile) location.replace('./account.html');
     });
   }
