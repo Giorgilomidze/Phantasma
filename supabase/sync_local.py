@@ -58,7 +58,7 @@ BATCH = 500
 
 ALLOWED_CANDIDATE_STATUS = {"lead", "prospect", "client", "paused", "churned"}
 TABLES_IN_ORDER = ["industries", "companies", "company_aliases", "function_keywords", "runs",
-                   "vacancies", "prospects", "candidates", "shortlists", "sends", "workbooks"]
+                   "vacancies", "prospects", "candidates", "shortlists", "sends", "workbooks", "audits"]
 
 
 # ---------------------------------------------------------------- helpers
@@ -395,6 +395,27 @@ def sync_workbooks(con, rest):
     print(f"  workbook     uploaded {n} file(s)")
 
 
+def sync_linkedin_audits(con, rest):
+    """<folder>/NNN II LinkedIn Audit.json -> candidates.linkedin_audit (jsonb)."""
+    folder_to_slug = {r["folder"]: r["slug"] for r in rows_of(con, "select slug, folder from candidates") if r["folder"]}
+    n = 0
+    for path in sorted(glob.glob(os.path.join(os.path.dirname(SHORTLIST_GLOB), "* LinkedIn Audit.json"))):
+        folder = os.path.basename(os.path.dirname(path))
+        slug = folder_to_slug.get(folder)
+        if not slug:
+            print(f"  audit        skipped {folder}: no candidate row has this folder")
+            continue
+        with open(path, encoding="utf-8") as fh:
+            audit = json.load(fh)
+        if rest.dry_run:
+            print(f"  audit        would set {slug}")
+            continue
+        rest._req("PATCH", "candidates", body={"linkedin_audit": audit},
+                  prefer="return=minimal", params={"slug": f"eq.{slug}"})
+        n += 1
+    print(f"  audit        set {n} candidate(s)")
+
+
 def dt_now():
     import datetime
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -463,6 +484,8 @@ def main():
             sync_sends(con, rest, by_local)
     if "workbooks" in only:
         sync_workbooks(con, rest)
+    if "audits" in only:
+        sync_linkedin_audits(con, rest)
     print("done")
 
 

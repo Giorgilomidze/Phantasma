@@ -1495,7 +1495,7 @@
       const sb = getClient();
       return Promise.all([
         sb.rpc('get_my_stats'),
-        sb.from('candidates').select('workbook_path, workbook_uploaded_at').maybeSingle(),
+        sb.from('candidates').select('workbook_path, workbook_uploaded_at, linkedin_audit').maybeSingle(),
         sb.from('shortlists')
           .select('id, week, rank, start_processing, client_decision, why_matches, salary_text, ' +
                   'vacancies ( id, title, company_raw, location, source, url, deadline_at, description, companies ( name ) )')
@@ -1506,6 +1506,7 @@
       ]).then(([stats, cand, shortlists, sends]) => ({
         stats: (stats.data && stats.data[0]) || null,
         workbook: (cand.data && cand.data.workbook_path) || null,
+        audit: (cand.data && cand.data.linkedin_audit) || null,
         shortlists: shortlists.data || [],
         sends: sends.data || [],
         weeks: new Set((shortlists.data || []).map((r) => r.week)).size,
@@ -1962,6 +1963,7 @@
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
       workbookPath = data.workbook;
       wb.hidden = !workbookPath;
+      paintAudit(data.audit);
       renderStats(data);
     }
 
@@ -2060,9 +2062,47 @@
       setTimeout(() => { if (pfModal.isOpen) pfModal.close(); }, 700);
     });
 
-    // ---- LinkedIn audit modal (plain page for now)
-    const liModal = modalCtl(document.getElementById('linkedin-modal'));
-    root.querySelector('#account-linkedin-btn').addEventListener('click', () => liModal.open('[data-close]'));
+    // ---- LinkedIn audit modal — candidates.linkedin_audit, written by
+    // sync_local.py from "NNN II LinkedIn Audit.json". Button hidden until
+    // an audit exists. Each section: what it says now / what it should say / why.
+    const liModalEl = document.getElementById('linkedin-modal');
+    const liModal   = modalCtl(liModalEl);
+    const liBtn     = root.querySelector('#account-linkedin-btn');
+    const liBody    = document.getElementById('account-linkedin-body');
+    const liScore   = document.getElementById('account-linkedin-score');
+    liBtn.addEventListener('click', () => liModal.open('[data-close]'));
+
+    function paintAudit(a) {
+      const sections = a && Array.isArray(a.sections) ? a.sections : [];
+      liBtn.hidden = !sections.length;
+      if (!sections.length) return;
+      liScore.textContent = Number.isFinite(Number(a.score))
+        ? liScore.dataset.text.replace('{score}', a.score).replace('{max}', a.score_max || 20)
+          + (a.audited_at ? ' · ' + fmtDate(a.audited_at) : '')
+        : '';
+      liBody.innerHTML = '';
+      sections.forEach((sec) => {
+        const el = document.createElement('section');
+        el.className = 'li-audit';
+        el.innerHTML =
+          '<h3 class="li-audit__title"></h3>' +
+          '<div class="li-audit__cols">' +
+            '<div class="li-audit__col"><p class="eyebrow"></p><p class="li-audit__text li-audit__text--now"></p></div>' +
+            '<div class="li-audit__col"><p class="eyebrow"></p><p class="li-audit__text li-audit__text--new"></p></div>' +
+          '</div>' +
+          '<p class="li-audit__why"></p>';
+        const q = (sel) => el.querySelector(sel);
+        q('.li-audit__title').textContent = sec.section || '';
+        const eb = el.querySelectorAll('.eyebrow');
+        eb[0].textContent = liModalEl.dataset.labelNow;
+        eb[1].textContent = liModalEl.dataset.labelNew;
+        q('.li-audit__text--now').textContent = sec.current || liModalEl.dataset.empty;
+        q('.li-audit__text--new').textContent = sec.suggested || '';
+        q('.li-audit__why').textContent = sec.why || '';
+        q('.li-audit__why').hidden = !sec.why;
+        liBody.appendChild(el);
+      });
+    }
 
     // ---- CV modal (PDF only, ≤ 5 MB)
     const cvModalEl = document.getElementById('cv-modal');

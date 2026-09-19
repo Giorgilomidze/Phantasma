@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260919b" />
+  <link rel="stylesheet" href="./styles.css?v=20260919c" />
 </head>
 <body>
 
@@ -131,7 +131,8 @@
             <button class="btn btn-sm account__quiet" type="button" id="account-cv-btn"
                     data-label-upload="Upload CV" data-label-review="Review my CV">Upload CV</button>
             <input type="file" id="account-cv-file" class="visually-hidden" tabindex="-1" accept=".pdf,application/pdf" />
-            <button class="btn btn-sm account__quiet" type="button" id="account-linkedin-btn">LinkedIn audit</button>
+            <!-- LinkedIn audit: candidates.linkedin_audit; hidden until one exists -->
+            <button class="btn btn-sm account__quiet" type="button" id="account-linkedin-btn" hidden>LinkedIn audit</button>
             <button class="btn btn-sm account__quiet" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button>
             <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
           </div>
@@ -278,9 +279,10 @@
     </div>
   </div>
 
-  <!-- LinkedIn audit modal — placeholder for the profile-improvement page.
-       Same panel size as the CV modal; content to be filled in later. -->
-  <div class="auth-modal" id="linkedin-modal" role="dialog" aria-modal="true" aria-labelledby="linkedin-title" hidden>
+  <!-- LinkedIn audit modal — what each profile section says now vs what it
+       should say. Data from candidates.linkedin_audit; built in paintAudit(). -->
+  <div class="auth-modal" id="linkedin-modal" role="dialog" aria-modal="true" aria-labelledby="linkedin-title" hidden
+       data-label-now="What it says now" data-label-new="What it should say" data-empty="(empty)">
     <div class="auth-modal__backdrop" data-close></div>
     <div class="auth-modal__panel auth-modal__panel--wide">
       <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
@@ -288,11 +290,10 @@
         <div>
           <h2 class="auth-modal__title" id="linkedin-title">LinkedIn audit</h2>
           <p class="account__hint">How your profile reads to a recruiter, and what to change.</p>
+          <p class="account__hint" id="account-linkedin-score" data-text="Profile score {score} / {max}"></p>
         </div>
       </div>
-      <div class="account-linkedin__body" id="account-linkedin-body">
-        <p>Your LinkedIn profile text will appear here, with suggestions on how to improve it.</p>
-      </div>
+      <div class="account-linkedin__body" id="account-linkedin-body"></div>
     </div>
   </div>
 
@@ -346,6 +347,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260919b"></script>
+  <script src="./script.js?v=20260919c"></script>
 </body>
 </html>
