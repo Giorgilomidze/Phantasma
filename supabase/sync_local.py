@@ -8,6 +8,7 @@ Reads
 
 Writes (upserts) to Supabase, in dependency order:
   industries -> companies -> vacancies -> candidates -> shortlists -> sends
+  -> workbooks (the .xlsx files themselves, to Storage bucket `shortlists`)
 
 Rules baked in:
   * Uses the service_role key, so RLS is bypassed. The key comes from .env
@@ -57,7 +58,7 @@ BATCH = 500
 
 ALLOWED_CANDIDATE_STATUS = {"lead", "prospect", "client", "paused", "churned"}
 TABLES_IN_ORDER = ["industries", "companies", "company_aliases", "function_keywords", "runs",
-                   "vacancies", "prospects", "candidates", "shortlists", "sends"]
+                   "vacancies", "prospects", "candidates", "shortlists", "sends", "workbooks"]
 
 
 # ---------------------------------------------------------------- helpers
@@ -359,6 +360,46 @@ def sync_shortlists(con, rest, by_local, by_url):
         print(f"  unmatched {line}")
 
 
+def sync_workbooks(con, rest):
+    """Upload every shortlist workbook to bucket `shortlists` at <slug>/<file>
+    and record the path on candidates.workbook_path. Overwrites each run."""
+    folder_to_slug = {r["folder"]: r["slug"] for r in rows_of(con, "select slug, folder from candidates") if r["folder"]}
+    key = sb.service_key()
+    n = 0
+    for path in workbooks():
+        folder = os.path.basename(os.path.dirname(path))
+        slug = folder_to_slug.get(folder)
+        if not slug:
+            continue
+        name = os.path.basename(path)
+        object_path = f"{slug}/{name}"
+        if rest.dry_run:
+            print(f"  workbook     would upload {object_path}")
+            continue
+        with open(path, "rb") as fh:
+            data = fh.read()
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/storage/v1/object/shortlists/{urllib.parse.quote(object_path)}",
+            data=data, method="POST",
+            headers={"apikey": key, "Authorization": f"Bearer {key}", "x-upsert": "true",
+                     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+        try:
+            urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            print(f"  workbook     FAILED {object_path}: {e.code} {e.read().decode('utf-8', 'replace')[:200]}")
+            continue
+        rest._req("PATCH", "candidates",
+                  body={"workbook_path": object_path, "workbook_uploaded_at": dt_now()},
+                  prefer="return=minimal", params={"slug": f"eq.{slug}"})
+        n += 1
+    print(f"  workbook     uploaded {n} file(s)")
+
+
+def dt_now():
+    import datetime
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
 def sync_sends(con, rest, by_local):
     rows, skipped = [], 0
     for r in rows_of(con, "select * from sends"):
@@ -420,6 +461,8 @@ def main():
             sync_shortlists(con, rest, by_local, by_url)
         if "sends" in only:
             sync_sends(con, rest, by_local)
+    if "workbooks" in only:
+        sync_workbooks(con, rest)
     print("done")
 
 

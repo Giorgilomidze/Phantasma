@@ -239,7 +239,10 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   every page except `landing.html`. Schema and RLS are owned by the Solve
   Assistant repo — see `supabase/README.md`. Header CTA is now **Log in /
   My profile** on all pages except `landing.html` (kept "Book a call").
-  `account.html` has **Profile details** (modal: first / middle / last name +
+  `account.html` has **Download processed vacancies** (the client's own
+  `NNN II Job Shortlist.xlsx`, uploaded by `sync_local.py` to private bucket
+  `shortlists` at `<slug>/<file>`, path on `candidates.workbook_path`; button
+  hidden until a file exists; 10-min signed URL), **Profile details** (modal: first / middle / last name +
   LinkedIn → `profiles`; `full_name` rebuilt on save), **Upload CV / Review my
   CV** (modal; private bucket `cvs`, **PDF only, ≤ 5 MB** enforced in the
   browser and on the bucket; path `<uid>/cv-<ts>.pdf` on `profiles.cv_path`;

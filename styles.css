@@ -2981,6 +2981,9 @@ body.is-locked {
 .account__quiet:hover { background: var(--surface); }
 .account__quiet[aria-expanded="true"] { background: var(--surface); }
 .account__quiet:disabled { opacity: 0.5; cursor: wait; }
+.account__download { background: var(--accent); color: var(--bg); box-shadow: none; }
+.account__download:hover { background: var(--accent-deep); color: var(--bg); }
+.account__download[hidden] { display: none; }
 .account__danger {
   max-width: 640px;
   padding-top: var(--space-6);

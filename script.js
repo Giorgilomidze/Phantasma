@@ -1427,9 +1427,12 @@
       return sb.from('profiles').update({ cv_path: null, cv_uploaded_at: null }).eq('id', session.user.id);
     }
 
-    // Private bucket → short-lived signed URL for preview / download.
+    // Private buckets → short-lived signed URLs for preview / download.
     function cvUrl(path) {
       return getClient().storage.from('cvs').createSignedUrl(path, 600);
+    }
+    function workbookUrl(path) {
+      return getClient().storage.from('shortlists').createSignedUrl(path, 600, { download: true });
     }
 
     function saveProfile(fields) {
@@ -1478,6 +1481,7 @@
       const sb = getClient();
       return Promise.all([
         sb.rpc('get_my_stats'),
+        sb.from('candidates').select('workbook_path, workbook_uploaded_at').maybeSingle(),
         sb.from('shortlists')
           .select('id, week, rank, start_processing, client_decision, why_matches, salary_text, ' +
                   'vacancies ( id, title, company_raw, location, source, url, deadline_at, description, companies ( name ) )')
@@ -1485,8 +1489,9 @@
         sb.from('sends')
           .select('vacancy_id, sent_at, outcome, outcome_at, vacancies ( title, company_raw, url, companies ( name ) )')
           .order('sent_at', { ascending: false }),
-      ]).then(([stats, shortlists, sends]) => ({
+      ]).then(([stats, cand, shortlists, sends]) => ({
         stats: (stats.data && stats.data[0]) || null,
+        workbook: (cand.data && cand.data.workbook_path) || null,
         shortlists: shortlists.data || [],
         sends: sends.data || [],
         weeks: new Set((shortlists.data || []).map((r) => r.week)).size,
@@ -1535,6 +1540,7 @@
       uploadCv,
       removeCv,
       cvUrl,
+      workbookUrl,
       loadPreferences,
       savePreferences,
       signInWithGoogle,
@@ -1940,6 +1946,8 @@
       });
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
+      workbookPath = data.workbook;
+      wb.hidden = !workbookPath;
       renderStats(data);
     }
 
@@ -2095,6 +2103,18 @@
       cvPath = null;
       paintCv();
       cvModal.close();
+    });
+
+    // Download processed vacancies — the client's shortlist workbook (.xlsx),
+    // uploaded by sync_local.py. Signed URL fetched on click (10-min life).
+    const wb = root.querySelector('#account-workbook');
+    let workbookPath = null;
+    wb.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!workbookPath) return;
+      const { data, error } = await Auth.workbookUrl(workbookPath);
+      if (error || !data) { window.alert(wb.dataset.msgError); return; }
+      window.location.href = data.signedUrl;
     });
 
     // Delete my account

@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260918b" />
+  <link rel="stylesheet" href="./styles.css?v=20260919a" />
 </head>
 <body>
 
@@ -122,6 +122,8 @@
             </div>
           </div>
           <div class="account__actions">
+            <a class="btn btn-sm account__quiet account__download" id="account-workbook" href="#" hidden
+               download data-msg-error="The file is not available right now — please try again later.">Download processed vacancies</a>
             <button class="btn btn-sm account__quiet" type="button" id="account-profile-btn">Profile details</button>
             <a class="btn btn-sm account__quiet" href="./preferences.html">Preferences</a>
             <!-- CV: one file per person in the private `cvs` bucket; path on
@@ -325,6 +327,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260918b"></script>
+  <script src="./script.js?v=20260919a"></script>
 </body>
 </html>
