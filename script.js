@@ -1255,10 +1255,12 @@
   }
 
   /* ---------------------------------------------------------------------
-     KPI funnel (projects page) — reads data/kpis.json at load and renders
-     the `funnel` array as stacked bands. Stage count, order and labels
-     come from the file; nothing here is hardcoded. Band width is
-     log-scaled so a 0 still shows as a 28% band.
+     KPI funnel (projects page) — reads the `public_kpis` view in Supabase
+     (one row of counts, see supabase/0010-public-kpis.sql) and renders
+     stacked bands. Stage order and labels come from `data-stages` on the
+     page so the Georgian version can supply its own; the view supplies the
+     numbers. If Supabase is unreachable it falls back to data/kpis.json
+     (data-src). Band width is log-scaled so a 0 still shows as a 28% band.
      --------------------------------------------------------------------- */
   function bootKpiFunnel() {
     const root = document.getElementById('kpi-funnel');
@@ -1288,10 +1290,14 @@
       return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     }
 
+    // Page-supplied stages: [{key, label}]; values are looked up by key
+    let stageDefs = [];
+    try { stageDefs = JSON.parse(root.dataset.stages || '[]'); } catch (e) { stageDefs = []; }
+
     function render(data) {
-      const stages = Array.isArray(data.funnel)
-        ? data.funnel.filter((s) => s && typeof s.label === 'string' && Number.isFinite(Number(s.value)))
-        : [];
+      const stages = stageDefs
+        .map((d) => ({ label: d.label, value: data[d.key] }))
+        .filter((s) => typeof s.label === 'string' && Number.isFinite(Number(s.value)));
       if (!stages.length) { unavailable(); return; }
 
       lede.textContent = ledeText
@@ -1332,10 +1338,18 @@
       io.observe(root);
     }
 
-    fetch(root.dataset.src, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-      .then(render)
-      .catch(unavailable);
+    // Live numbers from the view; the JSON file only if that fails
+    function fromFile() {
+      return fetch(root.dataset.src, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+    }
+    function fromView() {
+      if (!window.supabase) return Promise.reject(new Error('no supabase'));
+      return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+        .from('public_kpis').select('*').single()
+        .then(({ data, error }) => (error || !data ? Promise.reject(error) : data));
+    }
+    fromView().catch(fromFile).then(render).catch(unavailable);
   }
 
   /* ---------------------------------------------------------------------

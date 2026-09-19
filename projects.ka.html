@@ -78,7 +78,7 @@
       <nav class="site-nav" id="site-nav" aria-label="Primary">
         <a href="./index.html">მთავარი</a>
         <a href="./blog.html">ბლოგი</a>
-        <a href="./projects.ka.html" aria-current="page">პროექტები</a>
+        <a href="./projects.ka.html" aria-current="page">სამსახურის ძიება</a>
         <a href="./index.html#contact">კონტაქტი</a>
         <a href="./account.html" class="js-auth site-nav__auth" data-label-login="შესვლა" data-label-account="ჩემი პროფილი">შესვლა</a>
       </nav>
@@ -102,7 +102,7 @@
   <main id="main">
 
     <header class="project-hero page-grid">
-      <p class="eyebrow">პროექტები</p>
+      <p class="eyebrow">სამსახურის ძიება</p>
       <h1 class="project-hero__title">პერსონალური კარიერული სტრატეგი</h1>
       <p class="project-hero__sub">
         მართული სამსახურის ძიების სერვისი — ძიებას, წერასა და განაცხადების გაგზავნას
@@ -142,7 +142,8 @@
            data-text="ყველა რიცხვი ცოცხალია და პირდაპირ ჩვენი სამუშაო მონაცემებიდან მოდის."
            data-updated="განახლებულია {date}."
            data-unavailable="ცოცხალი მონაცემები მიუწვდომელია">იტვირთება…</p>
-        <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"></div>
+        <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"
+             data-stages='[{"key": "vacancies_tracked", "label": "თვალყურდევნებული ვაკანსიები"}, {"key": "companies_searched", "label": "მოძიებული კომპანიები"}, {"key": "profiles_researched", "label": "შესწავლილი პროფილები"}, {"key": "job_markets_investigated", "label": "გამოკვლეული შრომის ბაზრები"}, {"key": "vacancies_matched", "label": "კლიენტებზე მორგებული ვაკანსიები"}, {"key": "approved_by_clients", "label": "კლიენტების მიერ დამტკიცებული"}, {"key": "leads_sent", "label": "გაგზავნილი განაცხადები"}]'></div>
       </aside>
     </section>
 

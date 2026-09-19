@@ -65,7 +65,7 @@ or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 | `account.html` | Client dashboard (EN only). Signed-out: Log in prompt. Signed-in: email/Sign out + 8 KPI tiles from `get_my_stats()`. `noindex`, disallowed in `robots.txt`. |
 | `preferences.html` | Client questionnaire: 5 collapsible groups (salary, role, geography, where to search, applications), 23 questions, Save per group, answered-counters. Table `preferences` (salary typed + `answers` jsonb `q1..q24`, no q3). `noindex`. |
 | `supabase/` | **Not the schema.** `README.md` (run order + table contract), `0001-drop-site-v1.sql`, `0002-site-additions.sql`. The schema lives in `D:\Web Development\Solve Assistant\supabase\schema.sql`. |
-| `data/kpis.json` | **Live KPI numbers for the projects-page funnel.** Owner overwrites it and pushes; both projects pages fetch it at load (`cache: no-store`). Only the `funnel[]` array is rendered — stage count, order and labels come from the file. Live URL `https://solvephantasma.com/data/kpis.json`. |
+| `data/kpis.json` | **Fallback only** for the projects-page funnel. Live numbers come from the Supabase view `public_kpis` (`supabase/0010-public-kpis.sql`, readable by `anon`); the file is used if that query fails. Keys must match the view's columns. |
 | `script.js` | All behaviour + the `CASES` data (~1500 lines) |
 | `styles.css` | All styles, numbered sections (~2500 lines) |
 | `convert-images.js` | One-off `sharp` script, PNG/JPG to WebP at quality 82 |
@@ -95,7 +95,7 @@ Single IIFE. Order of contents:
 | `triggerCountUp()` | Animates `[data-count-to]` KPI numbers (cubic ease-out, staggered 60ms) |
 | `bootHeader()` | Adds scrolled state to `#site-header` past 80px |
 | `bootNavToggle()` | Hamburger menu, **≤1023px on every page**. `.is-open` on `#site-header`; Esc closes + refocuses button; link click / outside tap closes. Labels from `data-label-open/close` on the button (Georgian page supplies its own). Its `matchMedia('(max-width: 1023px)')` must match the CSS breakpoint. |
-| `bootKpiFunnel()` | Projects pages only. Fetches `data/kpis.json`, renders `funnel[]` as `.kpi-band`s. Width `28 + 72·log10(v+1)/log10(max+1)` % so 0 is still a 28% band. Colour via `--mix` custom prop → `color-mix(in oklch, --surface, --accent)`; text flips to `--bg` at mix ≥ 60%. Lede / "updated" / "unavailable" strings come from `data-*` on `#kpi-funnel-lede`; Georgian dates use a hardcoded month array (browsers ship no `ka` locale). Fetch failure → "Live figures unavailable", no bands. |
+| `bootKpiFunnel()` | Projects pages only. Reads the `public_kpis` view (one row of counts) via supabase-js, falls back to `data/kpis.json`. Stage order + labels come from `data-stages` JSON on `#kpi-funnel` (EN/KA each supply their own); values looked up by key. Width `28 + 72·log10(v+1)/log10(max+1)` % so 0 is still a 28% band. Colour via `--mix` custom prop → `color-mix(in oklch, --surface, --accent)`; text flips to `--bg` at mix ≥ 60%. Lede / "updated" / "unavailable" strings come from `data-*` on `#kpi-funnel-lede`; Georgian dates use a hardcoded month array. Both fail → "Live figures unavailable", no bands. |
 | `bootCaseReel()` | Infinite auto-scrolling carousel, 4 visible, 5s interval, arrows + dots |
 | `Lightbox` | Module (IIFE) — 6-slide case-study viewer with keyboard nav |
 | `bootApproachStrip()` | Scroll-driven progress through the 5 approach stations |

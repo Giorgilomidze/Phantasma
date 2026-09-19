@@ -76,7 +76,7 @@
       <nav class="site-nav" id="site-nav" aria-label="Primary">
         <a href="./index.html">Home</a>
         <a href="./blog.html">Blog</a>
-        <a href="./projects.html" aria-current="page">Projects</a>
+        <a href="./projects.html" aria-current="page">Job Seek</a>
         <a href="./index.html#contact">Contact</a>
         <a href="./account.html" class="js-auth site-nav__auth" data-label-login="Log in" data-label-account="My profile">Log in</a>
       </nav>
@@ -100,7 +100,7 @@
   <main id="main">
 
     <header class="project-hero page-grid">
-      <p class="eyebrow">Projects</p>
+      <p class="eyebrow">Job Seek</p>
       <h1 class="project-hero__title">Personal Career Strategist</h1>
       <p class="project-hero__sub">
         A managed job-search service — we do the searching, writing and applying, you
@@ -137,7 +137,8 @@
         <p class="eyebrow">Progress</p>
         <h3 id="progress-h" class="project-funnel__h">From the whole market to your inbox</h3>
         <p class="kpi-funnel__lede" id="kpi-funnel-lede" aria-live="polite">Loading live figures…</p>
-        <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"></div>
+        <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"
+             data-stages='[{"key": "vacancies_tracked", "label": "Vacancies tracked"}, {"key": "companies_searched", "label": "Companies searched"}, {"key": "profiles_researched", "label": "Profiles researched"}, {"key": "job_markets_investigated", "label": "Job markets investigated"}, {"key": "vacancies_matched", "label": "Vacancies matched to clients"}, {"key": "approved_by_clients", "label": "Approved by clients"}, {"key": "leads_sent", "label": "Leads sent"}]'></div>
       </aside>
     </section>
 
