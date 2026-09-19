@@ -360,6 +360,14 @@ pricing wording "per 4 weeks"; daily keep-awake workflow.
 
 ## 10. Working agreements
 
+- **Daily update channel to the Solve Assistant session:** whenever something
+  on the site / Supabase changes that the local pipeline should know about,
+  write (or append to) `D:\Web Development\Solve Assistant\updates-from-website\YYYY-MM-DD.md`
+  — sections *Changed / You need to know / Asked of you / Open*. Read the
+  latest file's `## Reply` section at session start. The standing contract is
+  `…\Solve Assistant\docs\Supabase Handoff.md`. Never touch anything else in
+  that folder (read-only data).
+
 - Match the surrounding code. This codebase is plain, commented, and
   hand-maintained; keep it that way.
 - Keep changes small and commit them with a specific, plain-language subject
