@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260919a" />
+  <link rel="stylesheet" href="./styles.css?v=20260919b" />
 </head>
 <body>
 
@@ -131,6 +131,7 @@
             <button class="btn btn-sm account__quiet" type="button" id="account-cv-btn"
                     data-label-upload="Upload CV" data-label-review="Review my CV">Upload CV</button>
             <input type="file" id="account-cv-file" class="visually-hidden" tabindex="-1" accept=".pdf,application/pdf" />
+            <button class="btn btn-sm account__quiet" type="button" id="account-linkedin-btn">LinkedIn audit</button>
             <button class="btn btn-sm account__quiet" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button>
             <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
           </div>
@@ -277,6 +278,24 @@
     </div>
   </div>
 
+  <!-- LinkedIn audit modal — placeholder for the profile-improvement page.
+       Same panel size as the CV modal; content to be filled in later. -->
+  <div class="auth-modal" id="linkedin-modal" role="dialog" aria-modal="true" aria-labelledby="linkedin-title" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel auth-modal__panel--wide">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <div class="account-cv__head">
+        <div>
+          <h2 class="auth-modal__title" id="linkedin-title">LinkedIn audit</h2>
+          <p class="account__hint">How your profile reads to a recruiter, and what to change.</p>
+        </div>
+      </div>
+      <div class="account-linkedin__body" id="account-linkedin-body">
+        <p>Your LinkedIn profile text will appear here, with suggestions on how to improve it.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Login modal — opened by the header "Log in" link and by Pay now when
        signed out. Three modes (login / signup / forgot) switched by
        data-mode on the form; behaviour in bootAuthModal (script.js). -->
@@ -327,6 +346,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260919a"></script>
+  <script src="./script.js?v=20260919b"></script>
 </body>
 </html>

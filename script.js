@@ -2060,6 +2060,10 @@
       setTimeout(() => { if (pfModal.isOpen) pfModal.close(); }, 700);
     });
 
+    // ---- LinkedIn audit modal (plain page for now)
+    const liModal = modalCtl(document.getElementById('linkedin-modal'));
+    root.querySelector('#account-linkedin-btn').addEventListener('click', () => liModal.open('[data-close]'));
+
     // ---- CV modal (PDF only, ≤ 5 MB)
     const cvModalEl = document.getElementById('cv-modal');
     const cvModal = modalCtl(cvModalEl);

@@ -2921,6 +2921,19 @@ body.is-locked {
   background: #fff;
 }
 .account-cv__preview[hidden] { display: none; }
+/* LinkedIn audit — same box as the CV preview, scrolls inside */
+.account-linkedin__body {
+  flex: 1 1 auto;
+  min-height: 320px;
+  height: 70vh;
+  overflow-y: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--type-body);
+  line-height: 1.6;
+}
 .account-newpass {
   display: grid;
   gap: var(--space-3);
