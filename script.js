@@ -2062,9 +2062,9 @@
       setTimeout(() => { if (pfModal.isOpen) pfModal.close(); }, 700);
     });
 
-    // ---- LinkedIn audit modal — candidates.linkedin_audit, written by
-    // sync_local.py from "NNN II LinkedIn Audit.json". Button hidden until
-    // an audit exists. Each section: what it says now / what it should say / why.
+    // ---- LinkedIn profile modal — candidates.linkedin_audit, written by
+    // sync_local.py from "NNN II LinkedIn Audit.json": the profile text as
+    // it is on LinkedIn, one block per section. Button hidden until it exists.
     const liModalEl = document.getElementById('linkedin-modal');
     const liModal   = modalCtl(liModalEl);
     const liBtn     = root.querySelector('#account-linkedin-btn');
@@ -2076,30 +2076,15 @@
       const sections = a && Array.isArray(a.sections) ? a.sections : [];
       liBtn.hidden = !sections.length;
       if (!sections.length) return;
-      liScore.textContent = Number.isFinite(Number(a.score))
-        ? liScore.dataset.text.replace('{score}', a.score).replace('{max}', a.score_max || 20)
-          + (a.audited_at ? ' · ' + fmtDate(a.audited_at) : '')
-        : '';
+      liScore.textContent = [a.profile_url, a.retrieved_at ? fmtDate(a.retrieved_at) : '']
+        .filter(Boolean).join(' · ');
       liBody.innerHTML = '';
       sections.forEach((sec) => {
         const el = document.createElement('section');
         el.className = 'li-audit';
-        el.innerHTML =
-          '<h3 class="li-audit__title"></h3>' +
-          '<div class="li-audit__cols">' +
-            '<div class="li-audit__col"><p class="eyebrow"></p><p class="li-audit__text li-audit__text--now"></p></div>' +
-            '<div class="li-audit__col"><p class="eyebrow"></p><p class="li-audit__text li-audit__text--new"></p></div>' +
-          '</div>' +
-          '<p class="li-audit__why"></p>';
-        const q = (sel) => el.querySelector(sel);
-        q('.li-audit__title').textContent = sec.section || '';
-        const eb = el.querySelectorAll('.eyebrow');
-        eb[0].textContent = liModalEl.dataset.labelNow;
-        eb[1].textContent = liModalEl.dataset.labelNew;
-        q('.li-audit__text--now').textContent = sec.current || liModalEl.dataset.empty;
-        q('.li-audit__text--new').textContent = sec.suggested || '';
-        q('.li-audit__why').textContent = sec.why || '';
-        q('.li-audit__why').hidden = !sec.why;
+        el.innerHTML = '<h3 class="li-audit__title"></h3><p class="li-audit__text"></p>';
+        el.firstChild.textContent = sec.section || '';
+        el.lastChild.textContent = sec.text || liModalEl.dataset.empty;
         liBody.appendChild(el);
       });
     }

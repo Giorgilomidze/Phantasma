@@ -62,7 +62,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20260919c" />
+  <link rel="stylesheet" href="./styles.css?v=20260920a" />
 </head>
 <body>
 
@@ -279,18 +279,18 @@
     </div>
   </div>
 
-  <!-- LinkedIn audit modal — what each profile section says now vs what it
-       should say. Data from candidates.linkedin_audit; built in paintAudit(). -->
+  <!-- LinkedIn profile modal — the profile text as it is on LinkedIn, one
+       block per section. Data from candidates.linkedin_audit; built in paintAudit(). -->
   <div class="auth-modal" id="linkedin-modal" role="dialog" aria-modal="true" aria-labelledby="linkedin-title" hidden
-       data-label-now="What it says now" data-label-new="What it should say" data-empty="(empty)">
+       data-empty="(empty)">
     <div class="auth-modal__backdrop" data-close></div>
     <div class="auth-modal__panel auth-modal__panel--wide">
       <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
       <div class="account-cv__head">
         <div>
-          <h2 class="auth-modal__title" id="linkedin-title">LinkedIn audit</h2>
-          <p class="account__hint">How your profile reads to a recruiter, and what to change.</p>
-          <p class="account__hint" id="account-linkedin-score" data-text="Profile score {score} / {max}"></p>
+          <h2 class="auth-modal__title" id="linkedin-title">Your LinkedIn profile</h2>
+          <p class="account__hint">Everything currently written on your profile, section by section.</p>
+          <p class="account__hint" id="account-linkedin-score"></p>
         </div>
       </div>
       <div class="account-linkedin__body" id="account-linkedin-body"></div>
@@ -347,6 +347,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20260919c"></script>
+  <script src="./script.js?v=20260920a"></script>
 </body>
 </html>

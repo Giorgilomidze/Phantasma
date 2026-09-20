@@ -2937,12 +2937,7 @@ body.is-locked {
 .li-audit { padding-block: var(--space-4); border-bottom: 1px solid var(--rule); }
 .li-audit:last-child { border-bottom: 0; }
 .li-audit__title { font-family: var(--font-display); font-size: var(--type-h3); margin: 0 0 var(--space-3); }
-.li-audit__cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
 .li-audit__text { margin: 0; white-space: pre-wrap; }
-.li-audit__text--now { color: var(--ink-soft); }
-.li-audit__text--new { padding: var(--space-3); background: var(--bg); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); }
-.li-audit__why { margin: var(--space-3) 0 0; font-size: var(--type-body-sm); color: var(--ink-soft); }
-@media (max-width: 767px) { .li-audit__cols { grid-template-columns: 1fr; } }
 .account-newpass {
   display: grid;
   gap: var(--space-3);
