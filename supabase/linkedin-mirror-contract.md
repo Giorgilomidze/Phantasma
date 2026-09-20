@@ -50,3 +50,31 @@ No other keys (no score, no audited_at, no Photo & banner, no Activity).
 Giorgi Lomidze's file is the reference: ~15,000 characters, Experience ≈ 6,000,
 Skills ≈ 6,000. A file under ~2,000 characters for a full profile is a retrieval
 failure, not a short profile.
+
+---
+
+## Status — parked 20 Sep 2026
+
+Stopped because LinkedIn retrieval is unreliable. State when parked:
+
+- **Site:** the "LinkedIn audit" button is removed from `account.html` (comment
+  marks the spot). `#linkedin-modal`, `paintAudit()` in `bootAccountPage`, and
+  the `.li-audit*` styles are still in place; the JS only skips when the button
+  is absent. **To resume:** put the button back —
+  `<button class="btn btn-sm account__quiet" type="button" id="account-linkedin-btn" hidden>LinkedIn audit</button>`
+  before the Change password button — and bump the cache version.
+- **Cloud:** `candidates.linkedin_audit` jsonb exists (`0011`). Giorgi Lomidze's
+  row holds a real text-shape mirror (~15k chars); 13 rows hold empty old-shape
+  placeholders; Ani Gogitidze none. Harmless — nothing reads the column now.
+- **Sync:** `sync_local.py --only audits` works and stays.
+
+## Planned next step (agreed, not built)
+
+1. Change this contract to a **structured** shape so the page can render the
+   LinkedIn look (employer cards, roles with dates/location/mode, skill chips,
+   certifications with credential IDs, skills with endorsement counts).
+2. Rebuild `paintAudit()` to render it.
+3. Add `candidates.linkedin_improved` (same shape). Modal gets two tabs —
+   *As on LinkedIn* / *Suggested* — with changed fields highlighted.
+4. Only then let the other session retrieve the 14 profiles; owner briefs the
+   rewrite separately.

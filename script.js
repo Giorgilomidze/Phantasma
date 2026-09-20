@@ -2070,9 +2070,11 @@
     const liBtn     = root.querySelector('#account-linkedin-btn');
     const liBody    = document.getElementById('account-linkedin-body');
     const liScore   = document.getElementById('account-linkedin-score');
-    liBtn.addEventListener('click', () => liModal.open('[data-close]'));
+    // Button parked 20 Sep 2026 (see supabase/linkedin-mirror-contract.md); code kept to resume
+    if (liBtn) liBtn.addEventListener('click', () => liModal.open('[data-close]'));
 
     function paintAudit(a) {
+      if (!liBtn) return;
       const sections = a && Array.isArray(a.sections) ? a.sections : [];
       liBtn.hidden = !sections.length;
       if (!sections.length) return;
