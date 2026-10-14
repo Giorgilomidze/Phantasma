@@ -1601,6 +1601,7 @@
       pwRow.hidden   = mode === 'forgot';
       password.required = mode !== 'forgot';
       password.autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+      if (mode === 'signup') track('signup_started');
       pwHint.hidden  = mode !== 'signup';
       forgot.hidden  = mode !== 'login';
       say('', '');
@@ -2286,6 +2287,43 @@
     document.addEventListener('phantasma:auth', (e) => render(e.detail.session));
   }
 
+  /* ---------------------------------------------------------------------
+     Enquiry events (measure-enquiries spec). Sent through the existing gtag
+     only when the visitor has accepted cookies; nothing fires when declined
+     or undecided. No GA4 ID is configured yet, so until one is added these
+     reach only the Google Ads tag.
+     --------------------------------------------------------------------- */
+  function track(name, params) {
+    if (typeof gtag !== 'function') return;
+    let consent = null;
+    try { consent = localStorage.getItem('phantasma_cookie_consent'); } catch (e) { /* storage blocked */ }
+    if (consent !== 'accepted') return;
+    gtag('event', name, params || {});
+  }
+
+  function bootEventTracking() {
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest) return;
+      const tierBtn = e.target.closest('[data-tier]');
+      if (tierBtn) {
+        track('pay_now_click', { tier: tierBtn.dataset.tier });
+        return;
+      }
+      const mail = e.target.closest('a[href^="mailto:"]');
+      if (mail) {
+        track('contact_email_click');
+        return;
+      }
+      // Book a call: any link to the booking section except the plain nav "Contact" link
+      const book = e.target.closest('a[href$="#contact"]');
+      if (book && !book.closest('.site-nav')) {
+        track('book_call_click');
+        return;
+      }
+      if (e.target.closest('#calendly-placeholder')) track('book_call_click');
+    });
+  }
+
   const CALENDLY_URL = 'https://calendly.com/lomiddze/30min';
 
   function bootCalendly() {
@@ -2326,6 +2364,13 @@
         document.head.appendChild(s);
       }
     }
+
+    // Calendly's embed posts 'calendly.event_scheduled' to the host page
+    // when a booking is confirmed, so no server is needed.
+    window.addEventListener('message', (e) => {
+      if (e.origin !== 'https://calendly.com') return;
+      if (e.data && e.data.event === 'calendly.event_scheduled') track('calendly_booked');
+    });
 
     placeholder.addEventListener('click', load);
     placeholder.addEventListener('keydown', (e) => {
@@ -2432,6 +2477,7 @@
     bootAccountPage();
     bootPreferencesPage();
     bootCalendly();
+    bootEventTracking();
     bootImageZoom();
   }
 

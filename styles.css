@@ -2628,6 +2628,31 @@ body.is-locked {
   margin: var(--space-4) 0 0;
 }
 
+/* Scope and terms block under the tiers */
+.pricing-terms {
+  margin: var(--space-6) 0 0;
+  padding: var(--space-5) 0 0;
+  border-top: 1px solid var(--rule);
+}
+.pricing-terms__h {
+  font-family: var(--font-display);
+  font-size: var(--type-h3, var(--type-body));
+  margin: 0 0 var(--space-3);
+}
+.pricing-terms__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  font-size: var(--type-body-sm);
+  color: var(--ink-soft);
+}
+.pricing-terms__list strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 @media (max-width: 1023px) {
   .pricing-grid {
     grid-template-columns: 1fr;
