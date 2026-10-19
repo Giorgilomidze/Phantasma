@@ -2032,6 +2032,13 @@ body.is-locked {
   .lightbox__stage { padding: var(--space-5) var(--space-5); }
   .slide-impact__tiles { grid-template-columns: 1fr; }
   .lightbox__hint { display: none; }
+
+  /* Case reel: 4 tiles at 25% are ~85px on a phone — show 2, then 1 */
+  .case-reel__slide { flex-basis: 50%; }
+  .case-reel__header .section-title { white-space: normal; }
+}
+@media (max-width: 479px) {
+  .case-reel__slide { flex-basis: 100%; }
 }
 
 /* -------------------------------------------------------------------------
@@ -2740,6 +2747,15 @@ body.is-locked {
   border-color: var(--accent-deep);
 }
 
+@media (max-width: 767px) {
+  /* Banner is fixed over content: keep it compact, buttons 44px tall */
+  .cookie-banner { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+  .cookie-banner__text { min-width: 0; font-size: 0.875rem; line-height: 1.4; }
+  .cookie-banner__actions { width: 100%; }
+  .cookie-banner__decline,
+  .cookie-banner__accept { flex: 1; min-height: 44px; }
+}
+
 /* -------------------------------------------------------------------------
    26. Auth — login modal, header Log in / Account link, account page
    (Supabase; see Auth / bootAuthModal / bootAccountPage in script.js)
@@ -3224,6 +3240,26 @@ button.stat[aria-expanded="true"]::after {
 .send-check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-table a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .account-table .t-sub { display: block; color: var(--ink-soft); }
+
+/* Company cell: logo (24px high) or round letter badge, then the name */
+.company { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; }
+.company__logo { display: block; height: 24px; width: auto; max-width: 96px; object-fit: contain; }
+.company__badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: var(--type-eyebrow);
+  font-weight: 500;
+  line-height: 1;
+}
+.company__name { min-width: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 1199px) {
   .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }

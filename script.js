@@ -625,7 +625,7 @@
       slide.className = 'case-reel__slide';
       slide.innerHTML = `
         <button type="button" class="case-reel__card" aria-label="Open case study: ${c.title}">
-          <img class="case-reel__img" src="${c.built.thumbnail.src}" alt="${c.built.thumbnail.alt}" loading="lazy" />
+          <img class="case-reel__img" src="${c.built.thumbnail.src}" srcset="${encodeURI(c.built.thumbnail.src.replace(/\.webp$/, '-640.webp'))} 640w, ${encodeURI(c.built.thumbnail.src)} 1376w" sizes="(min-width: 768px) 1376px, (min-width: 480px) 48vw, 94vw" width="1376" height="768" alt="${c.built.thumbnail.alt}" loading="lazy" decoding="async" />
           <div class="case-reel__overlay">
             <span class="case-reel__title">${c.title}</span>
           </div>
@@ -684,6 +684,7 @@
     nextBtn.addEventListener('click', () => { resetAuto(); advance(1); });
 
     function startAuto() {
+      if (prefersReducedMotion) return;
       autoTimer = setInterval(() => advance(1), 5000);
     }
     function resetAuto() {
@@ -698,8 +699,24 @@
       viewport.addEventListener('mouseleave', startAuto);
     }
 
+    // Touch: swipe left / right on the reel; stop auto-advance while a finger is down.
+    if (viewport) {
+      let touchX = null;
+      viewport.addEventListener('touchstart', (e) => {
+        touchX = e.touches[0].clientX;
+        clearInterval(autoTimer);
+      }, { passive: true });
+      viewport.addEventListener('touchend', (e) => {
+        if (touchX === null) return;
+        const dx = e.changedTouches[0].clientX - touchX;
+        touchX = null;
+        if (Math.abs(dx) > 40) advance(dx < 0 ? 1 : -1);
+        if (!prefersReducedMotion) startAuto();
+      }, { passive: true });
+    }
+
     render(true);
-    startAuto();
+    if (!prefersReducedMotion) startAuto();
   }
 
   /* ---------------------------------------------------------------------
@@ -1779,6 +1796,46 @@
     const SOURCE = { 'jobs.ge': 'jobs.ge', 'hr.ge': 'hr.ge', tbc: 'TBC Bank', bog: 'Bank of Georgia' };
     const OUTCOME = { sent: 'Sent', applied: 'Applied', interview: 'Interview', offer: 'Offer', rejected: 'Rejected', no_reply: 'No reply' };
 
+    // Company logos: normalised name (lowercase, trimmed) -> file in images/logos/.
+    // Anything not listed gets a round letter badge.
+    const COMPANY_LOGOS = {
+      'igg': './images/logos/igg.webp',
+      'insurance group of georgia': './images/logos/igg.webp',
+      'bank of georgia': './images/logos/bank-of-georgia.webp',
+      'tbc': './images/logos/tbc-bank.webp',
+      'tbc bank': './images/logos/tbc-bank.webp',
+      'terabank': './images/logos/terabank.webp',
+      'silknet': './images/logos/silknet.webp',
+      'silknet jsc': './images/logos/silknet.webp',
+    };
+    function companyCell(name) {
+      const wrap = document.createElement('span');
+      wrap.className = 'company';
+      const src = COMPANY_LOGOS[String(name).trim().toLowerCase()];
+      let mark;
+      if (src) {
+        mark = document.createElement('img');
+        mark.className = 'company__logo';
+        mark.src = src;
+        mark.alt = name;
+        mark.loading = 'lazy';
+        mark.decoding = 'async';
+      } else {
+        mark = document.createElement('span');
+        mark.className = 'company__badge';
+        mark.setAttribute('aria-hidden', 'true');
+        mark.textContent = (String(name).trim().charAt(0) || '?').toUpperCase();
+      }
+      wrap.appendChild(mark);
+      // Logo alt already names the company; keep visible text for badge and logo alike.
+      const label = document.createElement('span');
+      label.className = 'company__name';
+      label.textContent = name;
+      if (src) label.className += ' visually-hidden';
+      wrap.appendChild(label);
+      return wrap;
+    }
+
     // ---- table builders (text via textContent; only hrefs come from data)
     function table(headers, rows, cells) {
       if (!rows.length) {
@@ -1813,8 +1870,10 @@
             box.setAttribute('aria-label', 'Send my application for this vacancy');
             lab.appendChild(box);
             td.appendChild(lab);
+          } else if (c && c.company !== undefined) {
+            td.appendChild(companyCell(c.company));
           } else if (c && c.href) {
-            const a = document.createElement('a');
+            const a =document.createElement('a');
             a.href = c.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
             a.textContent = c.text;
             td.appendChild(a);
@@ -1836,7 +1895,7 @@
           const v = r.vacancies || {};
           return [
             fmtDate(r.week), r.rank,
-            company(v),
+            { company: company(v) },
             { href: v.url, text: v.title || '—', sub: [v.location, r.salary_text].filter(Boolean).join(' · ') },
             r.why_matches || short(v.description, 140),
             SOURCE[v.source] || v.source,
@@ -1873,7 +1932,7 @@
         rows,
         (r) => {
           const v = r.vacancies || {};
-          return [company(v), { href: v.url, text: v.title || '—' }, fmtDate(r.sent_at), OUTCOME[r.outcome] || r.outcome, fmtDate(r.outcome_at)];
+          return [{ company: company(v) }, { href: v.url, text: v.title || '—' }, fmtDate(r.sent_at), OUTCOME[r.outcome] || r.outcome, fmtDate(r.outcome_at)];
         });
     }
 
