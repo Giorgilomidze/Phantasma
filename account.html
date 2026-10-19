@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light" />
-  <meta name="theme-color" content="#f9f3eb" />
+  <meta name="theme-color" content="#f7f5f2" />
   <title>Your account — Phantasma</title>
   <meta name="description" content="Sign in to see your Phantasma orders and the status of your Personal Career Strategist service." />
 
@@ -62,9 +62,10 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20261019b" />
+  <link rel="stylesheet" href="./styles.css?v=20261020b" />
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
 
   <div class="grain" aria-hidden="true"></div>
   <div id="top" aria-hidden="true" class="scroll-anchor"></div>
@@ -86,7 +87,7 @@
     </div>
   </header>
 
-  <main id="main">
+  <main id="main" tabindex="-1">
 
     <!-- Client dashboard, v1: the numbers only. Filled by bootAccountPage
          (script.js) from get_my_stats(); forms and tables come later. -->
@@ -121,23 +122,44 @@
               <button class="account-li__edit" type="button" id="linkedin-edit" data-label-edit="Edit" data-label-add="Add">Edit</button>
             </div>
           </div>
-          <div class="account__actions">
-            <a class="btn btn-sm account__quiet account__download" id="account-workbook" href="#" hidden
-               download data-msg-error="The file is not available right now — please try again later.">Download processed vacancies</a>
-            <button class="btn btn-sm account__quiet" type="button" id="account-profile-btn">Profile details</button>
-            <a class="btn btn-sm account__quiet" href="./preferences.html">Preferences</a>
+        </div>
+
+        <div class="account-layout">
+        <!-- Side panel: same controls as before, moved here (ids unchanged, handlers in bootAccountPage).
+             >=1024px sticky left column; below that a scrollable chip row. -->
+        <nav class="account-nav" id="account-nav" aria-label="Account">
+          <ul class="account-nav__list">
+            <li><a class="account-nav__item" href="#account-stats" data-nav-target="account-stats" aria-current="true">Overview</a></li>
+            <li class="account-nav__group">
+              <span class="account-nav__title">Vacancies</span>
+              <ul>
+                <li><button class="account-nav__item" type="button" data-nav-panel="processed">Vacancy lists</button></li>
+                <li><a class="account-nav__item" id="account-workbook" href="#" hidden
+                       download data-msg-error="The file is not available right now — please try again later.">Download processed vacancies</a></li>
+              </ul>
+            </li>
+            <li><button class="account-nav__item" type="button" id="account-profile-btn">Profile details</button></li>
             <!-- CV: one file per person in the private `cvs` bucket; path on
                  profiles.cv_path. Label flips to "Review my CV" once uploaded. -->
-            <button class="btn btn-sm account__quiet" type="button" id="account-cv-btn"
-                    data-label-upload="Upload CV" data-label-review="Review my CV">Upload CV</button>
-            <input type="file" id="account-cv-file" class="visually-hidden" tabindex="-1" accept=".pdf,application/pdf" />
-            <!-- LinkedIn audit: candidates.linkedin_audit; hidden until one exists -->
+            <li>
+              <button class="account-nav__item" type="button" id="account-cv-btn"
+                      data-label-upload="Upload CV" data-label-review="Review my CV">Upload CV</button>
+              <input type="file" id="account-cv-file" class="visually-hidden" tabindex="-1" accept=".pdf,application/pdf" />
+            </li>
+            <li><a class="account-nav__item" href="./preferences.html">Preferences</a></li>
             <!-- LinkedIn mirror button removed 20 Sep 2026 — parked, see supabase/linkedin-mirror-contract.md.
                  Modal + paintAudit() stay in place; re-add the button to resume. -->
-            <button class="btn btn-sm account__quiet" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button>
-            <button class="btn btn-sm account__quiet" type="button" id="account-signout">Sign out</button>
-          </div>
-        </div>
+            <li class="account-nav__group account-nav__group--security">
+              <span class="account-nav__title">Account and security</span>
+              <ul>
+                <li><button class="account-nav__item" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button></li>
+                <li><button class="account-nav__item" type="button" id="account-signout">Sign out</button></li>
+                <li><a class="account-nav__item account-nav__item--danger" href="#account-danger" data-nav-target="account-danger">Delete my account</a></li>
+              </ul>
+            </li>
+          </ul>
+        </nav>
+        <div class="account-main">
 
         <!-- Password form: opened by "Change password", or automatically when
              the user arrives from a reset email (PASSWORD_RECOVERY). -->
@@ -155,7 +177,7 @@
         </form>
 
 
-        <section class="account__stats" aria-labelledby="stats-h">
+        <section class="account__stats" id="account-stats" aria-labelledby="stats-h">
           <p class="eyebrow" id="stats-h">Your service so far</p>
           <div class="stat-grid" id="stat-grid" role="list">
             <button class="stat" type="button" role="listitem" data-panel="weeks" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Weekly runs</span><span class="stat__value"><span data-stat="weeks">0</span><span class="stat__of"> / 4</span></span></button>
@@ -197,7 +219,7 @@
           </p>
         </div>
 
-        <div class="account__danger">
+        <div class="account__danger" id="account-danger" tabindex="-1">
           <p class="account__hint">
             Want to leave? Deleting your account removes your login at once; we then erase
             your CV, brief and shortlists by hand within 7 days and confirm by email.
@@ -207,6 +229,8 @@
                   data-msg-busy="Deleting…" data-msg-error="Could not delete the account — please email consult@solvephantasma.com.">Delete my account</button>
           <p class="account-form__status" id="delete-status" role="status" aria-live="polite" hidden></p>
         </div>
+        </div><!-- /.account-main -->
+        </div><!-- /.account-layout -->
       </div>
     </section>
 
@@ -348,6 +372,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261019b"></script>
+  <script src="./script.js?v=20261020b"></script>
 </body>
 </html>

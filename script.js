@@ -1999,6 +1999,39 @@
       panel.hidden = true;
     }
 
+    // Tile tone by meaning, from the numbers already loaded (never invented):
+    // ok = progress made, watch = nothing yet / waiting, act = your move.
+    // Outcomes (interviews, offers) are neutral at zero: a zero is not a fault.
+    const TONE_TEXT = { ok: 'On track', watch: 'Waiting', act: 'Your move' };
+    const TONE_ICON = { ok: '✓', watch: '…', act: '!' };
+    function toneFor(key, n, all) {
+      if (key === 'interviews' || key === 'offers') return n > 0 ? 'ok' : '';
+      if (key === 'selected') return n > 0 ? 'ok' : (all.processed > 0 ? 'act' : 'watch');
+      return n > 0 ? 'ok' : 'watch';
+    }
+    function paintTones(nums) {
+      Object.keys(nums).forEach((k) => {
+        const tile = grid.querySelector('[data-panel="' + k + '"]');
+        if (!tile) return;
+        const tone = toneFor(k, nums[k], nums);
+        let flag = tile.querySelector('.stat__flag');
+        if (!tone) { if (flag) flag.remove(); tile.removeAttribute('data-tone'); return; }
+        tile.dataset.tone = tone;
+        if (!flag) {
+          flag = document.createElement('span');
+          flag.className = 'stat__flag';
+          tile.insertBefore(flag, tile.querySelector('.stat__value'));
+        }
+        flag.innerHTML = '';
+        const ic = document.createElement('span');
+        ic.className = 'stat__flag-icon';
+        ic.setAttribute('aria-hidden', 'true');
+        ic.textContent = TONE_ICON[tone];
+        flag.appendChild(ic);
+        flag.appendChild(document.createTextNode(TONE_TEXT[tone]));
+      });
+    }
+
     function renderStats(d) {
       const st = d.stats;
       const nums = {
@@ -2015,6 +2048,7 @@
         el.textContent = nums[k];
         el.dataset.countTo = String(nums[k]);
       });
+      paintTones(nums);
       root.querySelector('[data-stat="lastweek"]').textContent =
         st && st.last_shortlist_week ? fmtDate(st.last_shortlist_week) : '—';
       root.querySelector('#account-stats-note').hidden = !!(st && st.vacancies_processed > 0);
@@ -2423,9 +2457,9 @@
       // Theme overrides via Calendly URL params: cream bg, warm graphite text, terracotta accent
       const params = new URLSearchParams({
         hide_gdpr_banner: '1',
-        background_color: 'f9f3eb',
-        text_color: '2a221a',
-        primary_color: 'c87651',
+        background_color: 'f7f5f2',
+        text_color: '14213d',
+        primary_color: 'f26b1d',
       });
       widget.setAttribute('data-url', `${CALENDLY_URL}?${params.toString()}`);
       widget.style.minWidth = '320px';
@@ -2540,6 +2574,63 @@
     });
   }
 
+  // Account side panel: active-section highlight, and proxy buttons that
+  // reuse the existing stat tiles (no logic duplicated). The nav sits inside
+  // #account-signed-in, so it is hidden with it when signed out.
+  function bootAccountNav() {
+    const el = document.getElementById('account-nav');
+    if (!el) return;
+
+    const links = Array.from(el.querySelectorAll('[data-nav-target]'));
+    const setCurrent = (item) => {
+      links.forEach((l) => l.removeAttribute('aria-current'));
+      if (item) item.setAttribute('aria-current', 'true');
+    };
+    const goTo = (id) => {
+      const t = document.getElementById(id);
+      if (!t) return;
+      if (!t.hasAttribute('tabindex')) t.setAttribute('tabindex', '-1');
+      t.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+      t.focus({ preventScroll: true });
+    };
+
+    links.forEach((l) => l.addEventListener('click', (e) => {
+      e.preventDefault();
+      goTo(l.dataset.navTarget);
+      setCurrent(l);
+    }));
+
+    // "Vacancy lists" opens the existing "processed" tile's table.
+    el.querySelectorAll('[data-nav-panel]').forEach((b) => b.addEventListener('click', () => {
+      const tile = document.querySelector('.stat[data-panel="' + b.dataset.navPanel + '"]');
+      if (!tile) return;
+      if (tile.getAttribute('aria-expanded') !== 'true') tile.click();
+      const title = document.getElementById('stat-panel-title');
+      if (title && !document.getElementById('stat-panel').hidden) {
+        title.setAttribute('tabindex', '-1');
+        title.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+        title.focus({ preventScroll: true });
+      }
+    }));
+
+    // Highlight follows scroll: last section whose top has passed 40% of the viewport.
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        let cur = links[0];
+        links.forEach((l) => {
+          const t = document.getElementById(l.dataset.navTarget);
+          if (t && t.getBoundingClientRect().top <= window.innerHeight * 0.4) cur = l;
+        });
+        setCurrent(cur);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+  }
+
   function init() {
     bootHeroReveal();
     bootHeader();
@@ -2552,6 +2643,7 @@
     Auth.boot();
     bootAuthModal();
     bootAccountPage();
+    bootAccountNav();
     bootPreferencesPage();
     bootCalendly();
     bootEventTracking();

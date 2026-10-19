@@ -163,8 +163,10 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 - Colours are authored in `oklch()` with a hex fallback block under
   `@supports not (color: oklch(...))`. **If you change a colour token, change
   both places.** Tokens carry a `--*-rgb` twin for the same reason.
-- Palette: `--bg` `#f9f3eb`, `--surface` `#f1e6d4`, `--ink` `#2a221a`,
-  `--accent` `#c87651` (terracotta), `--rule` `#dccfbf`.
+- Palette "Signal" (19 Oct 2026; hex in `:root` is the source of truth): `--bg` `#f7f5f2`,
+  `--surface` `#efece6`, `--ink` `#14213d`, `--accent` `#f26b1d` (fills only, never text),
+  `--accent-deep` `#b8420a` (orange text/links), `--on-accent` = `--ink`, `--partner` `#0e4f6b`,
+  status `--ok` `#1f7a4d` / `--watch` `#8a5a00` / `--act` `#b3261e`, `--rule` `#ddd8cf`.
 - Spacing is a **strict 4px scale**, `--space-1` through `--space-10`. Use the
   tokens; do not hardcode pixel values.
 - Type is fluid `clamp()` tokens: `--type-hero`, `--type-h2`, `--type-body`, etc.
@@ -269,7 +271,7 @@ you change it, change it in all of them.
   exists inside the JS-driven lightbox. **If you edit case copy in `CASES`,
   update this block too** — they are maintained by hand, in parallel.
 - `robots.txt` disallows `/landing.html` (paid-traffic page, kept out of the
-  index). `sitemap.xml` lists only `/` and `/blog.html`.
+  index). `sitemap.xml` lists 4 URLs: `/`, `/blog.html`, `/projects.html`, `/projects.ka.html`.
 - `blog.html` articles use ids of the form `case-<slug>`.
 
 ---

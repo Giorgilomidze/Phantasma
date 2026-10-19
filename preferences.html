@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light" />
-  <meta name="theme-color" content="#f9f3eb" />
+  <meta name="theme-color" content="#f7f5f2" />
   <title>Preferences — Phantasma</title>
   <meta name="description" content="Tell us what to look for: salary, titles, locations, where to search and how to apply." />
 
@@ -62,9 +62,10 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20261019b" />
+  <link rel="stylesheet" href="./styles.css?v=20261020b" />
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
 
   <div class="grain" aria-hidden="true"></div>
   <div id="top" aria-hidden="true" class="scroll-anchor"></div>
@@ -86,7 +87,7 @@
     </div>
   </header>
 
-  <main id="main">
+  <main id="main" tabindex="-1">
 
     <!-- Preferences questionnaire. 5 collapsible groups, one Save per group.
          Answers -> table `preferences` (salary typed, the rest in `answers`
@@ -400,6 +401,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261019b"></script>
+  <script src="./script.js?v=20261020b"></script>
 </body>
 </html>
