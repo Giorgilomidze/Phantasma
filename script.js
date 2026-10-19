@@ -625,9 +625,13 @@
       slide.className = 'case-reel__slide';
       slide.innerHTML = `
         <button type="button" class="case-reel__card" aria-label="Open case study: ${c.title}">
-          <img class="case-reel__img" src="${c.built.thumbnail.src}" srcset="${encodeURI(c.built.thumbnail.src.replace(/\.webp$/, '-640.webp'))} 640w, ${encodeURI(c.built.thumbnail.src)} 1376w" sizes="(min-width: 768px) 1376px, (min-width: 480px) 48vw, 94vw" width="1376" height="768" alt="${c.built.thumbnail.alt}" loading="lazy" decoding="async" />
+          <img class="case-reel__img" src="${c.built.thumbnail.src}" srcset="${encodeURI(c.built.thumbnail.src.replace(/\.webp$/, '-640.webp'))} 640w, ${encodeURI(c.built.thumbnail.src)} 1376w" sizes="(min-width: 768px) 1376px, 94vw" width="1376" height="768" alt="${c.built.thumbnail.alt}" loading="lazy" decoding="async" />
           <div class="case-reel__overlay">
             <span class="case-reel__title">${c.title}</span>
+            <span class="case-reel__meta">
+              <span class="case-reel__industry">${c.industry}</span>
+              <span class="case-reel__kpi">${c.kpiNum}<span class="case-reel__kpi-label">${c.kpiLabel}</span></span>
+            </span>
           </div>
         </button>`;
       slide.querySelector('.case-reel__card').addEventListener('click', () => {
@@ -683,8 +687,11 @@
     prevBtn.addEventListener('click', () => { resetAuto(); advance(-1); });
     nextBtn.addEventListener('click', () => { resetAuto(); advance(1); });
 
+    // No autoplay under reduced motion or on touch devices (swipe / arrows instead)
+    const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
     function startAuto() {
-      if (prefersReducedMotion) return;
+      clearInterval(autoTimer);
+      if (prefersReducedMotion || isTouch) return;
       autoTimer = setInterval(() => advance(1), 5000);
     }
     function resetAuto() {
@@ -702,21 +709,27 @@
     // Touch: swipe left / right on the reel; stop auto-advance while a finger is down.
     if (viewport) {
       let touchX = null;
+      let touchY = null;
       viewport.addEventListener('touchstart', (e) => {
         touchX = e.touches[0].clientX;
+        touchY = e.touches[0].clientY;
         clearInterval(autoTimer);
       }, { passive: true });
       viewport.addEventListener('touchend', (e) => {
         if (touchX === null) return;
         const dx = e.changedTouches[0].clientX - touchX;
+        const dy = e.changedTouches[0].clientY - touchY;
         touchX = null;
-        if (Math.abs(dx) > 40) advance(dx < 0 ? 1 : -1);
-        if (!prefersReducedMotion) startAuto();
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) advance(dx < 0 ? 1 : -1);
+        startAuto();
       }, { passive: true });
     }
 
+    // Re-measure on resize / rotation so the single phone card stays aligned
+    window.addEventListener('resize', () => render(true));
+
     render(true);
-    if (!prefersReducedMotion) startAuto();
+    startAuto();
   }
 
   /* ---------------------------------------------------------------------
@@ -1807,6 +1820,11 @@
       'terabank': './images/logos/terabank.webp',
       'silknet': './images/logos/silknet.webp',
       'silknet jsc': './images/logos/silknet.webp',
+      'alta': './images/logos/alta.webp',
+      'georgian beer company': './images/logos/georgian-beer-company.webp',
+      'zedazeni': './images/logos/georgian-beer-company.webp',
+      'taze technologies': './images/logos/taze.webp',
+      'taze': './images/logos/taze.webp',
     };
     function companyCell(name) {
       const wrap = document.createElement('span');
