@@ -1845,11 +1845,10 @@
         mark.textContent = (String(name).trim().charAt(0) || '?').toUpperCase();
       }
       wrap.appendChild(mark);
-      // Logo alt already names the company; keep visible text for badge and logo alike.
+      // Always show the company name next to the mark (small icons alone are not recognisable).
       const label = document.createElement('span');
       label.className = 'company__name';
       label.textContent = name;
-      if (src) label.className += ' visually-hidden';
       wrap.appendChild(label);
       return wrap;
     }
