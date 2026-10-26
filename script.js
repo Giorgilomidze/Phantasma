@@ -603,6 +603,69 @@
   }
 
   /* ---------------------------------------------------------------------
+     Header "Projects" dropdown — button + small menu of links.
+     Click / Enter / Space toggle; Arrow keys move between items; Esc closes
+     and refocuses the button; click outside closes. Same markup serves the
+     desktop popover and the accordion inside the hamburger panel (CSS only).
+     --------------------------------------------------------------------- */
+  function bootNavDropdown() {
+    const dd = document.querySelector('.nav-dropdown');
+    const btn = dd && dd.querySelector('.nav-dropdown__btn');
+    const menu = dd && dd.querySelector('.nav-dropdown__menu');
+    if (!dd || !btn || !menu) return;
+    const items = Array.from(menu.querySelectorAll('a'));
+
+    function setOpen(open) {
+      dd.classList.toggle('is-open', open);
+      btn.setAttribute('aria-expanded', String(open));
+    }
+    function isOpen() { return dd.classList.contains('is-open'); }
+
+    btn.addEventListener('click', () => setOpen(!isOpen()));
+
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setOpen(true);
+        if (items[0]) items[0].focus();
+      }
+    });
+
+    menu.addEventListener('keydown', (e) => {
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        items[(i + 1) % items.length].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[(i - 1 + items.length) % items.length].focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        items[0].focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        items[items.length - 1].focus();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isOpen()) {
+        setOpen(false);
+        if (btn.offsetParent !== null) btn.focus();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (isOpen() && !dd.contains(e.target)) setOpen(false);
+    });
+
+    // Tabbing out of the menu closes it
+    dd.addEventListener('focusout', (e) => {
+      if (isOpen() && e.relatedTarget && !dd.contains(e.relatedTarget)) setOpen(false);
+    });
+  }
+
+  /* ---------------------------------------------------------------------
      Case Reel — horizontal infinite auto-scrolling carousel
      --------------------------------------------------------------------- */
   function bootCaseReel() {
@@ -2634,6 +2697,7 @@
     bootHeroReveal();
     bootHeader();
     bootNavToggle();
+    bootNavDropdown();
     bootCookieBanner();
     bootCaseReel();
     Lightbox.bind();

@@ -1,0 +1,8 @@
+[
+  { "id": "img_1", "business": "edelweiss", "title_en": "Room, morning light (placeholder)", "title_ka": "ოთახი, დილის შუქი (მაკეტი)", "c1": "#14213d", "c2": "#f26b1d", "shape": "mountain" },
+  { "id": "img_2", "business": "edelweiss", "title_en": "Breakfast table (placeholder)", "title_ka": "საუზმის მაგიდა (მაკეტი)", "c1": "#0e4f6b", "c2": "#efece6", "shape": "circle" },
+  { "id": "img_3", "business": "edelweiss", "title_en": "Valley trail (placeholder)", "title_ka": "ხეობის ბილიკი (მაკეტი)", "c1": "#1f7a4d", "c2": "#fcfbf9", "shape": "mountain" },
+  { "id": "img_4", "business": "breeze", "title_en": "Terrace at sunset (placeholder)", "title_ka": "ტერასა მზის ჩასვლისას (მაკეტი)", "c1": "#b8420a", "c2": "#14213d", "shape": "wave" },
+  { "id": "img_5", "business": "breeze", "title_en": "Coffee cup (placeholder)", "title_ka": "ყავის ფინჯანი (მაკეტი)", "c1": "#4a5568", "c2": "#f7f5f2", "shape": "circle" },
+  { "id": "img_6", "business": "breeze", "title_en": "Lunch set (placeholder)", "title_ka": "სადილის სეტი (მაკეტი)", "c1": "#0e4f6b", "c2": "#f26b1d", "shape": "wave" }
+]

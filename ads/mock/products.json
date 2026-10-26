@@ -1,0 +1,8 @@
+[
+  { "id": "p_edel_room", "business": "edelweiss", "name_en": "Mountain view double room (MOCK)", "name_ka": "ორადგილიანი ოთახი მთის ხედით (MOCK)", "price": 120 },
+  { "id": "p_edel_breakfast", "business": "edelweiss", "name_en": "Breakfast package (MOCK)", "name_ka": "საუზმის პაკეტი (MOCK)", "price": 25 },
+  { "id": "p_edel_tour", "business": "edelweiss", "name_en": "Guided valley walk (MOCK)", "name_ka": "გიდით ბილიკზე გასეირნება (MOCK)", "price": 60 },
+  { "id": "p_breeze_lunch", "business": "breeze", "name_en": "Sea-view lunch set (MOCK)", "name_ka": "სადილის სეტი ზღვის ხედით (MOCK)", "price": 32 },
+  { "id": "p_breeze_coffee", "business": "breeze", "name_en": "Coffee and dessert (MOCK)", "name_ka": "ყავა და დესერტი (MOCK)", "price": 14 },
+  { "id": "p_breeze_event", "business": "breeze", "name_en": "Sunset table for two (MOCK)", "name_ka": "მაგიდა ორისთვის მზის ჩასვლისას (MOCK)", "price": 70 }
+]

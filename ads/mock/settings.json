@@ -1,0 +1,32 @@
+{
+  "_note": "MOCK DATA - fake businesses and numbers for the prototype. Not real.",
+  "currency": "GEL",
+  "limits": { "minDailyBudget": 2, "maxDailyBudget": 50, "maxDays": 30, "captionSoftLimit": 500 },
+  "businesses": [
+    { "id": "edelweiss", "name": "Edelweiss", "accounts": [
+      { "id": "act_edel_1", "name": "Edelweiss - main account" },
+      { "id": "act_edel_2", "name": "Edelweiss - winter promo" } ] },
+    { "id": "breeze", "name": "Breeze", "accounts": [
+      { "id": "act_breeze_1", "name": "Breeze - main account" } ] }
+  ],
+  "locations": [
+    { "id": "georgia", "en": "All Georgia", "ka": "მთელი საქართველო" },
+    { "id": "tbilisi", "en": "Tbilisi", "ka": "თბილისი" },
+    { "id": "batumi", "en": "Batumi", "ka": "ბათუმი" },
+    { "id": "kutaisi", "en": "Kutaisi", "ka": "ქუთაისი" },
+    { "id": "mestia", "en": "Mestia", "ka": "მესტია" }
+  ],
+  "forbiddenWords": [
+    { "word": "guaranteed", "en": "Absolute promise; Meta may reject it as a misleading claim.", "ka": "აბსოლუტური დაპირება; Meta-მ შეიძლება უარყოს როგორც შეცდომაში შემყვანი." },
+    { "word": "free", "en": "Free offers are reviewed closely; state the conditions clearly.", "ka": "უფასო შეთავაზებები მკაცრად მოწმდება; მიუთითეთ პირობები." },
+    { "word": "100%", "en": "Absolute claim; avoid unless you can prove it.", "ka": "აბსოლუტური მტკიცება; მოერიდეთ, თუ ვერ ამტკიცებთ." },
+    { "word": "cure", "en": "Health claim; not allowed in ads.", "ka": "ჯანმრთელობის მტკიცება; რეკლამაში აკრძალულია." },
+    { "word": "best in georgia", "en": "Unprovable superlative.", "ka": "დაუსაბუთებელი უპირატესობა." },
+    { "word": "უფასო", "en": "Free offers are reviewed closely (Georgian).", "ka": "უფასო შეთავაზებები მკაცრად მოწმდება." },
+    { "word": "გარანტია", "en": "Guarantee wording; may be treated as a misleading claim (Georgian).", "ka": "გარანტიის ფორმულირება; შეიძლება ჩაითვალოს შეცდომაში შემყვან მტკიცებად." }
+  ],
+  "georgianTemplates": [
+    "{product} - ახლა მხოლოდ {price} ლარად. მოგვწერეთ და დაგეხმარებით!",
+    "გამარჯობა! გაგიცანით {product}. ფასი: {price} ლარი. დაჯავშნისთვის მოგვწერეთ შეტყობინება."
+  ]
+}

@@ -1,0 +1,4 @@
+[
+  { "id": "au_1", "daysAgo": 6, "user": "demo (MOCK)", "action": "post.published", "entityType": "post", "entityId": "post_2", "detail": "Seed entry (MOCK)" },
+  { "id": "au_2", "daysAgo": 2, "user": "demo (MOCK)", "action": "post.published", "entityType": "post", "entityId": "post_5", "detail": "Seed entry (MOCK)" }
+]

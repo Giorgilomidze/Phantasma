@@ -1,0 +1,8 @@
+[
+  { "id": "post_1", "business": "edelweiss", "status": "draft", "productId": "p_edel_tour", "caption": "Walk the valley with a local guide this weekend.", "imageId": "img_3", "dateOffset": null },
+  { "id": "post_2", "business": "edelweiss", "status": "published", "productId": "p_edel_room", "caption": "Warm rooms with a mountain view. Message us to check dates.", "imageId": "img_1", "dateOffset": -6 },
+  { "id": "post_3", "business": "edelweiss", "status": "scheduled", "productId": "p_edel_breakfast", "caption": "Breakfast on the terrace, every morning.", "imageId": "img_2", "dateOffset": 3 },
+  { "id": "post_4", "business": "breeze", "status": "needs_approval", "productId": "p_breeze_coffee", "caption": "Guaranteed best coffee in town, with a free dessert.", "imageId": "img_5", "dateOffset": null },
+  { "id": "post_5", "business": "breeze", "status": "published", "productId": "p_breeze_event", "caption": "Book a sunset table for two. Message us.", "imageId": "img_4", "dateOffset": -2 },
+  { "id": "post_6", "business": "breeze", "status": "approved", "productId": "p_breeze_lunch", "caption": "Sea-view lunch set, ready from noon.", "imageId": "img_6", "dateOffset": null }
+]

@@ -1,0 +1,15 @@
+{
+  "_note": "MOCK per-day averages used to generate fake daily numbers.",
+  "campaigns": {
+    "c_1": { "reachPerDay": 1800, "messagesPerDay": 5.2 },
+    "c_2": { "reachPerDay": 900, "messagesPerDay": 1.1 },
+    "c_3": { "reachPerDay": 1100, "messagesPerDay": 0.8 },
+    "c_5": { "reachPerDay": 2300, "messagesPerDay": 7.4 },
+    "c_6": { "reachPerDay": 300, "messagesPerDay": 0.2 }
+  },
+  "alerts": [
+    { "id": "a_1", "level": "act", "business": "breeze", "en": "Campaign 'Coffee promo' was rejected: caption has a risky word.", "ka": "კამპანია 'Coffee promo' უარყოფილია: ტექსტში რისკიანი სიტყვაა." },
+    { "id": "a_2", "level": "watch", "business": "edelweiss", "en": "'Breakfast add-on' is paused but still has 6 days of budget left.", "ka": "'Breakfast add-on' შეჩერებულია, ბიუჯეტი კიდევ 6 დღისაა დარჩენილი." },
+    { "id": "a_3", "level": "ok", "business": "breeze", "en": "'Sunset tables' cost per message is 12% below last week.", "ka": "'Sunset tables'-ის შეტყობინების ფასი გასულ კვირაზე 12%-ით დაბალია." }
+  ]
+}

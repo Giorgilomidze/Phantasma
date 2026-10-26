@@ -61,7 +61,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20261025a" />
+  <link rel="stylesheet" href="./styles.css?v=20261026a" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -76,7 +76,13 @@
       <nav class="site-nav" id="site-nav" aria-label="Primary">
         <a href="./index.html">Home</a>
         <a href="./blog.html" aria-current="page">Blog</a>
-        <a href="./projects.html">Job Seek</a>
+        <div class="nav-dropdown">
+          <button class="nav-dropdown__btn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="nav-projects-menu">Projects</button>
+          <div class="nav-dropdown__menu" id="nav-projects-menu">
+            <a href="./projects.html">Job Seek</a>
+            <a href="./ads/">Ads Management</a>
+          </div>
+        </div>
         <a href="./index.html#contact">Contact</a>
       </nav>
       <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="My profile">Log in</a>
@@ -549,6 +555,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261025a" defer></script>
+  <script src="./script.js?v=20261026a" defer></script>
 </body>
 </html>

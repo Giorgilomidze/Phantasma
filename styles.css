@@ -465,6 +465,62 @@ kbd {
   border-radius: 2px;
 }
 
+/* Header "Projects" dropdown (see bootNavDropdown). Desktop: popover under
+   the button. <=1023px: accordion inside the hamburger panel (below). */
+.nav-dropdown { position: relative; }
+.nav-dropdown__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 150ms ease-out;
+}
+.nav-dropdown__btn::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 150ms ease-out;
+}
+.nav-dropdown__btn:hover,
+.nav-dropdown__btn.is-active,
+.nav-dropdown.is-open .nav-dropdown__btn { color: var(--ink); }
+.nav-dropdown.is-open .nav-dropdown__btn::after { transform: translateY(1px) rotate(-135deg); }
+.nav-dropdown__btn:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+.nav-dropdown__menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 100%;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-tile-hover);
+  z-index: 10;
+}
+.nav-dropdown.is-open .nav-dropdown__menu { display: flex; flex-direction: column; }
+.nav-dropdown__menu a[aria-current="page"] { color: var(--ink); }
+html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04em; }
+@media (prefers-reduced-motion: reduce) {
+  .nav-dropdown__btn,
+  .nav-dropdown__btn::after { transition: none; }
+}
+
 /* Mobile menu toggle. Hidden on desktop; shown and wired up in the
    <=767px block of section 20. Three bars: ::before / span / ::after. */
 .nav-toggle {
@@ -2008,6 +2064,23 @@ body.is-locked {
   }
   .site-header__row > .site-nav a::after { display: none; }
   .site-header__row > .site-nav a[aria-current="page"] { color: var(--ink); }
+  /* "Projects" group: button is a full-width row, items indent beneath it */
+  .nav-dropdown { border-top: 1px solid var(--rule); }
+  .nav-dropdown__btn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: space-between;
+    padding: var(--space-4) 0;
+    font-size: var(--type-eyebrow);
+  }
+  .nav-dropdown__menu {
+    position: static;
+    min-width: 0;
+    padding: 0 0 0 var(--space-4);
+    border: 0;
+    box-shadow: none;
+  }
+  .site-header__row > .site-nav .nav-dropdown__menu a { min-height: 44px; }
   /* Projects pages hide the header CTA at this width, so Log in / Account
      lives in the nav panel instead (hidden on desktop, see section 26). */
   .site-nav__auth { display: block; }
