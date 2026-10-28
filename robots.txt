@@ -3,6 +3,7 @@ Allow: /
 Disallow: /landing.html
 Disallow: /account.html
 Disallow: /preferences.html
+Disallow: /campaigns/
 Disallow: /ads/
 
 Sitemap: https://solvephantasma.com/sitemap.xml

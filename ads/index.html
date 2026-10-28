@@ -1,80 +1,14 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ads Management - Phantasma</title>
-  <!-- Private tool: kept out of search engines (also Disallow in /robots.txt) -->
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="description" content="Private Ads Management prototype (mock data)." />
-  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
-
-  <!-- Same fonts as the main site; Noto Georgian is added because the tool has a Georgian toggle -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preconnect" href="https://api.fontshare.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&amp;family=Noto+Sans+Georgian:wght@400;500;600&amp;family=Noto+Serif+Georgian:wght@500;600&amp;display=swap" media="print" onload="this.media='all'" />
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&amp;display=swap" /></noscript>
-  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&amp;display=swap" media="print" onload="this.media='all'" />
-  <noscript><link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&amp;display=swap" /></noscript>
-
-  <!-- Site tokens (palette Signal, spacing, type), then the tool's own styles -->
-  <link rel="stylesheet" href="../styles.css?v=20261026a" />
-  <link rel="stylesheet" href="./ads.css?v=20261026a" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Moved</title>
+  <meta http-equiv="refresh" content="0; url=../campaigns/">
+  <link rel="canonical" href="https://solvephantasma.com/campaigns/">
 </head>
-<body class="ads-body">
-  <a class="skip-link" href="#ads-main" data-i18n="common.skip">Skip to content</a>
-
-  <!-- Login gate: shown until a Supabase session is confirmed. Fails closed. -->
-  <div id="ads-gate" class="ads-gate" aria-live="polite">
-    <div class="ads-gatecard"><p>Loading...</p></div>
-  </div>
-
-  <div id="ads-app" hidden>
-    <div id="ads-shell" class="ads-shell">
-      <header class="ads-topbar">
-        <button type="button" id="ads-menu-btn" class="ads-iconbtn ads-topbar__menu" aria-expanded="false" aria-controls="ads-sidebar" data-i18n-aria="top.menu" aria-label="Menu">&#9776;</button>
-        <span class="ads-topbar__brand" data-i18n="app.name">Ads Management</span>
-        <span class="ads-badge" id="ads-badge">Mock data</span>
-        <div class="ads-topbar__ctx">
-          <label class="visually-hidden" for="ads-biz" data-i18n="top.business">Business</label>
-          <select id="ads-biz" class="ads-input ads-input--bar"></select>
-          <label class="visually-hidden" for="ads-account" data-i18n="top.account">Ad account</label>
-          <select id="ads-account" class="ads-input ads-input--bar"></select>
-        </div>
-        <div class="ads-topbar__end">
-          <button type="button" id="ads-lang" class="ads-btn ads-btn--ghost ads-btn--small" data-i18n-aria="top.lang" aria-label="Language">ქართული</button>
-          <button type="button" id="ads-ai-btn" class="ads-btn ads-btn--ghost ads-btn--small" aria-expanded="false" aria-controls="ads-assistant" data-i18n="ai.title">AI Assistant</button>
-          <div class="ads-user">
-            <button type="button" id="ads-user-btn" class="ads-btn ads-btn--ghost ads-btn--small" aria-expanded="false" aria-controls="ads-user-menu" data-i18n-aria="top.user" aria-label="Account menu">&#9786;<span class="ads-user__email" id="ads-user-email"></span></button>
-            <div id="ads-user-menu" class="ads-user__menu" hidden>
-              <a class="ads-menu__item" href="../index.html" data-i18n="menu.back">Back to site</a>
-              <button type="button" id="ads-mode" class="ads-menu__item">Use live backend (dry-run)</button>
-              <button type="button" id="ads-reset" class="ads-menu__item" data-i18n="menu.reset">Reset demo data</button>
-              <button type="button" id="ads-signout" class="ads-menu__item" data-i18n="menu.signout">Sign out</button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <aside id="ads-sidebar" class="ads-sidebar" aria-label="Main">
-        <nav id="ads-nav" data-i18n-aria="nav.label" aria-label="Main navigation"><ul id="ads-nav-list" class="ads-nav"></ul></nav>
-      </aside>
-
-      <main id="ads-main" class="ads-main" tabindex="-1"></main>
-    </div>
-
-    <aside id="ads-assistant" class="ads-drawer" role="dialog" aria-modal="true" aria-labelledby="ads-ai-title"></aside>
-    <div id="ads-scrim" class="ads-scrim" hidden></div>
-    <div id="ads-toasts" class="ads-toasts" role="status" aria-live="polite" aria-atomic="false"></div>
-  </div>
-
-  <noscript><p class="ads-gatecard">This tool needs JavaScript.</p></noscript>
-
-  <!-- supabase-js (UMD), same version as the main site; only used to read the session -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./i18n.js?v=20261026a"></script>
-  <script src="./api.js?v=20261026a"></script>
-  <script src="./ads.js?v=20261026a"></script>
+<body>
+  <p>This page moved to <a href="../campaigns/">solvephantasma.com/campaigns/</a>.</p>
 </body>
 </html>

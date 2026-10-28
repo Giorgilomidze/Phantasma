@@ -1,7 +1,7 @@
 /* =========================================================================
    Ads Management - api.js
    The ONLY file that touches data. Every function is async and returns
-   plain JSON. In round 1 the data is MOCK: it is read from ads/mock/*.json
+   plain JSON. In round 1 the data is MOCK: it is read from campaigns/mock/*.json
    and edits live in memory + localStorage so the demo feels real.
    Later, only this file changes (fetch() calls to a server). The UI never
    reads localStorage or the mock files directly.
