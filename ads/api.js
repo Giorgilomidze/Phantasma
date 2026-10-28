@@ -5,12 +5,20 @@
    and edits live in memory + localStorage so the demo feels real.
    Later, only this file changes (fetch() calls to a server). The UI never
    reads localStorage or the mock files directly.
+   LIVE backend (opt-in, switch in the user menu, kept in localStorage
+   'ads_backend_mode'): businesses + spending caps are read from the tables
+   ads_businesses / ads_settings, and two Supabase Edge Functions are called with
+   the signed-in user's session token (the supabase client from ads.js):
+   ads-meta-health and ads-create-campaign. The Meta token never reaches the
+   browser. While the server secret ADS_LIVE is off, create-campaign is a DRY RUN.
+   Everything else (campaign lists, posts, numbers) is still mock data.
    No secrets belong in this file.
    ========================================================================= */
 (function () {
   'use strict';
 
   var STORE_KEY = 'ads_mock_state_v1';
+  var MODE_KEY = 'ads_backend_mode'; // 'mock' (default) | 'live'
   var REVIEW_DELAY_MS = 15000; // mock "Meta review" takes 15 seconds
 
   /* ---- State machines (one definition, used by the UI and by this file) ---- */
@@ -35,6 +43,7 @@
   var state = null;     // { campaigns, posts, audit }
   var fixed = null;     // { settings, products, images, insights }
   var actor = 'unknown';
+  var client = null;    // supabase client, handed over by ads.js (same session as the gate)
 
   /* ---- small helpers ---- */
   function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -55,6 +64,67 @@
     return fetch('mock/' + name + '.json', { cache: 'no-cache' }).then(function (r) {
       if (!r.ok) throw new Error('mock/' + name + '.json ' + r.status);
       return r.json();
+    });
+  }
+
+  /* ---- backend mode (mock | live) ---- */
+  function mode() { try { return localStorage.getItem(MODE_KEY) === 'live' ? 'live' : 'mock'; } catch (e) { return 'mock'; } }
+  function setMode(m) { try { localStorage.setItem(MODE_KEY, m === 'live' ? 'live' : 'mock'); } catch (e) { /* private mode: stays mock */ } }
+  function isLive() { return mode() === 'live'; }
+
+  /* ---- live backend ---- */
+  // Reads ads_businesses + ads_settings (RLS applies: members only).
+  function loadLive() {
+    if (!client) return Promise.reject(new Error('no client'));
+    return Promise.all([
+      client.from('ads_businesses').select('id,name,page_id,ad_account_id,currency,active').order('created_at', { ascending: true }),
+      client.from('ads_settings').select('max_daily_budget_minor,max_total_budget_minor,max_days,currency').eq('id', true).maybeSingle()
+    ]).then(function (r) {
+      if (r[0].error || r[1].error) throw new Error('live read failed');
+      var rows = (r[0].data || []).filter(function (b) { return b.active; });
+      var cap = r[1].data;
+      if (!rows.length || !cap) throw new Error('no live businesses or caps');
+      return {
+        businesses: rows.map(function (b) {
+          return { id: b.id, name: b.name, currency: b.currency, pageId: b.page_id,
+            accounts: [{ id: b.ad_account_id, name: b.name + ' (' + b.ad_account_id + ')' }] };
+        }),
+        limits: {
+          minDailyBudget: 0.01, maxDailyBudget: cap.max_daily_budget_minor / 100,
+          maxTotalBudget: cap.max_total_budget_minor / 100, maxDays: cap.max_days
+        },
+        currency: cap.currency
+      };
+    });
+  }
+  // Calls an Edge Function. Always resolves with the parsed JSON body, also for
+  // error statuses ({ ok:false, error:{ code, message } }); rejects only when offline.
+  function callFn(name, body) {
+    if (!client) return Promise.reject(new Error('no client'));
+    return client.functions.invoke(name, { body: body }).then(function (r) {
+      if (!r.error) return r.data;
+      var res = r.error.context;
+      if (res && typeof res.json === 'function') {
+        return res.json().catch(function () { return { ok: false, error: { code: 'server', message: '' } }; });
+      }
+      return { ok: false, error: { code: 'network', message: '' } };
+    });
+  }
+  function metaHealth(businessId) { return callFn('ads-meta-health', { business_id: businessId }); }
+  function newRequestId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    var b = new Uint8Array(16); crypto.getRandomValues(b);
+    b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+    var x = Array.prototype.map.call(b, function (n) { return (n < 16 ? '0' : '') + n.toString(16); }).join('');
+    return x.slice(0, 8) + '-' + x.slice(8, 12) + '-' + x.slice(12, 16) + '-' + x.slice(16, 20) + '-' + x.slice(20);
+  }
+  // d: { requestId, business, name, goal, dailyBudget (major units), days, postObjectId, ageMin, ageMax }
+  // The server recomputes the total and enforces the caps; nothing here is trusted.
+  function createCampaignLive(d) {
+    return callFn('ads-create-campaign', {
+      client_request_id: d.requestId, business_id: d.business, name: d.name, goal: d.goal,
+      post_object_id: d.postObjectId, daily_budget_minor: Math.round(d.dailyBudget * 100), days: d.days,
+      countries: ['GE'], age_min: d.ageMin, age_max: d.ageMax
     });
   }
 
@@ -344,7 +414,17 @@
   }
 
   /* ---- fixed lists ---- */
-  function getSettings() { return init().then(function () { return wait(fixed.settings); }); }
+  function getSettings() {
+    return init().then(function () {
+      if (!isLive()) return wait(fixed.settings);
+      return loadLive().then(function (live) {
+        var s = clone(fixed.settings); // locations, forbidden words, caption limit stay from the mock file
+        s.live = true; s.businesses = live.businesses; s.currency = live.currency;
+        Object.keys(live.limits).forEach(function (k) { s.limits[k] = live.limits[k]; });
+        return s;
+      });
+    });
+  }
   function listProducts(b) { return init().then(function () { return wait(fixed.products.filter(function (p) { return !b || p.business === b; })); }); }
   function listImages(b) { return init().then(function () { return wait(fixed.images.filter(function (p) { return !b || p.business === b; })); }); }
   function listAudit() { return init().then(function () { return wait(state.audit); }); }
@@ -357,6 +437,9 @@
   window.AdsApi = {
     FLOW: FLOW,
     setActor: function (e) { actor = e || 'unknown'; },
+    setClient: function (c) { client = c; },
+    mode: mode, setMode: setMode, isLive: isLive,
+    metaHealth: metaHealth, newRequestId: newRequestId, createCampaignLive: createCampaignLive,
     canMove: function (kind, from, to) { return FLOW[kind][from].indexOf(to) !== -1; },
     findRisks: findRisks, total: total,
     init: init, getSettings: getSettings, listProducts: listProducts, listImages: listImages,

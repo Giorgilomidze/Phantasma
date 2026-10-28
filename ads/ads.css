@@ -56,6 +56,8 @@
   background: var(--ink); color: var(--bg); font-size: var(--type-caption); font-weight: 500;
   padding: var(--space-1) var(--space-3); border-radius: 999px;
 }
+.ads-badge--live { background: var(--partner); }
+.ads-code { margin: var(--space-2) 0 var(--space-3); padding: var(--space-3); background: var(--surface); border-radius: var(--radius-md); overflow: auto; max-height: 240px; font-size: var(--type-caption); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ads-user { position: relative; }
 .ads-user__email { display: none; margin-left: var(--space-2); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ads-user__menu {

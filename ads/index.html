@@ -35,7 +35,7 @@
       <header class="ads-topbar">
         <button type="button" id="ads-menu-btn" class="ads-iconbtn ads-topbar__menu" aria-expanded="false" aria-controls="ads-sidebar" data-i18n-aria="top.menu" aria-label="Menu">&#9776;</button>
         <span class="ads-topbar__brand" data-i18n="app.name">Ads Management</span>
-        <span class="ads-badge" data-i18n="top.badge">Prototype / mock data</span>
+        <span class="ads-badge" id="ads-badge">Mock data</span>
         <div class="ads-topbar__ctx">
           <label class="visually-hidden" for="ads-biz" data-i18n="top.business">Business</label>
           <select id="ads-biz" class="ads-input ads-input--bar"></select>
@@ -49,6 +49,7 @@
             <button type="button" id="ads-user-btn" class="ads-btn ads-btn--ghost ads-btn--small" aria-expanded="false" aria-controls="ads-user-menu" data-i18n-aria="top.user" aria-label="Account menu">&#9786;<span class="ads-user__email" id="ads-user-email"></span></button>
             <div id="ads-user-menu" class="ads-user__menu" hidden>
               <a class="ads-menu__item" href="../index.html" data-i18n="menu.back">Back to site</a>
+              <button type="button" id="ads-mode" class="ads-menu__item">Use live backend (dry-run)</button>
               <button type="button" id="ads-reset" class="ads-menu__item" data-i18n="menu.reset">Reset demo data</button>
               <button type="button" id="ads-signout" class="ads-menu__item" data-i18n="menu.signout">Sign out</button>
             </div>

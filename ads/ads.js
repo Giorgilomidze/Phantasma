@@ -18,7 +18,13 @@
   // needs a server-side check (RLS / edge function), not this list.
   var ALLOWED_EMAILS = [];
 
-  var t = AdsI18n.t, api = AdsApi;
+  var api = AdsApi;
+  // t() always offers {cur} (currency of the current business) to the strings.
+  function t(key, vars) {
+    vars = vars || {};
+    if (vars.cur === undefined) vars.cur = curLabel();
+    return AdsI18n.t(key, vars);
+  }
   var $ = function (s, r) { return (r || document).querySelector(s); };
 
   var client = null, user = null, started = false;
@@ -57,9 +63,19 @@
     return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
   }
   function locale() { return AdsI18n.lang() === 'ka' ? 'ka-GE' : 'en-GB'; }
+  // Currency of the selected business: live = from ads_businesses (USD for Edelweiss), mock = GEL.
+  function curCode() {
+    var b = settings && settings.businesses.filter(function (x) { return x.id === ctx.business; })[0];
+    return (b && b.currency) || (settings && settings.currency) || 'GEL';
+  }
+  function curLabel() {
+    var c = curCode();
+    return c === 'GEL' && AdsI18n.lang() === 'ka' ? 'ლარი' : c;
+  }
+  function currencyNote() { return curCode() === 'GEL' ? t('common.currencyNote') : t('common.currencyNoteOther'); }
   function money(n) {
     if (n == null) return '-';
-    return new Intl.NumberFormat(locale(), { style: 'currency', currency: 'GEL' }).format(n);
+    return new Intl.NumberFormat(locale(), { style: 'currency', currency: curCode() }).format(n);
   }
   function num(n) { return new Intl.NumberFormat(locale(), { maximumFractionDigits: 0 }).format(n); }
   function fmtDate(iso, long) {
@@ -150,6 +166,67 @@
       if (o.onOpen) o.onOpen(dlg, btns);
     });
   }
+  // ---- live backend: plain-word dialogs for server answers ----
+  function liveMode() { return api.isLive(); }
+  function srvErrorBody(err) {
+    err = err || {};
+    var code = err.code || 'server', kids = [];
+    if (code === 'network') return h('p', {}, t('srv.network'));
+    if (code === 'not_member' || code === 'no_token' || code === 'bad_token') return h('p', {}, t('srv.access'));
+    var known = ['over_daily_cap', 'over_total_cap', 'over_days_cap', 'meta_error', 'in_progress'].indexOf(code) !== -1;
+    kids.push(h('p', {}, h('strong', {}, known ? t('srv.' + code) : t('srv.default'))));
+    // The server sends its own plain-English sentence (amounts, Meta wording). Shown as is; not translated.
+    if (err.message) kids.push(h('p', {}, err.message));
+    if (err.step) kids.push(h('p', { class: 'ads-note' }, t('res.step') + ': ' + err.step));
+    if (code === 'meta_error') kids.push(h('p', { class: 'ads-note' }, t('srv.hint')));
+    return h('div', {}, kids);
+  }
+  function showSrvError(err) {
+    return openDialog({ title: t('srv.title'), body: srvErrorBody(err), noCancel: true, actions: [{ label: t('common.close'), value: true }] });
+  }
+  function showCreateResult(res) {
+    var dry = res.dry_run !== false, kids = [];
+    kids.push(h('p', { class: dry ? 'ads-warn' : 'ads-note' }, dry ? t('res.dry.text') : t('res.live.text')));
+    var rows = [];
+    if (res.ad_account_id) rows.push([t('res.account'), res.ad_account_id]);
+    if (res.api_version) rows.push([t('res.api'), res.api_version]);
+    if (res.total_minor != null && res.currency) {
+      rows.push([t('res.total'), new Intl.NumberFormat(locale(), { style: 'currency', currency: res.currency }).format(res.total_minor / 100)]);
+    }
+    if (!dry && res.meta_ids) {
+      rows.push([t('res.ids'), ['campaign', 'adset', 'creative', 'ad'].map(function (k) { return k + ': ' + (res.meta_ids[k] || '-'); }).join(' | ')]);
+    }
+    if (rows.length) kids.push(kv(rows));
+    if (dry && res.payloads) {
+      kids.push(h('h3', { class: 'ads-h3' }, t('res.payloads')));
+      ['campaign', 'adset', 'creative', 'ad'].forEach(function (k) {
+        if (!res.payloads[k]) return;
+        kids.push(h('details', { open: true }, [h('summary', {}, t('res.p.' + k)), h('pre', { class: 'ads-code' }, JSON.stringify(res.payloads[k], null, 2))]));
+      });
+    }
+    return openDialog({ title: dry ? t('res.dry.title') : t('res.live.title'), body: h('div', {}, kids), wide: true, noCancel: true, actions: [{ label: t('common.close'), value: true }] });
+  }
+  function testMetaConnection(btn) {
+    btn.disabled = true;
+    var biz = ctx.business;
+    api.metaHealth(biz).then(function (r) {
+      btn.disabled = false;
+      var kids = [];
+      if (r && r.error) return showSrvError(r.error);
+      if (r.ad_account) {
+        var a = r.ad_account;
+        kids.push(kv([[t('health.account'), a.name + ' (' + a.id + ')'], [t('health.status'), a.status], [t('health.currency'), a.currency],
+          [t('health.page'), r.page ? r.page.name + ' (' + r.page.id + ')' : t('health.none')],
+          [t('health.mode'), r.live_mode ? t('health.liveOn') : t('health.dry')]]));
+      }
+      if (r.ok) kids.unshift(h('p', {}, h('strong', {}, t('health.okText'))));
+      if (r.problems && r.problems.length) {
+        kids.push(h('p', { class: 'ads-warn' }, [h('strong', {}, t('health.problems') + ': '), h('ul', {}, r.problems.map(function (x) { return h('li', {}, x); }))]));
+      }
+      return openDialog({ title: t('health.title') + ' - ' + bizName(biz), body: h('div', {}, kids), noCancel: true, actions: [{ label: t('common.close'), value: true }] });
+    }).catch(function () { btn.disabled = false; showSrvError({ code: 'network' }); });
+  }
+
   function confirmDialog(o) {
     return openDialog({
       title: o.title, body: h('p', {}, o.message),
@@ -364,7 +441,8 @@
       })),
       h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { toast(t('dash.refreshed')); refresh(); } }, t('common.refresh'))
     ];
-    render(h('div', {}, [pageHead('nav.dashboard', tools), h('p', { class: 'ads-note' }, t('common.currencyNote')), body]), 'nav.dashboard');
+    if (liveMode()) tools.push(h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testMetaConnection(e.currentTarget); } }, t('health.btn')));
+    render(h('div', {}, [pageHead('nav.dashboard', tools), h('p', { class: 'ads-note' }, currencyNote()), liveMode() ? h('p', { class: 'ads-warn' }, t('mode.liveNote')) : null, body]), 'nav.dashboard');
     api.getDashboard({ range: dashRange, business: ctx.business, account: ctx.account }).then(function (d) {
       if (stale(tok)) return;
       body.innerHTML = '';
@@ -417,7 +495,7 @@
     search.addEventListener('input', function () { campQuery = search.value; load(); });
     render(h('div', {}, [
       pageHead('nav.campaigns', [h('a', { class: 'ads-btn ads-btn--primary', href: '#/campaigns/new', onclick: function () { wizard = null; } }, t('camp.new'))]),
-      h('p', { class: 'ads-note' }, t('common.currencyNote')),
+      h('p', { class: 'ads-note' }, currencyNote()),
       h('div', { class: 'ads-filters' }, [chipsBox, h('div', { class: 'ads-filters__row' }, [acct, search])]), body]), 'nav.campaigns');
 
     function load() {
@@ -500,20 +578,21 @@
     var w = {
       step: 1, name: '', goal: 'messages', accountId: ctx.account !== 'all' ? ctx.account : (accs[0] ? accs[0].id : ''),
       location: 'tbilisi', ageMin: 25, ageMax: 55, gender: 'all', dailyBudget: 2, days: 5, startDate: dayKey(new Date()),
-      postId: '', imageIds: [], caption: '', business: ctx.business
+      postId: '', imageIds: [], caption: '', business: ctx.business, postObjectId: '', requestId: ''
     };
+    if (liveMode() && settings.limits.maxDailyBudget < w.dailyBudget) w.dailyBudget = settings.limits.maxDailyBudget;
     Object.keys(prefill || {}).forEach(function (k) { w[k] = prefill[k]; });
     return w;
   }
   function viewWizard(tok) {
     if (!wizard || wizard.business !== ctx.business) wizard = newWizard();
-    var w = wizard, L = settings.limits;
+    var w = wizard, L = settings.limits, live = liveMode();
     var body = h('div', {}, skeleton(4));
     Promise.all([api.listPosts({ business: ctx.business }), api.listImages(ctx.business)]).then(function (res) {
       if (stale(tok)) return;
       draw(res[0], res[1]);
     }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(refresh)); } });
-    render(h('div', {}, [pageHead('wiz.title', [h('a', { class: 'ads-btn ads-btn--ghost', href: '#/campaigns', onclick: function () { wizard = null; } }, t('common.cancel'))]), h('p', { class: 'ads-note' }, t('common.currencyNote')), body]), 'wiz.title');
+    render(h('div', {}, [pageHead('wiz.title', [h('a', { class: 'ads-btn ads-btn--ghost', href: '#/campaigns', onclick: function () { wizard = null; } }, t('common.cancel'))]), h('p', { class: 'ads-note' }, currencyNote()), body]), 'wiz.title');
 
     function draw(posts, images) {
       body.innerHTML = '';
@@ -539,7 +618,7 @@
         var errs = validate(w.step);
         errBox.innerHTML = '';
         if (errs.length) {
-          errBox.appendChild(h('ul', {}, errs.map(function (e) { return h('li', {}, t(e[1])); })));
+          errBox.appendChild(h('ul', {}, errs.map(function (e) { return h('li', {}, t(e[1], e[2])); })));
           var f = document.getElementById(errs[0][0]); if (f) f.focus();
           return;
         }
@@ -552,12 +631,31 @@
         if (step === 3) {
           if (!(w.dailyBudget >= L.minDailyBudget && w.dailyBudget <= L.maxDailyBudget)) e.push(['ads-w-daily', 'err.budget']);
           if (!(w.days >= 1 && w.days <= L.maxDays && w.days % 1 === 0)) e.push(['ads-w-days', 'err.days']);
+          if (live && w.dailyBudget * w.days > L.maxTotalBudget + 1e-9) e.push(['ads-w-daily', 'err.total', { total: money(L.maxTotalBudget) }]);
         }
-        if (step === 4) { if (!w.postId && !w.imageIds.length) e.push(['ads-w-post', 'err.creative']); if (!w.caption.trim()) e.push(['ads-w-caption', 'err.caption']); }
+        if (step === 4 && live) { if (!/^\d+_\d+$/.test(w.postObjectId.trim())) e.push(['ads-w-postobj', 'err.postObj']); }
+        else if (step === 4) { if (!w.postId && !w.imageIds.length) e.push(['ads-w-post', 'err.creative']); if (!w.caption.trim()) e.push(['ads-w-caption', 'err.caption']); }
         return e;
+      }
+      // LIVE: the server validates, applies the caps and (while ADS_LIVE is off) only answers with a DRY RUN.
+      function createLive(btn) {
+        if (!w.requestId) w.requestId = api.newRequestId(); // kept, so a retry of the same form is idempotent
+        api.createCampaignLive({
+          requestId: w.requestId, business: w.business, name: w.name.trim(), goal: w.goal, dailyBudget: w.dailyBudget, days: w.days,
+          postObjectId: w.postObjectId.trim(), ageMin: w.ageMin, ageMax: w.ageMax
+        }).then(function (res) {
+          btn.disabled = false;
+          if (res && res.ok) {
+            var done = showCreateResult(res);
+            if (res.dry_run === false) done.then(function () { wizard = null; go('#/campaigns'); });
+            return done;
+          }
+          return showSrvError(res && res.error);
+        }).catch(function () { btn.disabled = false; showSrvError({ code: 'network' }); });
       }
       function create() {
         var btn = $('#ads-w-create'); btn.disabled = true;
+        if (live) return createLive(btn);
         api.createCampaign({
           business: ctx.business, accountId: w.accountId, name: w.name.trim(), goal: w.goal, dailyBudget: w.dailyBudget, days: w.days, startDate: w.startDate,
           audience: { location: w.location, ageMin: w.ageMin, ageMax: w.ageMax, gender: w.gender }, caption: w.caption, postId: w.postId || null, imageIds: w.imageIds
@@ -598,16 +696,25 @@
         p.appendChild(fs);
       }
       function s3(p) {
-        p.appendChild(h('p', { class: 'ads-note' }, t('wiz.limits', { min: money(L.minDailyBudget), max: money(L.maxDailyBudget), days: L.maxDays })));
+        p.appendChild(h('p', { class: 'ads-note' }, live
+          ? t('wiz.limitsLive', { max: money(L.maxDailyBudget), total: money(L.maxTotalBudget), days: L.maxDays })
+          : t('wiz.limits', { min: money(L.minDailyBudget), max: money(L.maxDailyBudget), days: L.maxDays })));
         p.appendChild(h('div', { class: 'ads-row' }, [
-          field('wiz.daily', numInput('ads-w-daily', 'dailyBudget', L.minDailyBudget, L.maxDailyBudget, 0.5), t('wiz.dailyHint'), 'ads-w-daily'),
+          field('wiz.daily', numInput('ads-w-daily', 'dailyBudget', L.minDailyBudget, L.maxDailyBudget, live ? 0.01 : 0.5), t('wiz.dailyHint'), 'ads-w-daily'),
           field('wiz.days', numInput('ads-w-days', 'days', 1, L.maxDays), null, 'ads-w-days')]));
         var date = h('input', { type: 'date', id: 'ads-w-start', class: 'ads-input', value: w.startDate, min: dayKey(new Date()) });
         date.addEventListener('input', function () { if (date.value) w.startDate = date.value; });
-        p.appendChild(field('wiz.start', date, null, 'ads-w-start'));
+        if (!live) p.appendChild(field('wiz.start', date, null, 'ads-w-start')); // live: the server starts it an hour after creation
         p.appendChild(h('p', { class: 'ads-total' }, [t('wiz.total') + ': ', h('strong', { id: 'ads-w-total' }, money(w.dailyBudget * w.days))]));
       }
       function s4(p) {
+        if (live) {
+          // The server builds the ad from an EXISTING Page post, so the post id is the creative.
+          var po = h('input', { type: 'text', id: 'ads-w-postobj', class: 'ads-input', value: w.postObjectId, autocomplete: 'off', inputmode: 'numeric', 'aria-describedby': 'ads-w-postobj-hint' });
+          po.addEventListener('input', function () { w.postObjectId = po.value; });
+          p.appendChild(field('wiz.postObj', po, t('wiz.postObjHint'), 'ads-w-postobj'));
+          return;
+        }
         var risk = riskBox();
         var cap = h('textarea', { id: 'ads-w-caption', class: 'ads-input ads-textarea', rows: '4' }, w.caption);
         cap.addEventListener('input', function () { w.caption = cap.value; risk.update(cap.value); });
@@ -629,6 +736,17 @@
         p.appendChild(risk); risk.update(w.caption);
       }
       function s5(p) {
+        if (live) {
+          p.appendChild(kv([
+            [t('wiz.name'), w.name], [t('wiz.account'), accountName(w.accountId)], [t('wiz.goal'), t('goal.' + w.goal)],
+            [t('wiz.location'), locName('georgia')], [t('wiz.age'), w.ageMin + ' - ' + w.ageMax],
+            [t('wiz.daily'), money(w.dailyBudget)], [t('wiz.days'), String(w.days)], [t('wiz.postObj'), w.postObjectId.trim()]
+          ]));
+          p.appendChild(h('p', { class: 'ads-total' }, [t('wiz.totalCost') + ': ', h('strong', {}, money(w.dailyBudget * w.days))]));
+          p.appendChild(h('p', { class: 'ads-note' }, t('wiz.liveNote')));
+          p.appendChild(h('p', { class: 'ads-note' }, t('wiz.pausedNote')));
+          return;
+        }
         var acc = accountName(w.accountId), total = w.dailyBudget * w.days, risks = api.findRisks(w.caption);
         var imgs = h('div', { class: 'ads-imgrow' }, w.imageIds.map(function (i) { return imageEl(i, 'ads-thumb'); }));
         p.appendChild(kv([
@@ -943,6 +1061,10 @@
     biz.value = ctx.business;
     fillAccounts();
     $('#ads-user-email').textContent = user ? user.email : '';
+    var live = liveMode(), bd = $('#ads-badge');
+    bd.textContent = t(live ? 'top.badge.live' : 'top.badge.mock');
+    bd.classList.toggle('ads-badge--live', live);
+    $('#ads-mode').textContent = t(live ? 'menu.modeMock' : 'menu.modeLive');
     $('#ads-lang').textContent = AdsI18n.lang() === 'en' ? 'ქართული' : 'English';
     function fillAccounts() {
       acc.innerHTML = '';
@@ -981,6 +1103,15 @@
     $('#ads-signout').addEventListener('click', function () {
       client.auth.signOut().then(function () { location.reload(); }).catch(function () { location.reload(); });
     });
+    $('#ads-mode').addEventListener('click', function () {
+      menu(false);
+      var toLive = !liveMode(), k = toLive ? 'mode.toLive' : 'mode.toMock';
+      confirmDialog({ title: t(k + '.title'), message: t(k + '.text'), confirmLabel: t(k + '.confirm') }).then(function (ok) {
+        if (!ok) return;
+        api.setMode(toLive ? 'live' : 'mock');
+        location.reload(); // businesses, limits and currency are loaded once at start
+      });
+    });
     $('#ads-reset').addEventListener('click', function () {
       menu(false);
       confirmDialog({ title: t('reset.title'), message: t('reset.text'), confirmLabel: t('reset.confirm'), danger: true }).then(function (ok) {
@@ -1012,13 +1143,21 @@
     started = true;
     user = session.user;
     api.setActor(user.email);
-    Promise.all([api.getSettings(), api.listImages()]).then(function (r) {
+    var liveFailed = false;
+    // If the live read fails (not a member, offline) fall back to mock instead of locking the tool.
+    var settingsP = api.getSettings().catch(function (e) {
+      if (!api.isLive()) throw e;
+      api.setMode('mock'); liveFailed = true;
+      return api.getSettings();
+    });
+    Promise.all([settingsP, api.listImages()]).then(function (r) {
       settings = r[0];
       r[1].forEach(function (im) { imageCache[im.id] = im; });
       main = $('#ads-main'); shell = $('#ads-shell'); scrim = $('#ads-scrim'); toastBox = $('#ads-toasts'); sidebar = $('#ads-sidebar'); assistant = $('#ads-assistant');
       loadCtx(); buildNav(); buildTopbar(); buildAssistant(); wireShell();
       $('#ads-gate').hidden = true; $('#ads-app').hidden = false;
       route();
+      if (liveFailed) toast(t('mode.liveFailed'), 'act');
     }).catch(function () { started = false; showGate('error'); });
   }
   function boot() {
@@ -1026,6 +1165,7 @@
     $('#ads-app').hidden = true;
     if (!window.supabase || !window.supabase.createClient) return showGate('error'); // fail closed
     try { client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch (e) { return showGate('error'); }
+    api.setClient(client); // same session as the gate; api.js sends its access token to the Edge Functions
     client.auth.getSession().then(function (res) {
       var s = res && res.data && res.data.session;
       if (res.error) return showGate('error');
