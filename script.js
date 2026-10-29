@@ -1785,12 +1785,53 @@
     const PENDING_KEY = 'phantasma_pending_tier';
     const keepzFor = (tier) => document.querySelector('[data-tier="' + tier + '"]');
 
+    // Flitt TEST path. Only when localStorage phantasma_flitt_test === '1'
+    // (see bootFlittTestMode). Calls the flitt-create-order Edge Function,
+    // then sends the browser to the hosted checkout. Keepz is untouched.
+    function startFlitt(tier, btn) {
+      const label = btn.textContent;
+      let note = btn.parentNode.querySelector('.pay-status');
+      if (!note) {
+        note = document.createElement('p');
+        note.className = 'auth-modal__status pay-status';
+        note.setAttribute('role', 'alert');
+        btn.parentNode.appendChild(note);
+      }
+      note.hidden = true;
+      btn.textContent = 'Starting secure payment…';
+      btn.setAttribute('aria-disabled', 'true');
+      btn.style.pointerEvents = 'none';
+      const fail = (msg) => {
+        btn.textContent = label;
+        btn.removeAttribute('aria-disabled');
+        btn.style.pointerEvents = '';
+        note.dataset.kind = 'error';
+        note.textContent = msg;
+        note.hidden = false;
+      };
+      Auth.db().functions.invoke('flitt-create-order', { body: { tier } }).then(async ({ data, error }) => {
+        if (error || !data || !data.checkout_url) {
+          let msg = 'We could not start the payment. Please try again in a moment.';
+          try {
+            const body = error && error.context && await error.context.json();
+            if (body && body.error && body.error.message) msg = body.error.message;
+          } catch (_e) { /* keep the plain message */ }
+          fail(msg);
+          return;
+        }
+        if (!/^https:\/\//.test(data.checkout_url)) { fail('We could not start the payment. Please try again in a moment.'); return; }
+        if (data.order_id) sessionStorage.setItem('phantasma_flitt_order', data.order_id);
+        location.href = data.checkout_url;
+      }).catch(() => fail('We could not reach the payment service. Check your connection and try again.'));
+    }
+
     function resumePayment() {
       const tier = sessionStorage.getItem(PENDING_KEY);
       if (!tier) return false;
       sessionStorage.removeItem(PENDING_KEY);
       const btn = keepzFor(tier);
       if (!btn) return false;
+      if (flittTestOn()) { startFlitt(tier, btn); return true; }
       Auth.requestSubscription(tier).then(({ error }) => {
         if (error) console.warn('subscription request not recorded', error.message);
         location.href = btn.href;          // no user gesture here → same tab, not a popup
@@ -1801,6 +1842,7 @@
     document.querySelectorAll('[data-tier]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         if (Auth.getSession()) {
+          if (flittTestOn()) { e.preventDefault(); startFlitt(btn.dataset.tier, btn); return; }
           Auth.requestSubscription(btn.dataset.tier).then(({ error }) => {
             if (error) console.warn('subscription request not recorded', error.message);
           });
@@ -1839,7 +1881,7 @@
     const arrivedWithTokens = /access_token=|[?&]code=/.test(location.hash + location.search);
     document.addEventListener('phantasma:auth', (e) => {
       if (!e.detail.session) return;
-      const onProfile = /\/(account|preferences)\.html$/.test(location.pathname);
+      const onProfile = /\/(account|preferences|payment-result)\.html$/.test(location.pathname);
       const fresh = e.detail.event === 'SIGNED_IN' && (!modal.hidden || arrivedWithTokens);
       if (!modal.hidden) close();
       if (fresh && resumePayment()) return;      // came here to pay → Keepz, not the profile
@@ -2693,7 +2735,127 @@
     window.addEventListener('scroll', onScroll, { passive: true });
   }
 
+  // Flitt test gate. localStorage phantasma_flitt_test === '1' switches the
+  // Pay now buttons to the Flitt test checkout. Set by visiting any page with
+  // ?flitt=test, cleared by ?flitt=off. A fixed badge shows while it is on.
+  const FLITT_FLAG = 'phantasma_flitt_test';
+  function flittTestOn() {
+    try { return localStorage.getItem(FLITT_FLAG) === '1'; } catch (_e) { return false; }
+  }
+
+  function bootFlittTestMode() {
+    try {
+      const url = new URL(location.href);
+      const want = url.searchParams.get('flitt');
+      if (want === 'test') localStorage.setItem(FLITT_FLAG, '1');
+      else if (want === 'off') localStorage.removeItem(FLITT_FLAG);
+      if (want === 'test' || want === 'off') {
+        url.searchParams.delete('flitt');
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+      }
+    } catch (_e) { return; }
+    if (!flittTestOn()) return;
+    const badge = document.createElement('div');
+    badge.className = 'test-badge';
+    badge.textContent = 'TEST MODE: Flitt';
+    badge.setAttribute('role', 'status');
+    document.body.appendChild(badge);
+  }
+
+  // payment-result.html — where Flitt sends the customer back. The URL is
+  // never trusted: order_id is only a lookup key, and the status is read from
+  // our own flitt_orders row (RLS: own rows only). The server callback can
+  // arrive after the redirect, so poll every 2 s for about 30 s.
+  function bootPaymentResult() {
+    const root = document.getElementById('payment-result');
+    if (!root) return;
+    const h1      = root.querySelector('#payment-result-h');
+    const body    = root.querySelector('.payment-result__body');
+    const text    = root.querySelector('#payment-result-text');
+    const actions = root.querySelector('#payment-result-actions');
+    const ORDER_KEY = 'phantasma_flitt_order';
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    // order_id: URL first (kept in sessionStorage across a login round-trip), else the stored one
+    const fromUrl = new URLSearchParams(location.search).get('order_id');
+    if (fromUrl && UUID.test(fromUrl)) sessionStorage.setItem(ORDER_KEY, fromUrl);
+    const stored = sessionStorage.getItem(ORDER_KEY);
+    const orderId = stored && UUID.test(stored) ? stored : null;
+
+    const link = (href, label, primary) => {
+      const a = document.createElement('a');
+      a.className = 'btn' + (primary ? ' btn-primary' : '');
+      a.href = href;
+      a.textContent = label;
+      return a;
+    };
+    const button = (label, onClick) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-primary';
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      return b;
+    };
+
+    function show(state, title, msg, btns, focus) {
+      body.dataset.state = state;
+      h1.textContent = title;
+      text.textContent = msg;
+      actions.replaceChildren(...btns);
+      if (focus) h1.focus();
+    }
+
+    const VIEWS = {
+      paid: () => show('paid', 'Payment received',
+        'Payment received. You can start working with the interface and the support team now.',
+        [link('./account.html', 'Go to my account', true), link('./projects.html', 'Back to the plans', false)], true),
+      declined: () => show('failed', 'Payment not completed',
+        'The bank did not accept this payment, so you have not been charged. You can try again, or use another card.',
+        [link('./projects.html', 'Try again', true)], true),
+      failed: () => show('failed', 'Payment not completed',
+        'Something went wrong with this payment, so it was not completed. You can try again.',
+        [link('./projects.html', 'Try again', true)], true),
+      expired: () => show('failed', 'Payment expired',
+        'This payment was not finished in time, so you have not been charged. You can start again.',
+        [link('./projects.html', 'Start again', true)], true),
+      reversed: () => show('failed', 'Payment refunded',
+        'This payment has been refunded. If that is not what you expected, write to consult@solvephantasma.com.',
+        [link('./projects.html', 'Back to the plans', true)], true),
+      unknown: () => show('unknown', 'We could not confirm your payment',
+        'We have no confirmation yet. If you were charged, it will appear in your account shortly. If it does not, write to consult@solvephantasma.com and mention the time of the payment.',
+        [link('./account.html', 'Go to my account', true), link('./projects.html', 'Back to the plans', false)], true),
+      signedOut: () => show('unknown', 'Please log in to see your payment',
+        'We show the result of a payment only to the account that made it. Log in and we will check it for you.',
+        [button('Log in', () => { const a = document.querySelector('.js-auth'); if (a) a.click(); })], true),
+    };
+
+    let polling = false;
+    function poll() {
+      if (polling) return;
+      polling = true;
+      if (!orderId) { VIEWS.unknown(); return; }
+      const started = Date.now();
+      const tick = async () => {
+        const { data, error } = await Auth.db().from('flitt_orders').select('status').eq('order_id', orderId).maybeSingle();
+        const status = !error && data ? data.status : null;
+        if (status === 'approved') return VIEWS.paid();
+        if (VIEWS[status] && status !== 'created' && status !== 'processing') return VIEWS[status]();
+        if (Date.now() - started >= 30000) return VIEWS.unknown();
+        setTimeout(tick, 2000);
+      };
+      tick();
+    }
+
+    if (!window.supabase) { VIEWS.unknown(); return; }
+    document.addEventListener('phantasma:auth', (e) => {
+      if (e.detail.session) poll();
+      else if (!polling) VIEWS.signedOut();
+    });
+  }
+
   function init() {
+    bootFlittTestMode();
     bootHeroReveal();
     bootHeader();
     bootNavToggle();
@@ -2708,6 +2870,7 @@
     bootAccountPage();
     bootAccountNav();
     bootPreferencesPage();
+    bootPaymentResult();
     bootCalendly();
     bootEventTracking();
     bootImageZoom();

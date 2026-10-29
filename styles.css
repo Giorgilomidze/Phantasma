@@ -2814,6 +2814,46 @@ body.is-locked {
   margin: var(--space-4) 0 0;
 }
 
+/* Payment result page (payment-result.html, bootPaymentResult) */
+.payment-result { padding-block: var(--space-9) var(--space-8); }
+.payment-result__body { max-width: 640px; }
+.payment-result__body[data-state="paid"] .project-hero__sub { color: var(--ink); }
+.payment-result__body[data-state="failed"] .project-hero__sub { color: var(--act); }
+.payment-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+.payment-result__actions .btn { min-height: 44px; }
+.payment-result__actions .btn:not(.btn-primary) {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  padding: 14px 22px;
+}
+.payment-result__actions .btn:not(.btn-primary):hover { background: var(--surface); }
+.payment-result [tabindex="-1"]:focus { outline: none; }
+
+/* Pay now: inline error under a tier button (Flitt test path) */
+.pay-status { margin-top: var(--space-3); }
+
+/* Visible only when the Flitt test flag is on, so test is never mistaken for live */
+.test-badge {
+  position: fixed;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 150;
+  padding: var(--space-1) var(--space-3);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: var(--type-body-sm);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
 /* Scope and terms block under the tiers */
 .pricing-terms {
   margin: var(--space-6) 0 0;
