@@ -64,7 +64,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20261029a" />
+  <link rel="stylesheet" href="./styles.css?v=20261029c" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -155,25 +155,24 @@
       <h2 id="plans-h" class="project-section__h">Plans</h2>
 
       <!--
-        Payment buttons. Each card's "Pay now" points at a fixed-amount, multi-use
-        Keepz payment link (created in app.keepz.me -> Payment links). The direct
-        app.keepz.me URL is used rather than the tiny.keepz.me short link, which is
-        a tinyurl.com redirect. All three links expire 31-12-2026 — recreate in Keepz
-        and update the href here. When checkout moves to the Keepz API these three
-        hrefs are the only thing to swap.
+        Payment buttons. "Pay now" (data-tier) is handled in bootAuthModal (script.js):
+        signed in -> Edge Function flitt-create-order -> Flitt hosted checkout;
+        signed out -> #pay-modal (log in / create account). Prices are fixed on the
+        server (plans table), not here.
       -->
       <div class="pricing-grid">
         <article class="pricing-card">
           <p class="pricing-card__tier">Tier 1</p>
           <h3 class="pricing-card__name">Detective</h3>
           <p class="pricing-card__price">₾10 <span>/ 4 weeks</span></p>
+          <p class="pricing-card__desc">Job-market research on your behalf, delivered as an Excel file of matching vacancies with company, role, description and a link to the original posting.</p>
           <ul class="pricing-card__list">
             <li>Job-market research on your behalf</li>
             <li>An Excel file of every matching vacancy: company, role, description and a link to the original posting</li>
             <li>You send your CV and whatever background you're comfortable sharing — the search is built around it</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=150bec12-356c-4f0f-b4b7-243574577d35" data-tier="detective" target="_blank" rel="noopener noreferrer">Pay now</a>
+            <a class="btn btn-primary" href="#" data-tier="detective">Pay now</a>
           </div>
         </article>
 
@@ -181,6 +180,7 @@
           <p class="pricing-card__tier">Tier 2</p>
           <h3 class="pricing-card__name">Essential</h3>
           <p class="pricing-card__price">₾50 <span>/ 4 weeks</span></p>
+          <p class="pricing-card__desc">Job research across 5 HR and job-board sources, a professionally written CV, motivation letters where a vacancy needs one, and full reporting on every application sent.</p>
           <ul class="pricing-card__list">
             <li>Job research across 5 HR and job-board sources</li>
             <li>A modern, professionally written CV</li>
@@ -188,7 +188,7 @@
             <li>Full reporting on every application sent and its progress</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=f51bd2a4-5ac6-4673-bd5e-d7f85bc7149f" data-tier="essential" target="_blank" rel="noopener noreferrer">Pay now</a>
+            <a class="btn btn-primary" href="#" data-tier="essential">Pay now</a>
           </div>
         </article>
 
@@ -196,19 +196,20 @@
           <p class="pricing-card__tier">Tier 3</p>
           <h3 class="pricing-card__name">Advanced</h3>
           <p class="pricing-card__price">₾80 <span>/ 4 weeks</span></p>
+          <p class="pricing-card__desc">Everything in Essential, plus a CV tailored to each vacancy and 9 sources researched in total.</p>
           <p class="pricing-card__plus">Everything in Essential, plus:</p>
           <ul class="pricing-card__list">
             <li>A CV tailored specifically to each individual vacancy</li>
             <li>4 additional sources researched — 9 in total</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=04216b80-e048-4f1a-83a0-d45e89920e49" data-tier="advanced" target="_blank" rel="noopener noreferrer">Pay now</a>
+            <a class="btn btn-primary" href="#" data-tier="advanced">Pay now</a>
           </div>
         </article>
       </div>
 
       <p class="pricing-note">
-        One payment covers four weeks of service, charged in GEL through Keepz. It is a one-off
+        One payment covers four weeks of service, charged in GEL through Flitt (card, Google Pay or Apple Pay). It is a one-off
         charge — nothing renews automatically. Applications are only sent with your approval.
       </p>
 
@@ -218,7 +219,7 @@
           <li><strong>Cadence.</strong> One payment covers four weeks of service. It is a one-off charge; nothing renews automatically.</li>
           <li><strong>Approval.</strong> No application is sent without your explicit go-ahead.</li>
           <li><strong>Job sources.</strong> Essential researches 5 HR and job-board sources. Advanced researches 9 in total.</li>
-          <li><strong>Payment.</strong> Charged in GEL through Keepz.</li>
+          <li><strong>Payment.</strong> Charged in GEL through Flitt (card, Google Pay or Apple Pay).</li>
         </ul>
       </div>
     </section>
@@ -233,9 +234,15 @@
         <a href="./index.html" class="wordmark wordmark--footer">Phantasma</a>
         <a href="./index.html#contact" class="link-quiet">Book a discovery call →</a>
       </div>
+      <address class="site-footer__contact" aria-label="Contact">
+        <span>Georgia, Tbilisi, Jiuli Shartava 5</span>
+        <a class="link-quiet" href="tel:+995599372600">+995 599 372 600</a>
+        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+      </address>
       <div class="site-footer__row site-footer__row--meta">
         <p class="site-footer__tagline">Tangible solutions for abstract problems.</p>
-        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+        <a class="link-quiet" href="./terms.html">Terms</a>
+        <a class="link-quiet" href="./privacy.html">Privacy</a>
         <a class="link-quiet" href="https://www.facebook.com/profile.php?id=61593677897066" target="_blank" rel="noopener noreferrer">Facebook</a>
         <a class="link-quiet" href="https://www.linkedin.com/company/144747226/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
         <a class="link-quiet" href="https://www.instagram.com/careerstrategist1/" target="_blank" rel="noopener noreferrer">Instagram</a>
@@ -246,18 +253,17 @@
   </footer>
 
   <!-- Cookie Consent Banner -->
-  <!-- Pay-now pre-step (signed out): log in, create account, or pay as guest.
+  <!-- Pay-now pre-step (signed out): log in or create an account.
        Behaviour in bootAuthModal (script.js). -->
   <div class="auth-modal" id="pay-modal" role="dialog" aria-modal="true" aria-labelledby="pay-title" hidden>
     <div class="auth-modal__backdrop" data-close></div>
     <div class="auth-modal__panel">
       <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
       <h2 class="auth-modal__title" id="pay-title">Before you pay</h2>
-      <p class="auth-modal__sub">With an account you get a dashboard of every vacancy we process for you. You can also pay without one.</p>
+      <p class="auth-modal__sub">With an account you get a dashboard of every vacancy we process for you.</p>
       <div class="pay-choice">
         <button class="btn btn-primary" type="button" id="pay-login">Log in</button>
         <button class="btn auth-modal__google pay-choice__signup" type="button" id="pay-signup">Create account</button>
-        <a class="auth-modal__link pay-choice__guest" id="pay-guest" href="#" target="_blank" rel="noopener noreferrer">Pay without an account →</a>
       </div>
     </div>
   </div>
@@ -312,6 +318,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261029a" defer></script>
+  <script src="./script.js?v=20261029c" defer></script>
 </body>
 </html>

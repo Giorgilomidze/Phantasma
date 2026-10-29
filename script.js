@@ -1463,16 +1463,6 @@
   const SUPABASE_URL = 'https://muumpjtpjnoxxdkhqtik.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_R6Ruxp1ehYAGVcFRqrM_Lg_n1ahoV8e';
 
-  // Keepz fixed-amount payment links, one per plan code. The same three URLs
-  // are hard-coded on projects.html / projects.ka.html — keep all in step.
-  // They expire 31-12-2026 (see CLAUDE.md §6).
-  const KEEPZ_BASE = 'https://app.keepz.me/pay?qrType=CUSTOM&receiverType=USER&receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&productId=';
-  const KEEPZ_LINKS = {
-    detective: KEEPZ_BASE + '150bec12-356c-4f0f-b4b7-243574577d35',
-    essential: KEEPZ_BASE + 'f51bd2a4-5ac6-4673-bd5e-d7f85bc7149f',
-    advanced:  KEEPZ_BASE + '04216b80-e048-4f1a-83a0-d45e89920e49',
-  };
-
   const Auth = (() => {
     let client = null;
     let session = null;
@@ -1572,15 +1562,7 @@
     // ---- data access. Every call is RLS-limited to the signed-in user; see
     // supabase/README.md for the table/column contract.
 
-    // Pay now: open a pending subscription request for this account. The
-    // owner confirms it against the Keepz dashboard and sets it active.
     function db() { return getClient(); }
-
-    function requestSubscription(planCode) {
-      if (!session) return Promise.resolve({ error: new Error('not signed in') });
-      return getClient().from('subscriptions')
-        .insert({ account_id: session.user.id, plan_code: planCode, status: 'pending' });
-    }
 
     // The account page: get_my_stats() (one row, or none while no candidates
     // row is linked yet), every shortlist row with its vacancy, and sends.
@@ -1653,7 +1635,6 @@
       savePreferences,
       signInWithGoogle,
       signOut,
-      requestSubscription,
       loadStats,
       db,
     };
@@ -1777,17 +1758,15 @@
       });
     });
 
-    // Pay now buttons. Signed in: record a pending subscription, Keepz opens
-    // (user gesture). Signed out: #pay-modal offers Log in / Create account /
-    // pay as guest; the chosen tier is remembered (sessionStorage survives the
-    // Google round-trip) and the payment continues right after sign-in.
+    // Pay now buttons. Signed in: flitt-create-order, then the browser goes to
+    // Flitt's hosted checkout. Signed out: #pay-modal offers Log in / Create
+    // account (payments are tied to an account); the chosen tier is remembered
+    // (sessionStorage survives the Google round-trip) and the payment continues
+    // right after sign-in.
     const payModal = document.getElementById('pay-modal');
     const PENDING_KEY = 'phantasma_pending_tier';
-    const keepzFor = (tier) => document.querySelector('[data-tier="' + tier + '"]');
+    const buttonFor = (tier) => document.querySelector('[data-tier="' + tier + '"]');
 
-    // Flitt TEST path. Only when localStorage phantasma_flitt_test === '1'
-    // (see bootFlittTestMode). Calls the flitt-create-order Edge Function,
-    // then sends the browser to the hosted checkout. Keepz is untouched.
     function startFlitt(tier, btn) {
       const label = btn.textContent;
       let note = btn.parentNode.querySelector('.pay-status');
@@ -1829,29 +1808,18 @@
       const tier = sessionStorage.getItem(PENDING_KEY);
       if (!tier) return false;
       sessionStorage.removeItem(PENDING_KEY);
-      const btn = keepzFor(tier);
+      const btn = buttonFor(tier);
       if (!btn) return false;
-      if (flittTestOn()) { startFlitt(tier, btn); return true; }
-      Auth.requestSubscription(tier).then(({ error }) => {
-        if (error) console.warn('subscription request not recorded', error.message);
-        location.href = btn.href;          // no user gesture here → same tab, not a popup
-      });
+      startFlitt(tier, btn);
       return true;
     }
 
     document.querySelectorAll('[data-tier]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
-        if (Auth.getSession()) {
-          if (flittTestOn()) { e.preventDefault(); startFlitt(btn.dataset.tier, btn); return; }
-          Auth.requestSubscription(btn.dataset.tier).then(({ error }) => {
-            if (error) console.warn('subscription request not recorded', error.message);
-          });
-          return;
-        }
         e.preventDefault();
+        if (Auth.getSession()) { startFlitt(btn.dataset.tier, btn); return; }
         if (!payModal) { open('signup'); return; }
         sessionStorage.setItem(PENDING_KEY, btn.dataset.tier);
-        payModal.querySelector('#pay-guest').href = btn.href;
         lastFocus = document.activeElement;
         payModal.hidden = false;
         requestAnimationFrame(() => payModal.classList.add('is-open'));
@@ -1871,7 +1839,6 @@
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !payModal.hidden) closePay(false); });
       payModal.querySelector('#pay-login').addEventListener('click', () => { closePay(true); open('login'); });
       payModal.querySelector('#pay-signup').addEventListener('click', () => { closePay(true); open('signup'); });
-      payModal.querySelector('#pay-guest').addEventListener('click', () => closePay(false));
     }
 
     // After an actual sign-in (modal login, or arriving back from Google /
@@ -1884,7 +1851,7 @@
       const onProfile = /\/(account|preferences|payment-result)\.html$/.test(location.pathname);
       const fresh = e.detail.event === 'SIGNED_IN' && (!modal.hidden || arrivedWithTokens);
       if (!modal.hidden) close();
-      if (fresh && resumePayment()) return;      // came here to pay → Keepz, not the profile
+      if (fresh && resumePayment()) return;      // came here to pay → Flitt, not the profile
       if (fresh && !onProfile) location.replace('./account.html');
     });
   }
@@ -2735,33 +2702,6 @@
     window.addEventListener('scroll', onScroll, { passive: true });
   }
 
-  // Flitt test gate. localStorage phantasma_flitt_test === '1' switches the
-  // Pay now buttons to the Flitt test checkout. Set by visiting any page with
-  // ?flitt=test, cleared by ?flitt=off. A fixed badge shows while it is on.
-  const FLITT_FLAG = 'phantasma_flitt_test';
-  function flittTestOn() {
-    try { return localStorage.getItem(FLITT_FLAG) === '1'; } catch (_e) { return false; }
-  }
-
-  function bootFlittTestMode() {
-    try {
-      const url = new URL(location.href);
-      const want = url.searchParams.get('flitt');
-      if (want === 'test') localStorage.setItem(FLITT_FLAG, '1');
-      else if (want === 'off') localStorage.removeItem(FLITT_FLAG);
-      if (want === 'test' || want === 'off') {
-        url.searchParams.delete('flitt');
-        history.replaceState(null, '', url.pathname + url.search + url.hash);
-      }
-    } catch (_e) { return; }
-    if (!flittTestOn()) return;
-    const badge = document.createElement('div');
-    badge.className = 'test-badge';
-    badge.textContent = 'TEST MODE: Flitt';
-    badge.setAttribute('role', 'status');
-    document.body.appendChild(badge);
-  }
-
   // payment-result.html — where Flitt sends the customer back. The URL is
   // never trusted: order_id is only a lookup key, and the status is read from
   // our own flitt_orders row (RLS: own rows only). The server callback can
@@ -2808,7 +2748,7 @@
 
     const VIEWS = {
       paid: () => show('paid', 'Payment received',
-        'Payment received. You can start working with the interface and the support team now.',
+        'You can start working with the interface and the support team now.',
         [link('./account.html', 'Go to my account', true), link('./projects.html', 'Back to the plans', false)], true),
       declined: () => show('failed', 'Payment not completed',
         'The bank did not accept this payment, so you have not been charged. You can try again, or use another card.',
@@ -2855,7 +2795,6 @@
   }
 
   function init() {
-    bootFlittTestMode();
     bootHeroReveal();
     bootHeader();
     bootNavToggle();

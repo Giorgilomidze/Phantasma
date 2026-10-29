@@ -47,7 +47,7 @@ server from the repo root, e.g. `python -m http.server 8000`.
 `git push` to `main`. GitHub Pages publishes automatically. There is no CI.
 
 **Cache-busting:** every page links `styles.css?v=YYYYMMDDx` and
-`script.js?v=YYYYMMDDx`. **Bump the value in all seven HTML files whenever CSS
+`script.js?v=YYYYMMDDx`. **Bump the value in all HTML files (incl. the four legal pages) whenever CSS
 or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 `sed -i -E 's#(styles\.css|script\.js)\?v=[^"]*#?v=NEW#' *.html`.
 
@@ -60,8 +60,9 @@ or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 | `index.html` | Main site (500 lines) |
 | `landing.html` | Paid-ads landing page — hero / approach / booking only |
 | `blog.html` | Case-studies page: 7 hand-written articles, sticky sidebar, scroll-spy |
-| `projects.html` | "Personal Career Strategist" service page — 3 pricing tiers, Keepz **Pay now** links |
+| `projects.html` | "Personal Career Strategist" service page — 3 pricing tiers, **Pay now** via Flitt hosted checkout |
 | `projects.ka.html` | **Georgian translation of `projects.html`.** Same markup, translated text, `lang="ka"`, loads Noto Sans/Serif Georgian. **Any copy or price change on `projects.html` must be mirrored here by hand.** Header carries a `.lang-switch` (inline-SVG GB/GE flags) and both pages link each other with `hreflang`. |
+| `terms.html`, `privacy.html`, `terms.ka.html`, `privacy.ka.html` | **Legal pages** (29 Oct 2026), indexable, EN + KA pair via `hreflang`, text from `docs/specs/legal-copy-2026-10-29.md`. KA is machine-translated, unproofread. The `[ID_CODE]` lines were removed on 29 Oct 2026. Lawyer-check notes live as HTML comments, not on the page. Every footer (all pages with one) has a contact block (address, phone, email) plus Terms / Privacy links; `projects.ka.html` links the KA pages. Styles: `.legal*` in section 25, `.site-footer__contact` in section 16. |
 | `account.html` | Client dashboard (EN only). Signed-out: Log in prompt. Signed-in: email/Sign out + 8 KPI tiles from `get_my_stats()`. `noindex`, disallowed in `robots.txt`. |
 | `preferences.html` | Client questionnaire: 5 collapsible groups (salary, role, geography, where to search, applications), 23 questions, Save per group, answered-counters. Table `preferences` (salary typed + `answers` jsonb `q1..q24`, no q3). `noindex`. |
 | `campaigns/` | **Ads Management** (folder renamed from `ads/` on 28 Oct 2026 because ad blockers block any URL containing `/ads/`; `/ads/` now only redirects) (26 Oct 2026): private, mock-data prototype for managing Meta ads/posts (Edelweiss, Breeze). Self-contained mini-app: `campaigns/index.html`, `app.css` (classes prefixed `ads-`, uses site tokens from `../styles.css`), `app.js` (UI, hash routes), `api.js` (**the only file that touches data**; later swap for a real server), `i18n.js` (EN + KA, KA unproofread), `mock/*.json`. `noindex`, `Disallow: /campaigns/` in `robots.txt`, signed-in gate is cosmetic (`ALLOWED_EMAILS` empty) — real data needs a server-side check. Round 1 = Dashboard, Campaigns (5-step wizard), Posts, AI drawer; Image Library, Products, Rotation, Settings, Audit log are "Round 2" stubs. Header nav "Projects" dropdown (`bootNavDropdown`) links Job Seek (`projects.html`) and Ads Management (`campaigns/`). |
@@ -101,7 +102,7 @@ Single IIFE. Order of contents:
 | `Lightbox` | Module (IIFE) — 6-slide case-study viewer with keyboard nav |
 | `bootApproachStrip()` | Scroll-driven progress through the 5 approach stations |
 | `Auth` | Module. supabase-js client (`SUPABASE_URL` / publishable key constants), email+password (`signIn`/`signUp`/`resetPassword`/`updatePassword`) + Google sign-in, `requestSubscription(plan)` (inserts a `pending` row), `loadStats()`. Syncs every `.js-auth` link (Log in ↔ Account, labels from `data-label-*`) and fires `phantasma:auth`. Skips silently when `window.supabase` is absent (landing). |
-| `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. One form, three modes via `data-mode` (login / signup / forgot); all copy in `data-*` attributes (KA page supplies its own). Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: signed in → `requestSubscription` then Keepz opens; signed out → `#pay-modal` (projects pages only): Log in / Create account / pay as guest. Chosen tier kept in `sessionStorage` (`phantasma_pending_tier`); after sign-in `resumePayment()` records the subscription and sends the browser to Keepz instead of the profile. |
+| `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. One form, three modes via `data-mode` (login / signup / forgot); all copy in `data-*` attributes (KA page supplies its own). Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: always `startFlitt()` → Edge Function `flitt-create-order` → browser goes to Flitt checkout (errors such as `already_active` / `payments_not_open` show under the button); signed out → `#pay-modal` (projects pages only): Log in / Create account (no guest payment). Chosen tier kept in `sessionStorage` (`phantasma_pending_tier`); after sign-in `resumePayment()` starts Flitt instead of opening the profile. |
 | `bootAccountPage()` | `account.html` only. Shows `#account-newpass` on the `PASSWORD_RECOVERY` auth event (reset-link landing). Fills `[data-stat]` tiles, each a button opening one `#stat-panel` table, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
 | `bootPreferencesPage()` | `preferences.html` only. Fill / count / per-group save via `Auth.loadPreferences` / `savePreferences` (upsert on `user_id`). Warns on leaving with unsaved edits. |
 | `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` |
@@ -220,17 +221,16 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   (commits `96ff2f8`, `3c00b15`; raised 680→760px on 17 Sep 2026 when Calendly
   added a time-zone row) — do not "fix" that by removing the height; raise it.
 
-- **Keepz (payments)** — merchant dashboard `app.keepz.me`, settles to the
-  owner's TBC Individual-Entrepreneur account. The three **Pay now** buttons on
-  `projects.html` / `projects.ka.html` are fixed-amount Keepz payment links,
-  used as the *direct* `app.keepz.me/pay?…productId=…` URL (the
-  `tiny.keepz.me` short links are tinyurl redirects — don't use them).
-  Detective ₾10 `productId=150bec12…`, Essential ₾50 `f51bd2a4…`, Advanced
-  ₾80 `04216b80…`. **All three links expire 31-12-2026** — recreate in Keepz
-  → Payment links and update both HTML files. Payments are one-off (no
-  recurring). The Keepz REST API needs server-side RSA/AES encryption and a
-  callback URL, so it is impossible from GitHub Pages — that is the Supabase
-  Edge Function job when the backend exists.
+- **Flitt (payments)** — merchant 4058420, hosted checkout, GEL. Keepz is no
+  longer used (decision 29 Oct 2026). Two Edge Functions in `supabase/functions/`:
+  `flitt-create-order` (JWT checked in code, prices from the `plans` table,
+  returns the checkout URL) and `flitt-callback` (no JWT, protected by Flitt's
+  signature; activates the subscription). Customer returns to
+  `payment-result.html`. **Safety switch:** secret `FLITT_LIVE`; unless it is
+  `'true'`, only the owner (`ads_roles`, role `owner`) can create an order,
+  everyone else gets 503 `payments_not_open`. Flitt is still in **test mode**,
+  so keep it off until live merchant id and secret are installed. Deploy and
+  secrets: `supabase/flitt-README.md`.
 
 - **Supabase (accounts)** — project `Phantasma`, `https://muumpjtpjnoxxdkhqtik.supabase.co`,
   eu-central-1, free tier (pauses after 7 idle days — move to Pro before real
@@ -305,19 +305,16 @@ Still open — need information or a decision from the owner:
    ~line 58, `account.html`). Add `gtag('config', 'G-XXXXXXXXXX')` behind the consent gate.
 2. **Footer LinkedIn link is `href="#"`** on `index.html`. The career-service
    pages link the Personal Career Strategist FB / LinkedIn / Instagram (17 Sep).
-3. **Keepz (owner action):** set the three links to multi-use, add an email
-   field for the payer, and email Keepz for integrator API access (needed for
-   the automated callback).
+3. ~~Keepz owner actions~~ — Keepz is no longer used (29 Oct 2026).
 4. **Georgian copy review.** `projects.ka.html` and the KA login modal were
    machine-translated; owner has not proofread.
 5. **`hrdetective.solvephantasma.com`** — GoDaddy forward to
    `/projects.html`, HTTPS reported OK by owner 17 Sep 2026.
 6. ~~Sideways scroll on phones~~ — likely fixed 17 Sep 2026: the reel
    viewport is now constrained to the `.page-grid` frame. Verify on a phone.
-7. **Payments identity.** Pay now writes a `pending` `subscriptions` row for
-   the signed-in user before Keepz opens; owner matches Keepz payments by
-   time/amount and sets the row `active` by hand. Automated Keepz callback via
-   Edge Function not started (blocked on item 3).
+7. **Payments identity.** Done via Flitt: each order is tied to the signed-in
+   account (`flitt_orders`), the callback activates the subscription. Open: go live
+   (live Flitt credentials, then set `FLITT_LIVE=true`).
 8. **Schema drift** — the cloud schema is ahead of `Solve Assistant\supabase\schema.sql`;
    list in `supabase/README.md`. Also still wanted there: column-level grants
    on `candidates` / `shortlists` so clients can write only intake columns /

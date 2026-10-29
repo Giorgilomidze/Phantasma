@@ -67,7 +67,7 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20261029a" />
+  <link rel="stylesheet" href="./styles.css?v=20261029c" />
 </head>
 <body>
   <a class="skip-link" href="#main">მთავარ შინაარსზე გადასვლა</a>
@@ -161,25 +161,24 @@
       <h2 id="plans-h" class="project-section__h">პაკეტები</h2>
 
       <!--
-        Payment buttons. Each card's "Pay now" points at a fixed-amount, multi-use
-        Keepz payment link (created in app.keepz.me -> Payment links). The direct
-        app.keepz.me URL is used rather than the tiny.keepz.me short link, which is
-        a tinyurl.com redirect. All three links expire 31-12-2026 — recreate in Keepz
-        and update the href here. When checkout moves to the Keepz API these three
-        hrefs are the only thing to swap.
+        Payment buttons. "Pay now" (data-tier) is handled in bootAuthModal (script.js):
+        signed in -> Edge Function flitt-create-order -> Flitt hosted checkout;
+        signed out -> #pay-modal (log in / create account). Prices are fixed on the
+        server (plans table), not here.
       -->
       <div class="pricing-grid">
         <article class="pricing-card">
           <p class="pricing-card__tier">პაკეტი 1</p>
           <h3 class="pricing-card__name">დეტექტივი</h3>
           <p class="pricing-card__price">₾10 <span>/ 4 კვირა</span></p>
+          <p class="pricing-card__desc">შრომის ბაზრის კვლევა თქვენი სახელით; შედეგი არის Excel ფაილი შესაბამისი ვაკანსიებით: კომპანია, პოზიცია, აღწერა და ორიგინალი განცხადების ბმული.</p>
           <ul class="pricing-card__list">
             <li>შრომის ბაზრის კვლევა თქვენი სახელით</li>
             <li>Excel ფაილი ყველა შესაბამისი ვაკანსიით: კომპანია, პოზიცია, აღწერა და ბმული ორიგინალ განცხადებაზე</li>
             <li>თქვენ გვიგზავნით CV-ს და იმ ინფორმაციას, რომლის გაზიარებაც გსურთ — ძიება მასზე იგება</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=150bec12-356c-4f0f-b4b7-243574577d35" data-tier="detective" target="_blank" rel="noopener noreferrer">გადახდა</a>
+            <a class="btn btn-primary" href="#" data-tier="detective">გადახდა</a>
           </div>
         </article>
 
@@ -187,6 +186,7 @@
           <p class="pricing-card__tier">პაკეტი 2</p>
           <h3 class="pricing-card__name">ძირითადი</h3>
           <p class="pricing-card__price">₾50 <span>/ 4 კვირა</span></p>
+          <p class="pricing-card__desc">სამუშაოს ძიება 5 HR და ვაკანსიების წყაროში, პროფესიონალურად დაწერილი CV, მოტივაციის წერილები საჭიროებისამებრ და სრული ანგარიში თითოეულ გაგზავნილ განაცხადზე.</p>
           <ul class="pricing-card__list">
             <li>ვაკანსიების ძიება 5 HR და სამუშაოს საძიებო წყაროზე</li>
             <li>თანამედროვე, პროფესიონალურად დაწერილი CV</li>
@@ -194,7 +194,7 @@
             <li>სრული ანგარიშგება ყველა გაგზავნილ განაცხადსა და მის პროგრესზე</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=f51bd2a4-5ac6-4673-bd5e-d7f85bc7149f" data-tier="essential" target="_blank" rel="noopener noreferrer">გადახდა</a>
+            <a class="btn btn-primary" href="#" data-tier="essential">გადახდა</a>
           </div>
         </article>
 
@@ -202,19 +202,20 @@
           <p class="pricing-card__tier">პაკეტი 3</p>
           <h3 class="pricing-card__name">გაფართოებული</h3>
           <p class="pricing-card__price">₾80 <span>/ 4 კვირა</span></p>
+          <p class="pricing-card__desc">ყველაფერი, რაც Essential-ში, პლუს თითოეულ ვაკანსიაზე მორგებული CV და სულ 9 წყაროს კვლევა.</p>
           <p class="pricing-card__plus">ყველაფერი, რაც ძირითად პაკეტშია, პლუს:</p>
           <ul class="pricing-card__list">
             <li>თითოეულ ვაკანსიაზე ინდივიდუალურად მორგებული CV</li>
             <li>4 დამატებითი წყარო — სულ 9</li>
           </ul>
           <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="https://app.keepz.me/pay?qrType=CUSTOM&amp;receiverType=USER&amp;receiverId=26e203ca-01f0-444b-bab3-ac4d5631b91e&amp;productId=04216b80-e048-4f1a-83a0-d45e89920e49" data-tier="advanced" target="_blank" rel="noopener noreferrer">გადახდა</a>
+            <a class="btn btn-primary" href="#" data-tier="advanced">გადახდა</a>
           </div>
         </article>
       </div>
 
       <p class="pricing-note">
-        ერთი გადახდა მოიცავს ოთხკვირიან მომსახურებას და იხდება ლარში Keepz-ის მეშვეობით. გადახდა
+        ერთი გადახდა მოიცავს ოთხკვირიან მომსახურებას და იხდება ლარში Flitt-ის მეშვეობით (ბარათით, Google Pay-ით ან Apple Pay-ით). გადახდა
         ერთჯერადია — არაფერი განახლდება ავტომატურად. განაცხადები იგზავნება მხოლოდ თქვენი თანხმობით.
       </p>
 
@@ -224,7 +225,7 @@
           <li><strong>პერიოდულობა.</strong> ერთი გადახდა მოიცავს ოთხკვირიან მომსახურებას. გადახდა ერთჯერადია — არაფერი განახლდება ავტომატურად.</li>
           <li><strong>თანხმობა.</strong> არცერთი განაცხადი არ იგზავნება თქვენი პირდაპირი თანხმობის გარეშე.</li>
           <li><strong>წყაროები.</strong> ძირითადი პაკეტი ეძებს 5 HR და სამუშაოს საძიებო წყაროზე. გაფართოებული — სულ 9 წყაროზე.</li>
-          <li><strong>გადახდა.</strong> იხდება ლარში Keepz-ის მეშვეობით.</li>
+          <li><strong>გადახდა.</strong> იხდება ლარში Flitt-ის მეშვეობით (ბარათით, Google Pay-ით ან Apple Pay-ით).</li>
         </ul>
       </div>
     </section>
@@ -239,9 +240,15 @@
         <a href="./index.html" class="wordmark wordmark--footer">Phantasma</a>
         <a href="./index.html#contact" class="link-quiet">დაჯავშნეთ გაცნობითი ზარი →</a>
       </div>
+      <address class="site-footer__contact" aria-label="კონტაქტი">
+        <span>საქართველო, თბილისი, ჯიული შარტავას 5</span>
+        <a class="link-quiet" href="tel:+995599372600">+995 599 372 600</a>
+        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+      </address>
       <div class="site-footer__row site-footer__row--meta">
         <p class="site-footer__tagline">ხელშესახები გადაწყვეტები აბსტრაქტული პრობლემებისთვის.</p>
-        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+        <a class="link-quiet" href="./terms.ka.html">მომსახურების პირობები</a>
+        <a class="link-quiet" href="./privacy.ka.html">კონფიდენციალურობის პოლიტიკა</a>
         <a class="link-quiet" href="https://www.facebook.com/profile.php?id=61593677897066" target="_blank" rel="noopener noreferrer">Facebook</a>
         <a class="link-quiet" href="https://www.linkedin.com/company/144747226/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
         <a class="link-quiet" href="https://www.instagram.com/careerstrategist1/" target="_blank" rel="noopener noreferrer">Instagram</a>
@@ -252,18 +259,17 @@
   </footer>
 
   <!-- Cookie Consent Banner -->
-  <!-- Pay-now pre-step (signed out): log in, create account, or pay as guest.
+  <!-- Pay-now pre-step (signed out): log in or create an account.
        Behaviour in bootAuthModal (script.js). -->
   <div class="auth-modal" id="pay-modal" role="dialog" aria-modal="true" aria-labelledby="pay-title" hidden>
     <div class="auth-modal__backdrop" data-close></div>
     <div class="auth-modal__panel">
       <button class="auth-modal__close" type="button" data-close aria-label="დახურვა">✕</button>
       <h2 class="auth-modal__title" id="pay-title">გადახდამდე</h2>
-      <p class="auth-modal__sub">ანგარიშით მიიღებთ პირად კაბინეტს, სადაც ხედავთ ყველა დამუშავებულ ვაკანსიას. გადახდა ანგარიშის გარეშეც შეგიძლიათ.</p>
+      <p class="auth-modal__sub">ანგარიშით მიიღებთ პირად კაბინეტს, სადაც ხედავთ ყველა დამუშავებულ ვაკანსიას.</p>
       <div class="pay-choice">
         <button class="btn btn-primary" type="button" id="pay-login">შესვლა</button>
         <button class="btn auth-modal__google pay-choice__signup" type="button" id="pay-signup">ანგარიშის შექმნა</button>
-        <a class="auth-modal__link pay-choice__guest" id="pay-guest" href="#" target="_blank" rel="noopener noreferrer">გადახდა ანგარიშის გარეშე →</a>
       </div>
     </div>
   </div>
@@ -318,6 +324,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261029a" defer></script>
+  <script src="./script.js?v=20261029c" defer></script>
 </body>
 </html>
