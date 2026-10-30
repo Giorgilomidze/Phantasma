@@ -88,6 +88,8 @@
     'health.okText': 'The connection works.', 'health.problems': 'Problems found', 'health.account': 'Ad account', 'health.status': 'Status', 'health.currency': 'Currency',
     'health.page': 'Facebook Page', 'health.mode': 'Server mode', 'health.dry': 'Dry-run: nothing is sent to Meta', 'health.liveOn': 'LIVE: campaigns are really created at Meta (paused)', 'health.none': 'not available',
     'wiz.postObj': 'Facebook post ID', 'wiz.postObjHint': 'The ad uses a post that already exists on your Facebook Page. Open that post, copy its ID (it looks like 155011827684882_1234567890) and paste it here.',
+    'wiz.posts.label': 'Choose a Facebook post', 'wiz.posts.loading': 'Loading posts from your Facebook Page...', 'wiz.posts.empty': 'No published posts found on this Page.',
+    'wiz.posts.error': 'The posts could not be loaded.', 'wiz.posts.retry': 'Retry', 'wiz.posts.paste': 'or paste a post ID', 'wiz.posts.noText': '(post without text)',
     'wiz.limitsLive': 'Limits set by the owner: up to {max} per day, up to {total} per campaign, up to {days} days.',
     'wiz.liveNote': 'Live backend: the server checks the limits again. Location is set to Georgia; gender, start date, caption and images are not sent (the ad is built from the existing post).',
     'err.postObj': 'Enter the Facebook post ID, like 155011827684882_1234567890.', 'err.total': 'The total (daily budget x days) is over the limit of {total}.',
@@ -178,6 +180,9 @@
     'mode.toLive.confirm': 'რეალურ ბექენდზე გადასვლა', 'mode.toMock.title': 'დავბრუნდეთ სატესტო მონაცემებზე?', 'mode.toMock.text': 'ყველაფერი ისევ სატესტო იქნება. გვერდი თავიდან ჩაიტვირთება.', 'mode.toMock.confirm': 'სატესტო მონაცემების გამოყენება',
     'mode.liveNote': 'რეალური ბექენდი: ბიზნესები და ხარჯვის ლიმიტები რეალურია. კამპანიების სია, პოსტები და ციფრები ამ გვერდზე ჯერ სატესტოა.',
     'mode.liveFailed': 'რეალური მონაცემები ვერ ჩაიტვირთა (ეს ანგარიში Ads Management-ის წევრია?). ნაჩვენებია სატესტო მონაცემები.',
+    // KA below: machine-translated, not proofread.
+    'wiz.posts.label': 'აირჩიეთ Facebook პოსტი', 'wiz.posts.loading': 'პოსტები იტვირთება თქვენი Facebook გვერდიდან...', 'wiz.posts.empty': 'ამ გვერდზე გამოქვეყნებული პოსტი ვერ მოიძებნა.',
+    'wiz.posts.error': 'პოსტების ჩატვირთვა ვერ მოხერხდა.', 'wiz.posts.retry': 'ხელახლა ცდა', 'wiz.posts.paste': 'ან ჩასვით პოსტის ID', 'wiz.posts.noText': '(პოსტი ტექსტის გარეშე)',
     'health.btn': 'Meta-სთან კავშირის შემოწმება', 'health.title': 'Meta-სთან კავშირი', 'health.running': 'კავშირი მოწმდება...',
     'health.okText': 'კავშირი მუშაობს.', 'health.problems': 'ნაპოვნია პრობლემები', 'health.account': 'სარეკლამო ანგარიში', 'health.status': 'სტატუსი', 'health.currency': 'ვალუტა',
     'health.page': 'Facebook გვერდი', 'health.mode': 'სერვერის რეჟიმი', 'health.dry': 'ტესტური გაშვება: Meta-ში არაფერი იგზავნება', 'health.liveOn': 'რეალური: კამპანიები Meta-ში ნამდვილად იქმნება (შეჩერებული)', 'health.none': 'მიუწვდომელია',

@@ -235,6 +235,19 @@
 .ads-imgpick:has(input:focus-visible) { outline: 3px solid var(--ink); outline-offset: 2px; }
 .ads-imgpick__img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .ads-imgpick__cap { display: block; padding: var(--space-1) var(--space-2); font-size: var(--type-caption); }
+
+/* Live Creative step: choose a published Facebook post */
+.ads-postlist { display: flex; flex-direction: column; gap: var(--space-2); }
+.ads-postlist:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.ads-postlist__status { margin-top: var(--space-2); }
+.ads-postlist__paste { margin-top: var(--space-4); }
+.ads-postlist__paste summary { cursor: pointer; padding: var(--space-2) 0; color: var(--accent-deep); }
+.ads-postpick { display: flex; align-items: center; gap: var(--space-3); cursor: pointer; }
+.ads-postpick:has(input:focus-visible) { outline: 3px solid var(--ink); outline-offset: 2px; }
+.ads-postpick__img { width: 64px; height: 64px; flex: none; object-fit: cover; border-radius: var(--radius-md); background: var(--surface); }
+.ads-postpick__text { display: flex; flex-direction: column; min-width: 0; }
+.ads-postpick__msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ads-postpick__date { font-size: var(--type-caption); color: var(--ink-soft, var(--ink)); }
 .ads-imgrow { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .ads-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: var(--radius-sm); flex: none; background: var(--surface); }
 .ads-img-empty { display: grid; place-items: center; background: var(--surface); color: var(--ink-soft); font-size: var(--type-caption); aspect-ratio: 4 / 3; }

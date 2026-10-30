@@ -633,7 +633,7 @@
           if (!(w.days >= 1 && w.days <= L.maxDays && w.days % 1 === 0)) e.push(['ads-w-days', 'err.days']);
           if (live && w.dailyBudget * w.days > L.maxTotalBudget + 1e-9) e.push(['ads-w-daily', 'err.total', { total: money(L.maxTotalBudget) }]);
         }
-        if (step === 4 && live) { if (!/^\d+_\d+$/.test(w.postObjectId.trim())) e.push(['ads-w-postobj', 'err.postObj']); }
+        if (step === 4 && live) { if (!/^\d+_\d+$/.test(w.postObjectId.trim())) e.push(['ads-w-posts', 'err.postObj']); }
         else if (step === 4) { if (!w.postId && !w.imageIds.length) e.push(['ads-w-post', 'err.creative']); if (!w.caption.trim()) e.push(['ads-w-caption', 'err.caption']); }
         return e;
       }
@@ -710,9 +710,51 @@
       function s4(p) {
         if (live) {
           // The server builds the ad from an EXISTING Page post, so the post id is the creative.
+          // Choose from the Page's published posts; the pasted-id input below stays as a fallback.
+          // Both write the same value, w.postObjectId, so ads-create-campaign gets it as before.
           var po = h('input', { type: 'text', id: 'ads-w-postobj', class: 'ads-input', value: w.postObjectId, autocomplete: 'off', inputmode: 'numeric', 'aria-describedby': 'ads-w-postobj-hint' });
-          po.addEventListener('input', function () { w.postObjectId = po.value; });
-          p.appendChild(field('wiz.postObj', po, t('wiz.postObjHint'), 'ads-w-postobj'));
+          var group = h('div', { class: 'ads-postlist', id: 'ads-w-posts', role: 'radiogroup', 'aria-labelledby': 'ads-w-posts-label', tabindex: '-1' });
+          var status = h('div', { class: 'ads-postlist__status', 'aria-live': 'polite' });
+          var more = h('details', { class: 'ads-postlist__paste' }, [h('summary', {}, t('wiz.posts.paste')), field('wiz.postObj', po, t('wiz.postObjHint'), 'ads-w-postobj')]);
+          if (w.postObjectId) more.open = true;
+          po.addEventListener('input', function () {
+            w.postObjectId = po.value;
+            Array.prototype.forEach.call(group.querySelectorAll('input[type=radio]'), function (r) { r.checked = r.value === po.value.trim(); });
+          });
+          function load() {
+            group.innerHTML = '';
+            status.innerHTML = '';
+            status.appendChild(h('span', { class: 'visually-hidden' }, t('wiz.posts.loading')));
+            group.appendChild(skeleton(3));
+            api.listPagePosts(w.business).then(function (list) {
+              group.innerHTML = ''; status.innerHTML = '';
+              if (!list.length) { status.appendChild(h('p', { class: 'ads-note' }, t('wiz.posts.empty'))); more.open = true; return; }
+              list.forEach(function (x, i) {
+                var first = String(x.message || '').split(/\r?\n/)[0].trim() || t('wiz.posts.noText');
+                var rid = 'ads-w-post-' + i;
+                var r = h('input', { type: 'radio', name: 'ads-w-post-pick', id: rid, value: x.id, checked: w.postObjectId.trim() === x.id, 'aria-labelledby': rid + '-msg', 'aria-describedby': rid + '-date' });
+                r.addEventListener('change', function () { w.postObjectId = x.id; po.value = x.id; });
+                group.appendChild(h('label', { class: 'ads-option ads-postpick', for: rid }, [
+                  r,
+                  x.picture ? h('img', { class: 'ads-postpick__img', src: x.picture, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : h('span', { class: 'ads-postpick__img', 'aria-hidden': 'true' }),
+                  h('span', { class: 'ads-postpick__text' }, [
+                    h('span', { class: 'ads-postpick__msg', id: rid + '-msg' }, first),
+                    h('span', { class: 'ads-postpick__date', id: rid + '-date' }, x.created_time ? fmtDate(x.created_time, true) : '')
+                  ])
+                ]));
+              });
+            }).catch(function (err) {
+              group.innerHTML = ''; status.innerHTML = '';
+              more.open = true;
+              status.appendChild(h('div', { class: 'ads-warn', role: 'alert' }, [
+                h('p', {}, (err && err.message) || t('wiz.posts.error')),
+                h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: load }, t('wiz.posts.retry'))
+              ]));
+            });
+          }
+          p.appendChild(h('div', { class: 'ads-field' }, [h('span', { class: 'ads-label', id: 'ads-w-posts-label' }, t('wiz.posts.label')), group, status]));
+          p.appendChild(more);
+          load();
           return;
         }
         var risk = riskBox();

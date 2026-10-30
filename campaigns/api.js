@@ -111,6 +111,18 @@
     });
   }
   function metaHealth(businessId) { return callFn('ads-meta-health', { business_id: businessId }); }
+  // Published posts of the business's Facebook Page, newest first (live only; mock has none).
+  // Resolves with [{ id, message, created_time, permalink_url, picture }]; rejects with the
+  // server's plain-language message (empty string when the server could not be reached).
+  function listPagePosts(businessId) {
+    if (!isLive()) return Promise.resolve([]);
+    return callFn('ads-list-posts', { business_id: businessId }).then(function (r) {
+      if (r && r.ok && Array.isArray(r.posts)) return r.posts;
+      var e = new Error((r && r.error && r.error.message) || '');
+      e.code = (r && r.error && r.error.code) || 'server';
+      throw e;
+    });
+  }
   function newRequestId() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     var b = new Uint8Array(16); crypto.getRandomValues(b);
@@ -439,7 +451,7 @@
     setActor: function (e) { actor = e || 'unknown'; },
     setClient: function (c) { client = c; },
     mode: mode, setMode: setMode, isLive: isLive,
-    metaHealth: metaHealth, newRequestId: newRequestId, createCampaignLive: createCampaignLive,
+    metaHealth: metaHealth, listPagePosts: listPagePosts, newRequestId: newRequestId, createCampaignLive: createCampaignLive,
     canMove: function (kind, from, to) { return FLOW[kind][from].indexOf(to) !== -1; },
     findRisks: findRisks, total: total,
     init: init, getSettings: getSettings, listProducts: listProducts, listImages: listImages,
