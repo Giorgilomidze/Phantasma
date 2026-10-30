@@ -1096,7 +1096,14 @@
   /* ---------------------------------------------------------------------
      10. Top bar, language, user menu
      --------------------------------------------------------------------- */
+  function syncSideToggle() {
+    var b = $('#ads-side-toggle'); if (!b) return;
+    var open = !document.documentElement.classList.contains('ads-side-collapsed');
+    b.setAttribute('aria-expanded', String(open));
+    b.setAttribute('aria-label', t(open ? 'top.sideCollapse' : 'top.sideExpand'));
+  }
   function buildTopbar() {
+    syncSideToggle();
     var biz = $('#ads-biz'), acc = $('#ads-account');
     biz.innerHTML = '';
     settings.businesses.forEach(function (b) { biz.appendChild(h('option', { value: b.id }, b.name)); });
@@ -1133,6 +1140,13 @@
       $('#ads-lang').focus();
     });
     $('#ads-menu-btn').addEventListener('click', function () { openDrawer(sidebar, this); });
+    $('#ads-side-toggle').addEventListener('click', function () {
+      var collapse = !document.documentElement.classList.contains('ads-side-collapsed');
+      document.documentElement.classList.toggle('ads-side-collapsed', collapse);
+      try { localStorage.setItem('ads_side', collapse ? 'collapsed' : 'open'); } catch (e) { /* ignore */ }
+      syncSideToggle();
+    });
+    syncSideToggle();
     $('#ads-ai-btn').addEventListener('click', function () { openDrawer(assistant, this, $('#ads-chat-in')); });
     scrim.addEventListener('click', function () { closeDrawer(); });
     window.matchMedia('(min-width: 1024px)').addEventListener('change', function (e) { if (e.matches && activeDrawer && activeDrawer.el === sidebar) closeDrawer(true); });

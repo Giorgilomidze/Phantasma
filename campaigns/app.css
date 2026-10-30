@@ -94,14 +94,31 @@
 .ads-topbar .ads-topbar__menu { display: inline-grid; }
 
 @media (min-width: 640px) { .ads-user__email { display: inline; } }
+.ads-topbar .ads-topbar__side { display: none; }
+.ads-badge { white-space: nowrap; flex: 0 0 auto; }
 @media (min-width: 1024px) {
-  .ads-shell { grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  .ads-topbar { grid-column: 1 / -1; padding: var(--space-2) var(--space-5); }
-  .ads-topbar__ctx { flex: 0 1 auto; order: 0; }
-  .ads-topbar__ctx .ads-input { flex: 0 0 auto; width: 220px; }
+  /* Sidebar and top bar are siblings: sidebar column on the left spans both rows,
+     top bar + main share the content column, so the sidebar can never cover the top bar.
+     The column width is animated; html.ads-side-collapsed (set before first paint) shrinks it to 0. */
+  .ads-shell { grid-template-columns: var(--ads-side-w, 240px) minmax(0, 1fr); grid-template-rows: auto 1fr; transition: grid-template-columns .2s ease; }
+  html.ads-side-collapsed .ads-shell { --ads-side-w: 0px; }
+  .ads-topbar { grid-column: 2; grid-row: 1; min-width: 0; padding: var(--space-2) var(--space-5); }
+  .ads-topbar__ctx { flex: 0 1 auto; order: 0; flex-wrap: wrap; }
+  .ads-topbar__ctx .ads-input { flex: 0 1 220px; width: 220px; min-width: 140px; }
   .ads-topbar .ads-topbar__menu { display: none; }
-  .ads-sidebar { position: sticky; top: 0; align-self: start; height: 100vh; transform: none; visibility: visible; width: auto; z-index: auto; }
-  .ads-main { padding: var(--space-6) var(--space-6) var(--space-8); }
+  .ads-topbar .ads-topbar__side { display: inline-grid; }
+  .ads-sidebar {
+    position: sticky; top: 0; grid-column: 1; grid-row: 1 / span 2; align-self: start; height: 100vh;
+    transform: none; visibility: visible; width: auto; min-width: 0; z-index: auto; padding: 0; overflow: hidden;
+    transition: visibility 0s linear 0s;
+  }
+  .ads-sidebar nav { width: 240px; height: 100%; padding: var(--space-4); overflow-y: auto; }
+  html.ads-side-collapsed .ads-sidebar { visibility: hidden; border-right-color: transparent; transition: visibility 0s linear .2s; }
+  .ads-main { grid-column: 2; grid-row: 2; padding: var(--space-6) var(--space-6) var(--space-8); }
+}
+@media (min-width: 1024px) and (max-width: 1366px) {
+  .ads-topbar { padding: var(--space-2) var(--space-4); }
+  .ads-topbar__ctx .ads-input { flex-basis: 180px; width: 180px; }
 }
 
 /* -------------------------------------------------------------------------
@@ -331,6 +348,6 @@
    11. Reduced motion
    ------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .ads-sidebar, .ads-drawer { transition: none; }
+  .ads-sidebar, .ads-drawer, .ads-shell { transition: none !important; }
   .ads-skel__bar { animation: none; }
 }
