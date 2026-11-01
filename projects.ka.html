@@ -19,7 +19,7 @@
   <meta property="og:url" content="https://solvephantasma.com/projects.ka.html" />
   <meta property="og:title" content="პერსონალური კარიერული სტრატეგი — Phantasma" />
   <meta property="og:description" content="მართული სამსახურის ძიების სერვისი — ძიებას, წერასა და გაგზავნას ჩვენ ვაკეთებთ, თქვენ მხოლოდ გასაუბრებებზე მიდიხართ." />
-  <meta property="og:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+  <meta property="og:image" content="https://solvephantasma.com/images/social-share-1200.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
 
@@ -27,7 +27,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="პერსონალური კარიერული სტრატეგი — Phantasma" />
   <meta name="twitter:description" content="მართული სამსახურის ძიების სერვისი — ძიებას, წერასა და გაგზავნას ჩვენ ვაკეთებთ, თქვენ მხოლოდ გასაუბრებებზე მიდიხართ." />
-  <meta name="twitter:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+  <meta name="twitter:image" content="https://solvephantasma.com/images/social-share-1200.jpg" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -67,7 +67,8 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20261029c" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <link rel="stylesheet" href="./styles.css?v=20261101b" />
 </head>
 <body>
   <a class="skip-link" href="#main">მთავარ შინაარსზე გადასვლა</a>
@@ -160,12 +161,7 @@
     <section class="project-section page-grid" aria-labelledby="plans-h">
       <h2 id="plans-h" class="project-section__h">პაკეტები</h2>
 
-      <!--
-        Payment buttons. "Pay now" (data-tier) is handled in bootAuthModal (script.js):
-        signed in -> Edge Function flitt-create-order -> Flitt hosted checkout;
-        signed out -> #pay-modal (log in / create account). Prices are fixed on the
-        server (plans table), not here.
-      -->
+      <!-- Pay now buttons (data-tier): handled in script.js, bootAuthModal. -->
       <div class="pricing-grid">
         <article class="pricing-card">
           <p class="pricing-card__tier">პაკეტი 1</p>
@@ -203,7 +199,6 @@
           <h3 class="pricing-card__name">გაფართოებული</h3>
           <p class="pricing-card__price">₾80 <span>/ 4 კვირა</span></p>
           <p class="pricing-card__desc">ყველაფერი, რაც Essential-ში, პლუს თითოეულ ვაკანსიაზე მორგებული CV და სულ 9 წყაროს კვლევა.</p>
-          <p class="pricing-card__plus">ყველაფერი, რაც ძირითად პაკეტშია, პლუს:</p>
           <ul class="pricing-card__list">
             <li>თითოეულ ვაკანსიაზე ინდივიდუალურად მორგებული CV</li>
             <li>4 დამატებითი წყარო — სულ 9</li>
@@ -324,6 +319,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261029c" defer></script>
+  <script src="./script.js?v=20261101b" defer></script>
 </body>
 </html>

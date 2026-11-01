@@ -1640,9 +1640,32 @@
     };
   })();
 
+  // Shared focus trap for the modal dialogs (auth, pay, profile, CV).
+  // Call from a keydown handler while the dialog is open: Tab / Shift+Tab
+  // cycle through the dialog's visible controls and never reach the page
+  // behind it. (The Lightbox keeps its own trapFocus.)
+  function trapTab(box, e) {
+    if (e.key !== 'Tab' || !box) return;
+    const items = Array.from(box.querySelectorAll(
+      'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )).filter((el) => !el.disabled && el.getClientRects().length > 0);
+    if (items.length === 0) { e.preventDefault(); return; }
+    const first = items[0];
+    const last  = items[items.length - 1];
+    const here  = document.activeElement;
+    const inside = box.contains(here);
+    if (e.shiftKey && (here === first || !inside)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (here === last || !inside)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   // Login modal (#auth-modal): Google, or email + password with three modes
   // (login / signup / forgot) on one form. Same open/close conventions as
-  // the lightbox: Esc closes, backdrop closes, focus restored.
+  // the lightbox: Esc closes, backdrop closes, Tab trapped, focus restored.
   function bootAuthModal() {
     const modal = document.getElementById('auth-modal');
     if (!modal || !window.supabase) return;
@@ -1701,6 +1724,7 @@
     closeEls.forEach((el) => el.addEventListener('click', close));
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !modal.hidden) close();
+      else if (!modal.hidden) trapTab(modal, e);
     });
     switcher.addEventListener('click', () => setMode(form.dataset.mode === 'login' ? 'signup' : 'login'));
     forgot.addEventListener('click', () => setMode('forgot'));
@@ -1834,9 +1858,16 @@
         payModal.hidden = true;
         document.body.classList.remove('is-locked');
         if (!keepTier) sessionStorage.removeItem(PENDING_KEY);
+        // Back to the Pay now button. When the login modal opens next
+        // (keepTier), it records this button as its own focus-restore target.
+        if (lastFocus && lastFocus.focus) lastFocus.focus();
       };
       payModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closePay(false)));
-      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !payModal.hidden) closePay(false); });
+      document.addEventListener('keydown', (e) => {
+        if (payModal.hidden) return;
+        if (e.key === 'Escape') closePay(false);
+        else trapTab(payModal, e);
+      });
       payModal.querySelector('#pay-login').addEventListener('click', () => { closePay(true); open('login'); });
       payModal.querySelector('#pay-signup').addEventListener('click', () => { closePay(true); open('signup'); });
     }
@@ -2195,7 +2226,11 @@
         if (lastFocus && lastFocus.focus) lastFocus.focus();
       }
       el.querySelectorAll('[data-close]').forEach((c) => c.addEventListener('click', close));
-      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.hidden) close(); });
+      document.addEventListener('keydown', (e) => {
+        if (el.hidden) return;
+        if (e.key === 'Escape') close();
+        else trapTab(el, e);
+      });
       return { open, close, get isOpen() { return !el.hidden; } };
     }
 
@@ -2583,6 +2618,9 @@
   function bootImageZoom() {
     const overlay = document.createElement('div');
     overlay.className = 'img-zoom-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Full image');
     overlay.innerHTML = `
       <button class="img-zoom-overlay__close" aria-label="Close full image">×</button>
       <img class="img-zoom-overlay__img" src="" alt="" />
@@ -2590,24 +2628,36 @@
     document.body.appendChild(overlay);
 
     const overlayImg = overlay.querySelector('.img-zoom-overlay__img');
+    const closeBtn   = overlay.querySelector('.img-zoom-overlay__close');
+    let opener = null;   // the image button that opened the overlay
+
+    function closeZoom() {
+      overlay.classList.remove('is-open');
+      if (opener && opener.focus) opener.focus();
+      opener = null;
+    }
 
     document.addEventListener('click', function (e) {
       const btn = e.target.closest('.slide-built__image-btn');
       if (btn) {
+        opener = btn;
         overlayImg.src = btn.dataset.src;
         overlayImg.alt = btn.dataset.alt;
         overlay.classList.add('is-open');
-        overlay.focus();
+        closeBtn.focus();
         return;
       }
       if (overlay.classList.contains('is-open') &&
           (e.target === overlay || e.target.closest('.img-zoom-overlay__close'))) {
-        overlay.classList.remove('is-open');
+        closeZoom();
       }
     });
 
     overlay.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') overlay.classList.remove('is-open');
+      // Esc closes only the zoom, not the lightbox underneath.
+      if (e.key === 'Escape') { e.stopPropagation(); closeZoom(); }
+      // Close is the only control: keep Tab on it, out of the lightbox behind.
+      if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); closeBtn.focus(); }
     });
   }
 

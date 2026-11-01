@@ -19,7 +19,7 @@
   <meta property="og:url" content="https://solvephantasma.com/projects.html" />
   <meta property="og:title" content="Personal Career Strategist — Phantasma" />
   <meta property="og:description" content="A managed job-search service — we do the searching, writing and applying, you show up to the interviews." />
-  <meta property="og:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+  <meta property="og:image" content="https://solvephantasma.com/images/social-share-1200.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
 
@@ -27,7 +27,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Personal Career Strategist — Phantasma" />
   <meta name="twitter:description" content="A managed job-search service — we do the searching, writing and applying, you show up to the interviews." />
-  <meta name="twitter:image" content="https://solvephantasma.com/images/Social%20Sharing%20Image%20-%201.png" />
+  <meta name="twitter:image" content="https://solvephantasma.com/images/social-share-1200.jpg" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -64,7 +64,8 @@
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=20261029c" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <link rel="stylesheet" href="./styles.css?v=20261101b" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -154,12 +155,7 @@
     <section class="project-section page-grid" aria-labelledby="plans-h">
       <h2 id="plans-h" class="project-section__h">Plans</h2>
 
-      <!--
-        Payment buttons. "Pay now" (data-tier) is handled in bootAuthModal (script.js):
-        signed in -> Edge Function flitt-create-order -> Flitt hosted checkout;
-        signed out -> #pay-modal (log in / create account). Prices are fixed on the
-        server (plans table), not here.
-      -->
+      <!-- Pay now buttons (data-tier): handled in script.js, bootAuthModal. -->
       <div class="pricing-grid">
         <article class="pricing-card">
           <p class="pricing-card__tier">Tier 1</p>
@@ -197,7 +193,6 @@
           <h3 class="pricing-card__name">Advanced</h3>
           <p class="pricing-card__price">₾80 <span>/ 4 weeks</span></p>
           <p class="pricing-card__desc">Everything in Essential, plus a CV tailored to each vacancy and 9 sources researched in total.</p>
-          <p class="pricing-card__plus">Everything in Essential, plus:</p>
           <ul class="pricing-card__list">
             <li>A CV tailored specifically to each individual vacancy</li>
             <li>4 additional sources researched — 9 in total</li>
@@ -318,6 +313,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261029c" defer></script>
+  <script src="./script.js?v=20261101b" defer></script>
 </body>
 </html>

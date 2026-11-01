@@ -1,0 +1,27 @@
+# GitHub Pages (Jekyll) settings.
+# Only job: keep internal files off the live site. No theme, no plugins,
+# no permalink changes. Pages, CSS, JS, images (.webp/.jpg/.png), data/,
+# campaigns/, ads/ and the site plumbing (CNAME, robots, sitemap) stay published.
+# Note: setting `exclude` replaces Jekyll's default list, so Gemfile,
+# node_modules and vendor are listed again here.
+exclude:
+  - CLAUDE.md
+  - README.md
+  - "*.md"
+  - "*.py"
+  - "*.sql"
+  - docs
+  - supabase
+  - .claude
+  - .github
+  - "images/*.docx"
+  - node_modules
+  - package.json
+  - package-lock.json
+  - convert-images.js
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - exports
+  - "Fantasma OLD"
+  - "Miscelanous trash"

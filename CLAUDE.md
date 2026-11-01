@@ -44,7 +44,12 @@ server from the repo root, e.g. `python -m http.server 8000`.
 
 ### Deploy
 
-`git push` to `main`. GitHub Pages publishes automatically. There is no CI.
+`git push` to `main`. GitHub Pages publishes automatically (Jekyll, default settings). No build CI; the only
+workflow is the daily `.github/workflows/keep-supabase-awake.yml` ping.
+`_config.yml` exists only to `exclude` internal files (CLAUDE.md, `docs/`,
+`supabase/`, `*.md`, `*.py`, `*.sql`, `images/*.docx`, tooling) from the live site.
+Jekyll also skips anything starting with `_` or `.`, so never give a published file
+such a name.
 
 **Cache-busting:** every page links `styles.css?v=YYYYMMDDx` and
 `script.js?v=YYYYMMDDx`. **Bump the value in all HTML files (incl. the four legal pages) whenever CSS
@@ -57,7 +62,7 @@ or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 
 | File | Role |
 |---|---|
-| `index.html` | Main site (500 lines) |
+| `index.html` | Main site (~560 lines) |
 | `landing.html` | Paid-ads landing page — hero / approach / booking only |
 | `blog.html` | Case-studies page: 7 hand-written articles, sticky sidebar, scroll-spy |
 | `projects.html` | "Personal Career Strategist" service page — 3 pricing tiers, **Pay now** via Flitt hosted checkout |
@@ -68,10 +73,10 @@ or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 | `campaigns/` | **Ads Management** (folder renamed from `ads/` on 28 Oct 2026 because ad blockers block any URL containing `/ads/`; `/ads/` now only redirects) (26 Oct 2026): private, mock-data prototype for managing Meta ads/posts (Edelweiss, Breeze). Self-contained mini-app: `campaigns/index.html`, `app.css` (classes prefixed `ads-`, uses site tokens from `../styles.css`), `app.js` (UI, hash routes), `api.js` (**the only file that touches data**; later swap for a real server), `i18n.js` (EN + KA, KA unproofread), `mock/*.json`. `noindex`, `Disallow: /campaigns/` in `robots.txt`, signed-in gate is cosmetic (`ALLOWED_EMAILS` empty) — real data needs a server-side check. Round 1 = Dashboard, Campaigns (5-step wizard), Posts, AI drawer; Image Library, Products, Rotation, Settings, Audit log are "Round 2" stubs. Header nav "Projects" dropdown (`bootNavDropdown`) links Job Seek (`projects.html`) and Ads Management (`campaigns/`). |
 | `supabase/` | **Not the schema.** `README.md` (run order + table contract), `0001-drop-site-v1.sql`, `0002-site-additions.sql`. The schema lives in `D:\Web Development\Solve Assistant\supabase\schema.sql`. |
 | `data/kpis.json` | **Fallback only** for the projects-page funnel. Live numbers come from the Supabase view `public_kpis` (`supabase/0010-public-kpis.sql`, readable by `anon`); the file is used if that query fails. Keys must match the view's columns. |
-| `script.js` | All behaviour + the `CASES` data (~1500 lines) |
-| `styles.css` | All styles, numbered sections (~2500 lines) |
+| `script.js` | All behaviour + the `CASES` data (~2900 lines) |
+| `styles.css` | All styles, numbered sections (~3700 lines) |
 | `convert-images.js` | One-off `sharp` script, PNG/JPG to WebP at quality 82 |
-| `favicon.svg`, `CNAME`, `robots.txt`, `sitemap.xml` | Site plumbing |
+| `favicon.svg`, `apple-touch-icon.png` (180x180, rendered from the SVG), `CNAME`, `robots.txt`, `sitemap.xml`, `_config.yml` | Site plumbing |
 | `images/` | Source PNG/JPG **and** the WebP the site actually references |
 | `Fantasma OLD/`, `Miscelanous trash/` | Scratch dirs, now git-ignored. Ignore them. |
 
@@ -87,7 +92,7 @@ API token, see §9) and the two scratch dirs.
 Single IIFE. Order of contents:
 
 1. `prefersReducedMotion` — checked throughout; every animation must respect it.
-2. **`CASES`** — array of 7 case-study objects, lines ~14-486. This is the
+2. **`CASES`** — array of 7 case-study objects, lines ~14-471. This is the
    single source of truth for the case reel *and* the lightbox.
 3. Boot functions, all called from `init()` at the bottom:
 
@@ -108,14 +113,24 @@ Single IIFE. Order of contents:
 | `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` |
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
+| `bootNavDropdown()` | Header "Projects" dropdown (button + menu): click / Enter / Space toggle, arrow keys, Esc refocuses the button, outside click closes. |
+| `bootEventTracking()` | Delegated clicks → `track()` (gtag events only when consent is `accepted`): Pay now, mailto, Book a call. |
+| `bootAccountNav()` | `account.html` side panel: active-section highlight, proxy buttons that reuse the stat tiles. |
+| `bootPaymentResult()` | `payment-result.html` only. Reads the own `flitt_orders` row (URL never trusted), polls every 2 s for ~30 s. |
 
-`init()` runs on `DOMContentLoaded`. **All pages (index, landing, blog, projects, projects.ka, account) load the same
+Modal dialogs (auth, pay, profile, CV, LinkedIn) share one helper, `trapTab(box, e)`,
+which keeps Tab / Shift+Tab inside the open dialog; each restores focus on close.
+The image zoom overlay is `role="dialog"`, focuses its close button, and Esc closes
+only the zoom (not the lightbox under it).
+
+`init()` runs on `DOMContentLoaded`. **All 12 root pages (index, landing, blog, projects, projects.ka, account,
+preferences, payment-result, terms, terms.ka, privacy, privacy.ka) load the same
 `script.js`**, so every boot function must guard against elements that do not
 exist on the current page (`if (!el) return;`). Several past bugs were exactly
 this — see commits `a2fec02` and `ca88b9c`.
 
-> Note: `index.html` loads `script.js` with `defer`; `landing.html` and
-> `blog.html` load it without. Harmless today because of the `readyState`
+> Note: most pages load `script.js` with `defer`; `account.html` and
+> `preferences.html` load it without. Harmless today because of the `readyState`
 > check at the bottom, but keep it in mind.
 
 ### Shape of a CASES entry
@@ -207,13 +222,13 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 
 ## 6. Analytics, consent, and third parties
 
-- **Google Ads** tag `AW-18182297582` is live on all three pages, with a
+- **Google Ads** tag `AW-18182297582` is live on all 12 root pages, with a
   conversion event `AW-18182297582/4NM8CKTh37EcEO6v_91D`.
 - Google **consent mode** defaults everything to `denied` in an inline script in
   `<head>`, before the gtag loader. Consent is stored in `localStorage` under
   `phantasma_cookie_consent` (`accepted` or `declined`), and the banner is
   `#cookie-banner`.
-- **GA4 is not wired up yet** — placeholder comment at `index.html:99` waiting
+- **GA4 is not wired up yet** — placeholder comment at `index.html:104` waiting
   for a measurement ID.
 - **Calendly**: `https://calendly.com/lomiddze/30min`, constant `CALENDLY_URL`
   in `script.js`. Deliberately lazy-loaded so no third-party request fires
@@ -257,22 +272,27 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   emails `consult@solvephantasma.com`, deletes the login. **Owner must then
   remove the CV / candidate rows by hand** and set `handled_at`.
 
-The consent-mode `<head>` block is duplicated across **all seven** HTML files. If
+The consent-mode `<head>` block is duplicated across **all 12** root HTML files. If
 you change it, change it in all of them.
 
 ---
 
 ## 7. SEO
 
-- Per-page: canonical link, Open Graph, Twitter card. OG image is
-  `images/Social Sharing Image - 1.png` (1200x630).
-- `index.html` has a **JSON-LD `ProfessionalService`** block in `<head>`.
+- Per-page: canonical link, Open Graph, Twitter card (image: see below).
+- `index.html` has a **JSON-LD `ProfessionalService`** block in `<head>` (name,
+  email, telephone, logo, image, postal address — all copied from the footer; no `sameAs`
+  until the LinkedIn URL is confirmed).
 - `index.html` ends with a `.visually-hidden` `<section>` containing the full
   text of all 7 case studies, so Google can index content that otherwise only
   exists inside the JS-driven lightbox. **If you edit case copy in `CASES`,
   update this block too** — they are maintained by hand, in parallel.
-- `robots.txt` disallows `/landing.html` (paid-traffic page, kept out of the
-  index). `sitemap.xml` lists 4 URLs: `/`, `/blog.html`, `/projects.html`, `/projects.ka.html`.
+- `robots.txt` disallows `/landing.html` (paid-traffic page), `/account.html`,
+  `/preferences.html`, `/campaigns/` and `/ads/`. `sitemap.xml` lists 8 URLs: `/`,
+  `/blog.html`, `/projects.html`, `/projects.ka.html`, `/terms.html`, `/terms.ka.html`,
+  `/privacy.html`, `/privacy.ka.html`.
+- OG / Twitter image on every page: `images/social-share-1200.jpg` (1200x630 JPG,
+  ~130 KB, made with sharp from `Social Sharing Image - 1.png`, which stays as source).
 - `blog.html` articles use ids of the form `case-<slug>`.
 
 ---
@@ -301,8 +321,7 @@ the copy, not used by the site.
 Still open — need information or a decision from the owner:
 
 1. **GA4 measurement ID missing.** Placeholder comment in all pages
-   (`index.html:99`, `landing.html:56`, `blog.html:58`, both `projects*.html`
-   ~line 58, `account.html`). Add `gtag('config', 'G-XXXXXXXXXX')` behind the consent gate.
+   (all 12 root pages, e.g. `index.html:104`, `blog.html:60`, `landing.html:52`). Add `gtag('config', 'G-XXXXXXXXXX')` behind the consent gate.
 2. **Footer LinkedIn link is `href="#"`** on `index.html`. The career-service
    pages link the Personal Career Strategist FB / LinkedIn / Instagram (17 Sep).
 3. ~~Keepz owner actions~~ — Keepz is no longer used (29 Oct 2026).
@@ -324,8 +343,8 @@ Still open — need information or a decision from the owner:
     (`auth@solvephantasma.com`, key in `.env`); Resend domain verification was
     still *Pending* at 00:30 17 Sep 2026 — until Verified, sign-up /
     reset emails fail with "Error sending". Templates still Supabase default
-    (subjects rebranded). **Privacy-policy page** still missing (needed for
-    sign-ups and the Google consent screen). LinkedIn provider not set up.
+    (subjects rebranded). Privacy-policy page: done (`privacy.html`, 29 Oct 2026).
+    LinkedIn provider not set up.
 11. **Dashboard next steps** (backend ready): Interested / Not for me on the
     shortlist panel; client brief form + CV upload to the `cvs` bucket;
     weekly "your shortlist is ready" email (Supabase cron + Resend).
@@ -333,8 +352,8 @@ Still open — need information or a decision from the owner:
     screen (the auth callback host). Fix options: (a) Google Cloud → OAuth
     consent → Branding (name, logo, privacy URL) + Publish + brand
     verification, so it reads "to continue to Phantasma"; (b) Supabase
-    custom auth domain `auth.solvephantasma.com` (Pro add-on). Do (a) once
-    `privacy.html` exists.
+    custom auth domain `auth.solvephantasma.com` (Pro add-on). (a) is now
+    ready to do: `privacy.html` exists since 29 Oct 2026.
 13. **Supabase Pro** — not needed while `.github/workflows/keep-supabase-awake.yml`
     pings daily; switch when the first paying client is live (adds backups).
 
