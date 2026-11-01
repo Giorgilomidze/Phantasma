@@ -71,7 +71,7 @@ or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
 | `account.html` | Client dashboard (EN only). Signed-out: Log in prompt. Signed-in: email/Sign out + 8 KPI tiles from `get_my_stats()`. `noindex`, disallowed in `robots.txt`. |
 | `preferences.html` | Client questionnaire: 5 collapsible groups (salary, role, geography, where to search, applications), 23 questions, Save per group, answered-counters. Table `preferences` (salary typed + `answers` jsonb `q1..q24`, no q3). `noindex`. |
 | `campaigns/` | **Ads Management** (folder renamed from `ads/` on 28 Oct 2026 because ad blockers block any URL containing `/ads/`; `/ads/` now only redirects) (26 Oct 2026): private, mock-data prototype for managing Meta ads/posts (Edelweiss, Breeze). Self-contained mini-app: `campaigns/index.html`, `app.css` (classes prefixed `ads-`, uses site tokens from `../styles.css`), `app.js` (UI, hash routes), `api.js` (**the only file that touches data**; later swap for a real server), `i18n.js` (EN + KA, KA unproofread), `mock/*.json`. `noindex`, `Disallow: /campaigns/` in `robots.txt`, signed-in gate is cosmetic (`ALLOWED_EMAILS` empty) — real data needs a server-side check. Round 1 = Dashboard, Campaigns (5-step wizard), Posts, AI drawer; Image Library, Products, Rotation, Settings, Audit log are "Round 2" stubs. Header nav "Projects" dropdown (`bootNavDropdown`) links Job Seek (`projects.html`) and Ads Management (`campaigns/`). |
-| `supabase/` | **Not the schema.** `README.md` (run order + table contract), `0001-drop-site-v1.sql`, `0002-site-additions.sql`. The schema lives in `D:\Web Development\Solve Assistant\supabase\schema.sql`. |
+| `supabase/` | **Not the schema.** `README.md` (run order + table contract), `0001-drop-site-v1.sql`, `0002-site-additions.sql`, … `0023-contact-requests.sql` (contact form table). Edge Functions in `supabase/functions/` (incl. `contact-submit`, deployed 1 Nov 2026). The schema lives in `D:\Web Development\Solve Assistant\supabase\schema.sql`. |
 | `data/kpis.json` | **Fallback only** for the projects-page funnel. Live numbers come from the Supabase view `public_kpis` (`supabase/0010-public-kpis.sql`, readable by `anon`); the file is used if that query fails. Keys must match the view's columns. |
 | `script.js` | All behaviour + the `CASES` data (~2900 lines) |
 | `styles.css` | All styles, numbered sections (~3700 lines) |
@@ -110,7 +110,8 @@ Single IIFE. Order of contents:
 | `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. One form, three modes via `data-mode` (login / signup / forgot); all copy in `data-*` attributes (KA page supplies its own). Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: always `startFlitt()` → Edge Function `flitt-create-order` → browser goes to Flitt checkout (errors such as `already_active` / `payments_not_open` show under the button); signed out → `#pay-modal` (projects pages only): Log in / Create account (no guest payment). Chosen tier kept in `sessionStorage` (`phantasma_pending_tier`); after sign-in `resumePayment()` starts Flitt instead of opening the profile. |
 | `bootAccountPage()` | `account.html` only. Shows `#account-newpass` on the `PASSWORD_RECOVERY` auth event (reset-link landing). Fills `[data-stat]` tiles, each a button opening one `#stat-panel` table, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
 | `bootPreferencesPage()` | `preferences.html` only. Fill / count / per-group save via `Auth.loadPreferences` / `savePreferences` (upsert on `user_id`). Warns on leaving with unsaved edits. |
-| `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` |
+| `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` or any `[data-open-booking]` link |
+| `bootContactForm()` | `index.html` only. Short form `#contact-form` → Edge Function `contact-submit`; status in `#contact-form-status` (copy from its `data-*`); on success `track('contact_submitted')` (also an Ads conversion, see §6). |
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
 | `bootNavDropdown()` | Header "Projects" dropdown (button + menu): click / Enter / Space toggle, arrow keys, Esc refocuses the button, outside click closes. |
@@ -222,14 +223,34 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 
 ## 6. Analytics, consent, and third parties
 
-- **Google Ads** tag `AW-18182297582` is live on all 12 root pages, with a
-  conversion event `AW-18182297582/4NM8CKTh37EcEO6v_91D`.
+- **Google Ads** tag `AW-18182297582` is live on all 12 root pages. **Conversions
+  fire from `track()` in `script.js` only** (consent-gated), never on page load
+  (the old head block that counted every page view after cookie consent was
+  removed 1 Nov 2026): `calendly_booked` or `contact_submitted` also send the lead
+  conversion `ADS_LEAD_CONVERSION` = `AW-18182297582/4NM8CKTh37EcEO6v_91D`;
+  `purchase` also sends `ADS_PURCHASE_LABEL` (value, `GEL`, `transaction_id`)
+  **once the owner fills that constant** with the send_to of a "Purchase"
+  conversion action created in Google Ads (empty = off).
+- **Contact form** (1 Nov 2026): `index.html`, band `.impact-cta` right after the
+  impact tiles = **Book a call** (`data-open-booking`: scrolls to `#contact` and
+  loads Calendly) + short form `#contact-form` (name, email, message, honeypot
+  `website`, privacy link). `bootContactForm()` POSTs to Edge Function
+  **`contact-submit`** (`verify_jwt false`, CORS only `https://solvephantasma.com`
+  and `http://localhost:8000`, honeypot → silent 200, max 5 per hashed IP per
+  hour, IP stored only as SHA-256 + fixed salt). Rows go to
+  `public.contact_requests` (`supabase/0023-contact-requests.sql`; RLS on, no
+  public policies, read them in the Supabase dashboard, set `handled_at` after
+  replying). Email to `consult@solvephantasma.com` from `auth@solvephantasma.com`
+  via Resend **only if the Edge Function secret `RESEND_API_KEY` is set**;
+  otherwise the row is still saved and the reply carries `note: email_not_sent`.
+  Styles: section 13.
 - Google **consent mode** defaults everything to `denied` in an inline script in
   `<head>`, before the gtag loader. Consent is stored in `localStorage` under
   `phantasma_cookie_consent` (`accepted` or `declined`), and the banner is
   `#cookie-banner`.
-- **GA4 is not wired up yet** — placeholder comment at `index.html:104` waiting
-  for a measurement ID.
+- **GA4** `G-Q423P065C1` (since 1 Nov 2026) is configured in the head block of all
+  12 root pages, behind consent mode; `track()` events flow to it, and
+  `payment-result.html` sends a `purchase` (value, GEL, order id) once per order.
 - **Calendly**: `https://calendly.com/lomiddze/30min`, constant `CALENDLY_URL`
   in `script.js`. Deliberately lazy-loaded so no third-party request fires
   before the user asks. Its height is pinned to avoid an internal scrollbar
@@ -320,8 +341,7 @@ the copy, not used by the site.
 
 Still open — need information or a decision from the owner:
 
-1. **GA4 measurement ID missing.** Placeholder comment in all pages
-   (all 12 root pages, e.g. `index.html:104`, `blog.html:60`, `landing.html:52`). Add `gtag('config', 'G-XXXXXXXXXX')` behind the consent gate.
+1. ~~GA4 measurement ID~~ — done 1 Nov 2026 (`G-Q423P065C1`). Open: link GA4 to Google Ads (owner), create an Ads "Purchase" conversion and fill `ADS_PURCHASE_LABEL`.
 2. **Footer LinkedIn link is `href="#"`** on `index.html`. The career-service
    pages link the Personal Career Strategist FB / LinkedIn / Instagram (17 Sep).
 3. ~~Keepz owner actions~~ — Keepz is no longer used (29 Oct 2026).

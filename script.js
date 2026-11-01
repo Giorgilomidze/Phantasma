@@ -2510,12 +2510,95 @@
      or undecided. No GA4 ID is configured yet, so until one is added these
      reach only the Google Ads tag.
      --------------------------------------------------------------------- */
+  // Google Ads conversions. Fired from track() below, so they are consent-gated too.
+  // "Lead" conversion: a booked Calendly call or a sent contact form.
+  const ADS_LEAD_CONVERSION = 'AW-18182297582/4NM8CKTh37EcEO6v_91D';
+  // Purchase conversion: EMPTY on purpose. When the owner creates a "Purchase"
+  // conversion action in Google Ads, put its full send_to here
+  // (e.g. 'AW-18182297582/AbCdEf...') and every 'purchase' event (payment-result
+  // page) will also send it, with value, currency GEL and transaction_id.
+  const ADS_PURCHASE_LABEL = '';
+
   function track(name, params) {
     if (typeof gtag !== 'function') return;
     let consent = null;
     try { consent = localStorage.getItem('phantasma_cookie_consent'); } catch (e) { /* storage blocked */ }
     if (consent !== 'accepted') return;
-    gtag('event', name, params || {});
+    const p = params || {};
+    gtag('event', name, p);
+    if (name === 'calendly_booked' || name === 'contact_submitted') {
+      gtag('event', 'conversion', { send_to: ADS_LEAD_CONVERSION });
+    }
+    if (name === 'purchase' && ADS_PURCHASE_LABEL) {
+      gtag('event', 'conversion', {
+        send_to: ADS_PURCHASE_LABEL,
+        value: p.value,
+        currency: 'GEL',
+        transaction_id: p.transaction_id,
+      });
+    }
+  }
+
+  /* ---------------------------------------------------------------------
+     Short contact form (index.html, after the impact tiles). Posts to the
+     Edge Function contact-submit (no login; it stores the row with the
+     service role and emails the owner). Honeypot field "website" is sent
+     as is; the server drops filled ones silently.
+     --------------------------------------------------------------------- */
+  const CONTACT_ENDPOINT = 'https://muumpjtpjnoxxdkhqtik.supabase.co/functions/v1/contact-submit';
+
+  function bootContactForm() {
+    const form = document.getElementById('contact-form');
+    if (!form) return;
+    const status = document.getElementById('contact-form-status');
+    const btn = form.querySelector('button[type="submit"]');
+    let sending = false;
+
+    function say(kind) {
+      if (!status) return;
+      status.textContent = status.dataset[kind] || '';
+      status.dataset.kind = kind === 'ok' || kind === 'busy' ? kind : 'error';
+      status.hidden = false;
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (sending) return;
+      const name = form.elements.name.value.trim();
+      const email = form.elements.email.value.trim();
+      const message = form.elements.message.value.trim();
+      if (!name || !message || !form.elements.email.checkValidity() || !email) {
+        say('invalid');
+        return;
+      }
+      sending = true;
+      if (btn) btn.disabled = true;
+      say('busy');
+      fetch(CONTACT_ENDPOINT, {
+        method: 'POST',
+        // Same apikey header supabase-js sends; the function itself needs no login.
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
+        body: JSON.stringify({
+          name,
+          email,
+          message,
+          page: location.pathname,
+          website: form.elements.website ? form.elements.website.value : '',
+        }),
+      })
+        .then((r) => r.json().catch(() => ({})).then((data) => ({ ok: r.ok && data.ok === true })))
+        .then(({ ok }) => {
+          if (!ok) throw new Error('send failed');
+          say('ok');
+          form.reset();
+          track('contact_submitted');
+        })
+        .catch(() => say('error'))
+        .finally(() => {
+          sending = false;
+          if (btn) btn.disabled = false;
+        });
+    });
   }
 
   function bootEventTracking() {
@@ -2590,6 +2673,9 @@
     });
 
     placeholder.addEventListener('click', load);
+    // "Book a call" after the impact tiles: the link scrolls to #contact,
+    // and the click itself counts as asking for the calendar.
+    document.querySelectorAll('[data-open-booking]').forEach((a) => a.addEventListener('click', load));
     placeholder.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -2870,6 +2956,7 @@
     bootPreferencesPage();
     bootPaymentResult();
     bootCalendly();
+    bootContactForm();
     bootEventTracking();
     bootImageZoom();
   }

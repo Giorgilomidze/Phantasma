@@ -94,20 +94,13 @@
   <script>
     gtag('js', new Date());
     gtag('config', 'AW-18182297582');
-    if (localStorage.getItem('phantasma_cookie_consent') === 'accepted') {
-      gtag('event', 'conversion', {
-        send_to: 'AW-18182297582/4NM8CKTh37EcEO6v_91D',
-        value: 1.0,
-        currency: 'USD'
-      });
-    }
     gtag('config', 'G-Q423P065C1'); /* GA4 — sends only after cookie consent (consent mode above) */
   </script>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 
-  <link rel="stylesheet" href="./styles.css?v=20261101c" />
+  <link rel="stylesheet" href="./styles.css?v=20261101d" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -386,6 +379,48 @@
             <p class="impact-tile__source">Pharmacy chain</p>
           </article>
         </div>
+
+        <!-- Next step after the proof: Book a call (primary) + short note (secondary) -->
+        <div class="impact-cta">
+          <div class="impact-cta__lead">
+            <h3 id="impact-cta-h" class="impact-cta__h">Have a process like these?</h3>
+            <p class="impact-cta__sub">A 30-minute call is the quickest way to find out whether we can help.</p>
+            <a class="btn btn-primary" href="#contact" data-open-booking>Book a call</a>
+          </div>
+
+          <form class="contact-form" id="contact-form" novalidate>
+            <p class="contact-form__intro">Not ready for a call? Send a short note.</p>
+            <div class="contact-form__row">
+              <div class="contact-form__field">
+                <label class="contact-form__label" for="cf-name">Name</label>
+                <input class="contact-form__input" id="cf-name" name="name" type="text" autocomplete="name" maxlength="120" required />
+              </div>
+              <div class="contact-form__field">
+                <label class="contact-form__label" for="cf-email">Email</label>
+                <input class="contact-form__input" id="cf-email" name="email" type="email" autocomplete="email" maxlength="200" required />
+              </div>
+            </div>
+            <div class="contact-form__field">
+              <label class="contact-form__label" for="cf-message">Message</label>
+              <textarea class="contact-form__input contact-form__textarea" id="cf-message" name="message" rows="4" maxlength="2000" required></textarea>
+            </div>
+            <!-- Honeypot: hidden from people, bots fill it in -->
+            <div class="contact-form__hp" aria-hidden="true">
+              <label for="cf-website">Website</label>
+              <input id="cf-website" name="website" type="text" tabindex="-1" autocomplete="off" />
+            </div>
+            <p class="contact-form__consent">
+              We use these details only to reply to you. See our
+              <a class="link-quiet" href="./privacy.html">Privacy policy</a>.
+            </p>
+            <button class="btn contact-form__submit" type="submit">Send</button>
+            <p class="contact-form__status" id="contact-form-status" role="status" aria-live="polite" hidden
+               data-busy="Sending…"
+               data-ok="Thank you. Your message has arrived; we will reply by email."
+               data-invalid="Please fill in your name, a valid email and a message."
+               data-error="Could not send just now. Please try again, or email consult@solvephantasma.com."></p>
+          </form>
+        </div>
       </div>
     </section>
 
@@ -547,7 +582,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261101c" defer></script>
+  <script src="./script.js?v=20261101d" defer></script>
 
   <!-- SEO: Full case study content, visually hidden, indexed by Google -->
   <section class="visually-hidden">
