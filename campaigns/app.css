@@ -163,10 +163,10 @@
    5. Cards, KPIs, tables, chart, alerts
    ------------------------------------------------------------------------- */
 .ads-card { background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-4); min-width: 0; }
-.ads-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); margin: 0 0 var(--space-3); }
-.ads-kpi { background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
+.ads-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 200px)); gap: var(--space-3); margin: 0 0 var(--space-3); }
+.ads-kpi { background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); display: flex; flex-direction: column; gap: 2px; }
 .ads-kpi__label { font-size: var(--type-caption); color: var(--ink-soft); }
-.ads-kpi__value { font-family: var(--font-display); font-size: var(--type-h2-tile); line-height: 1.1; }
+.ads-kpi__value { font-family: var(--font-display); font-size: clamp(1.125rem, 1rem + 0.35vw, 1.5rem); line-height: 1.1; }
 .ads-kpis--small { margin-top: var(--space-3); }
 
 .ads-tablewrap { overflow-x: auto; }
@@ -185,7 +185,7 @@
   .ads-table--stack td.ads-actions::before { display: none; }
 }
 .ads-chart { overflow-x: auto; }
-.ads-chart svg { min-width: 520px; width: 100%; height: auto; }
+.ads-chart svg { min-width: 520px; width: 100%; max-width: 760px; height: auto; display: block; }
 .ads-chart__tick { font-size: 13px; fill: var(--ink-soft); font-family: var(--font-body); }
 .ads-chart__legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--type-caption); margin: 0 0 var(--space-2); }
 .ads-key::before { content: ""; display: inline-block; width: 24px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: var(--space-2); }
