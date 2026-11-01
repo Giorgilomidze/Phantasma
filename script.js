@@ -2827,9 +2827,18 @@
       if (!orderId) { VIEWS.unknown(); return; }
       const started = Date.now();
       const tick = async () => {
-        const { data, error } = await Auth.db().from('flitt_orders').select('status').eq('order_id', orderId).maybeSingle();
+        const { data, error } = await Auth.db().from('flitt_orders').select('status, amount_minor, currency, plan_code').eq('order_id', orderId).maybeSingle();
         const status = !error && data ? data.status : null;
-        if (status === 'approved') return VIEWS.paid();
+        if (status === 'approved') {
+          // GA4 purchase, once per order (consent-gated inside track()).
+          let seen = null;
+          try { seen = sessionStorage.getItem('phantasma_ga_purchase'); } catch (e) { /* storage blocked */ }
+          if (seen !== orderId) {
+            track('purchase', { transaction_id: orderId, value: (data.amount_minor || 0) / 100, currency: data.currency || 'GEL', items: [{ item_id: data.plan_code }] });
+            try { sessionStorage.setItem('phantasma_ga_purchase', orderId); } catch (e) { /* storage blocked */ }
+          }
+          return VIEWS.paid();
+        }
         if (VIEWS[status] && status !== 'created' && status !== 'processing') return VIEWS[status]();
         if (Date.now() - started >= 30000) return VIEWS.unknown();
         setTimeout(tick, 2000);
