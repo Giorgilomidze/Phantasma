@@ -1116,7 +1116,7 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
 .impact-cta__cols {
   display: grid;
   gap: var(--space-5);
-  align-items: start; /* cards end at their content, no empty tail */
+  align-items: stretch; /* both cards share one height */
 }
 .impact-cta__card {
   background: var(--surface);
@@ -1145,8 +1145,8 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
   margin: 0;
 }
 .impact-cta__btn { min-height: 44px; }
-/* Email line follows the button directly (cards no longer stretch to equal height) */
-.impact-cta__book .booking__fallback { margin-top: 0; }
+/* Email line sits at the bottom so both cards end level */
+.impact-cta__book .booking__fallback { margin-top: auto; }
 
 .contact-form {
   display: grid;
@@ -1185,7 +1185,7 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
 }
 .contact-form__textarea {
   resize: vertical;
-  min-height: 5.5em;
+  min-height: 4.5em;
 }
 .contact-form__input:focus-visible {
   outline: 2px solid var(--accent-deep);
@@ -1200,7 +1200,15 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
   height: 1px;
   overflow: hidden;
 }
+/* Send button with the privacy line beside it, on one row */
+.contact-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+}
 .contact-form__consent {
+  flex: 1 1 16rem;
   margin: 0;
   font-size: var(--type-body-sm);
   color: var(--ink-soft);
