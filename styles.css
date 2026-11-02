@@ -1092,10 +1092,10 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
 /* Contact band (#contact, after About): heading on top, then two equal-height
    cards, short note | Book a call. Mobile-first: stacked; side by side from 1024px. */
 .impact-cta {
-  padding: var(--space-9) 0 var(--space-8);
+  padding: var(--space-5) 0 var(--space-7);
 }
 .impact-cta__head {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-4);
 }
 .impact-cta__h {
   font-family: var(--font-display);
@@ -1116,6 +1116,7 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
 .impact-cta__cols {
   display: grid;
   gap: var(--space-5);
+  align-items: start; /* cards end at their content, no empty tail */
 }
 .impact-cta__card {
   background: var(--surface);
@@ -1144,12 +1145,12 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
   margin: 0;
 }
 .impact-cta__btn { min-height: 44px; }
-/* Email line sits at the bottom so both cards end level */
-.impact-cta__book .booking__fallback { margin-top: auto; }
+/* Email line follows the button directly (cards no longer stretch to equal height) */
+.impact-cta__book .booking__fallback { margin-top: 0; }
 
 .contact-form {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-width: 0;
 }
 .contact-form__intro {
@@ -1184,7 +1185,7 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
 }
 .contact-form__textarea {
   resize: vertical;
-  min-height: 7.5em;
+  min-height: 5.5em;
 }
 .contact-form__input:focus-visible {
   outline: 2px solid var(--accent-deep);
@@ -1236,7 +1237,7 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
   .contact-form__row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 600px) {
-  .impact-cta__card { padding: var(--space-6); }
+  .impact-cta__card { padding: var(--space-5); }
 }
 @media (min-width: 1024px) {
   .impact-cta__cols {
@@ -1267,8 +1268,10 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
 }
 
 /* index.html: About | "Tell us what's manual" side by side from 1024px. */
+/* index.html: less air between the impact tiles and the About row */
+.impact:has(+ .about-duo) { padding-bottom: var(--space-5); }
 .about-duo {
-  padding: var(--space-9) 0;
+  padding: var(--space-5) 0 var(--space-4);
 }
 .about-duo .page-grid { row-gap: var(--space-6); }
 .about-duo .section-title,
