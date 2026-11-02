@@ -2377,7 +2377,7 @@
       function chosen() { return boxes.filter((cb) => cb.checked).map((cb) => cb.value); }
       function applyFilter() {
         const pick = chosen();
-        const live = recs.filter((x) => x.tr.isConnected);
+        const live = recs.filter((x) => x.tr.parentNode);
         let n = 0;
         live.forEach((x) => {
           const show = !pick.length || pick.indexOf(dayKey(get(x.r))) !== -1;
@@ -2393,6 +2393,15 @@
       boxes.forEach((cb) => cb.addEventListener('change', applyFilter));
       allBtn.addEventListener('click', () => { boxes.forEach((cb) => { cb.checked = false; }); applyFilter(); });
       latestBtn.addEventListener('click', () => { boxes.forEach((cb, i) => { cb.checked = i === 0; }); applyFilter(); });
+      // The list floats over the table (fixed position), so opening it never pushes the table down.
+      function placePanel() {
+        const r = summary.getBoundingClientRect();
+        panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8)) + 'px';
+        panel.style.top = (r.bottom + 4) + 'px';
+      }
+      menu.addEventListener('toggle', () => { if (menu.open) placePanel(); });
+      window.addEventListener('scroll', (e) => { if (menu.open && !panel.contains(e.target)) menu.open = false; }, true);
+      window.addEventListener('resize', () => { if (menu.open) placePanel(); });
       // Close the menu on outside click or Esc.
       document.addEventListener('click', (e) => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
       menu.addEventListener('keydown', (e) => { if (e.key === 'Escape' && menu.open) { menu.open = false; summary.focus(); } });
