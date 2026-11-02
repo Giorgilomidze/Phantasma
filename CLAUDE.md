@@ -54,7 +54,7 @@ such a name.
 **Cache-busting:** every page links `styles.css?v=YYYYMMDDx` and
 `script.js?v=YYYYMMDDx`. **Bump the value in all HTML files (incl. the four legal pages) whenever CSS
 or JS changes**, or browsers (and Pages' 10-min cache) keep the old file:
-`sed -i -E 's#(styles\.css|script\.js)\?v=[^"]*#?v=NEW#' *.html`.
+`sed -i -E 's#(styles\.css|script\.js)\?v=[^"]*#\1?v=NEW#g' *.html campaigns/index.html`.
 
 ---
 
@@ -105,12 +105,12 @@ Single IIFE. Order of contents:
 | `bootKpiFunnel()` | Projects pages only. Reads the `public_kpis` view (one row of counts) via supabase-js, falls back to `data/kpis.json`. Stage order + labels come from `data-stages` JSON on `#kpi-funnel` (EN/KA each supply their own); values looked up by key. Width `28 + 72·log10(v+1)/log10(max+1)` % so 0 is still a 28% band. Colour via `--mix` custom prop → `color-mix(in oklch, --surface, --accent)`; text flips to `--bg` at mix ≥ 60%. Lede / "updated" / "unavailable" strings come from `data-*` on `#kpi-funnel-lede`; Georgian dates use a hardcoded month array. Both fail → "Live figures unavailable", no bands. |
 | `bootCaseReel()` | Infinite auto-scrolling carousel, 4 visible, 5s interval, arrows + dots |
 | `Lightbox` | Module (IIFE) — 6-slide case-study viewer with keyboard nav |
-| `bootApproachStrip()` | Scroll-driven progress through the 5 approach stations |
+| `bootApproachStrip()` | Scroll-driven progress through the 5 approach stations. On `index.html` the section is parked in a `<template>` (2 Nov 2026), so it finds no `#approach-strip` and returns; still live on `landing.html`. |
 | `Auth` | Module. supabase-js client (`SUPABASE_URL` / publishable key constants), email+password (`signIn`/`signUp`/`resetPassword`/`updatePassword`) + Google sign-in, `requestSubscription(plan)` (inserts a `pending` row), `loadStats()`. Syncs every `.js-auth` link (Log in ↔ Account, labels from `data-label-*`) and fires `phantasma:auth`. Skips silently when `window.supabase` is absent (landing). |
 | `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. One form, three modes via `data-mode` (login / signup / forgot); all copy in `data-*` attributes (KA page supplies its own). Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: always `startFlitt()` → Edge Function `flitt-create-order` → browser goes to Flitt checkout (errors such as `already_active` / `payments_not_open` show under the button); signed out → `#pay-modal` (projects pages only): Log in / Create account (no guest payment). Chosen tier kept in `sessionStorage` (`phantasma_pending_tier`); after sign-in `resumePayment()` starts Flitt instead of opening the profile. |
 | `bootAccountPage()` | `account.html` only. Shows `#account-newpass` on the `PASSWORD_RECOVERY` auth event (reset-link landing). Fills `[data-stat]` tiles, each a button opening one `#stat-panel` table, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
 | `bootPreferencesPage()` | `preferences.html` only. Fill / count / per-group save via `Auth.loadPreferences` / `savePreferences` (upsert on `user_id`). Warns on leaving with unsaved edits. |
-| `bootBooking()` | On click of `#booking-placeholder` (or any `[data-open-booking]` link) inserts the Google appointment-schedule `<iframe>` (`BOOKING_URL`) plus an "Open booking page in a new tab" link. Nothing loads before the click. |
+| `bootBooking()` | Any `[data-open-booking]` control (index: the Book a call button in the `#contact` band) or `#booking-placeholder` (landing) opens the **booking dialog** `#booking-modal`, built by JS on first open (title, "Open booking page in a new tab" link, close button, Google `<iframe>` with `BOOKING_URL`). Nothing from Google loads before the click; the iframe is kept for re-opens. Esc / backdrop / close button, `trapTab`, focus back to the trigger, `body.is-locked`, `track('book_call_click')` on open. |
 | `bootContactForm()` | `index.html` only. Short form `#contact-form` → Edge Function `contact-submit`; status in `#contact-form-status` (copy from its `data-*`); on success `track('contact_submitted')` (also an Ads conversion, see §6). |
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
@@ -119,8 +119,11 @@ Single IIFE. Order of contents:
 | `bootAccountNav()` | `account.html` side panel: active-section highlight, proxy buttons that reuse the stat tiles. |
 | `bootPaymentResult()` | `payment-result.html` only. Reads the own `flitt_orders` row (URL never trusted), polls every 2 s for ~30 s. |
 
-Modal dialogs (auth, pay, profile, CV, LinkedIn) share one helper, `trapTab(box, e)`,
+Modal dialogs (auth, pay, profile, CV, LinkedIn, booking) share one helper, `trapTab(box, e)`,
 which keeps Tab / Shift+Tab inside the open dialog; each restores focus on close.
+`trapTab` counts `iframe` as focusable; the booking dialog also has a `focusin`
+guard, because tabbing out of the cross-origin Google frame skips our keydown handler
+(Esc pressed while focus is inside that frame cannot be caught either; the close button still works).
 The image zoom overlay is `role="dialog"`, focuses its close button, and Esc closes
 only the zoom (not the lightbox under it).
 
@@ -231,9 +234,11 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   `purchase` also sends `ADS_PURCHASE_LABEL` (value, `GEL`, `transaction_id`)
   **once the owner fills that constant** with the send_to of a "Purchase"
   conversion action created in Google Ads (empty = off).
-- **Contact form** (1 Nov 2026): `index.html`, band `.impact-cta` right after the
-  impact tiles = **Book a call** (`data-open-booking`: scrolls to `#contact` and
-  loads the booking iframe) + short form `#contact-form` (name, email, message, honeypot
+- **Contact form** (1 Nov 2026; layout 2 Nov 2026): `index.html`, section
+  `.impact-cta#contact` after the About row = heading "Have a process like these?"
+  on top, then two equal cards (side by side >=1024px): short form `#contact-form`
+  (left) and a **Book a 30-minute call** card whose `data-open-booking` button opens
+  the booking dialog (right). Form fields: name, email, message, honeypot
   `website`, privacy link). `bootContactForm()` POSTs to Edge Function
   **`contact-submit`** (`verify_jwt false`, CORS only `https://solvephantasma.com`
   and `http://localhost:8000`, honeypot → silent 200, max 5 per hashed IP per
@@ -253,14 +258,16 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
   `payment-result.html` sends a `purchase` (value, GEL, order id) once per order.
 - **Booking** (2 Nov 2026, replaced Calendly): Google Workspace appointment
   schedule under `consult@solvephantasma.com`. Constant `BOOKING_URL` in
-  `script.js` = public booking-page URL + `?gv=true` (embed mode). `bootBooking()`
-  inserts a lazy `<iframe class="booking__frame">` only after the visitor clicks
-  `#booking-placeholder` or a `[data-open-booking]` link (click tracked as
-  `book_call_click`), plus a new-tab fallback link (`.booking__newtab`).
-  Google posts **no booking event** to the page, so there is no "booked"
-  conversion; the Ads lead conversion comes from the contact form only. Frame
-  height is pinned in CSS (700px, 900px ≤767px) to avoid an inner scrollbar —
-  do not "fix" that by removing the height; raise it. Privacy pages name
+  `script.js` = public booking-page URL + `?gv=true` (embed mode). Since 2 Nov 2026
+  the calendar opens in a **dialog** (`.booking-modal*`, section 16), not inline:
+  the old inline iframe showed an inner scrollbar. The panel is ~92vw x 88vh
+  (max 1100px wide), full screen <=767px, `z-index` above the cookie banner.
+  Built only after the visitor clicks `#booking-placeholder` or a
+  `[data-open-booking]` control (tracked as `book_call_click`); carries a new-tab
+  fallback link. Google posts **no booking event** to the page, so there is no
+  "booked" conversion; the Ads lead conversion comes from the contact form only.
+  If the calendar still scrolls inside, raise the panel height, do not shrink
+  the frame. Privacy pages name
   Google Calendar (appointment scheduling) as the booking vendor.
 
 - **Flitt (payments)** — merchant 4058420, hosted checkout, GEL. Keepz is no
@@ -402,6 +409,19 @@ pricing wording "per 4 weeks"; daily keep-awake workflow.
   <a href="#approach">Approach</a>
   ```
   Reference copy: `git show 914a926:index.html` (and `:projects.ka.html` for KA).
+  Note: since 2 Nov 2026 the `#approach` section itself is parked (next entry),
+  so restore that first or drop the Approach link.
+- **2 Nov 2026 — Approach section parked on `index.html`.** Its full markup sits
+  inside `<template id="parked-approach">` (comment above it), between the
+  capabilities section and the impact section, so it is not rendered and
+  `bootApproachStrip()` skips it. To restore: delete the `<template ...>` and
+  `</template>` lines (keep the `<section class="approach">` between them). No CSS
+  or JS change needed. `landing.html` keeps its own Approach section, untouched.
+- **2 Nov 2026 — homepage order after the impact tiles.** Now: impact KPIs ->
+  `.about-duo` (About | "Tell us what's manual"; the second About paragraph moved
+  under that heading) -> `.impact-cta#contact` (heading, then form | Book a call).
+  Before: CTA band inside the impact section, then `.about-contact#contact` with
+  the inline booking placeholder. Reference copy: `git show 7e0093c:index.html`.
 
 ## 10. Working agreements
 

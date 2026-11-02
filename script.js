@@ -1639,14 +1639,14 @@
     };
   })();
 
-  // Shared focus trap for the modal dialogs (auth, pay, profile, CV).
+  // Shared focus trap for the modal dialogs (auth, pay, profile, CV, booking).
   // Call from a keydown handler while the dialog is open: Tab / Shift+Tab
   // cycle through the dialog's visible controls and never reach the page
   // behind it. (The Lightbox keeps its own trapFocus.)
   function trapTab(box, e) {
     if (e.key !== 'Tab' || !box) return;
     const items = Array.from(box.querySelectorAll(
-      'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'a[href], button, input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])'
     )).filter((el) => !el.disabled && el.getClientRects().length > 0);
     if (items.length === 0) { e.preventDefault(); return; }
     const first = items[0];
@@ -2613,13 +2613,12 @@
         track('contact_email_click');
         return;
       }
-      // Book a call: any link to the booking section except the plain nav "Contact" link
+      // Book a call: any link to the contact section except the plain nav "Contact" link.
+      // [data-open-booking] / #booking-placeholder are tracked by bootBooking when the dialog opens.
       const book = e.target.closest('a[href$="#contact"]');
-      if (book && !book.closest('.site-nav')) {
+      if (book && !book.closest('.site-nav') && !book.closest('[data-open-booking]')) {
         track('book_call_click');
-        return;
       }
-      if (e.target.closest('#booking-placeholder')) track('book_call_click');
     });
   }
 
@@ -2627,55 +2626,100 @@
   // Public booking-page URL, not a secret.
   const BOOKING_URL = 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0ki0aEhxq8-sjpLOxYytOX1M6SvJYnAomC4oTGmE5Wxq1BSowyQQ9i2R52IIczfYpB18T4IREo?gv=true';
 
+  // Booking dialog (2 Nov 2026, replaced the inline iframe, which showed an
+  // inner scrollbar). Any [data-open-booking] control, or the landing page's
+  // #booking-placeholder, opens a viewport-sized dialog with the Google
+  // calendar inside. The dialog is built on first open, so nothing from
+  // Google loads before the click. Same conventions as the auth modal:
+  // close button, Esc, backdrop, trapTab, focus restored, body.is-locked.
+  // Google does not post a "booked" event to the host page, so there is
+  // no booking conversion; only the open (book_call_click) is tracked.
   function bootBooking() {
     const placeholder = document.getElementById('booking-placeholder');
-    if (!placeholder) return;
+    const triggers = Array.from(document.querySelectorAll('[data-open-booking]'));
+    if (placeholder) triggers.push(placeholder);
+    if (triggers.length === 0) return;
 
-    let loaded = false;
+    let modal = null;
+    let panel = null;
+    let lastFocus = null;
 
-    function load() {
-      if (loaded) return;
-      loaded = true;
-      placeholder.classList.add('is-loaded');
-      placeholder.removeAttribute('role');
-      placeholder.removeAttribute('tabindex');
-      placeholder.removeAttribute('aria-label');
+    function build() {
+      modal = document.createElement('div');
+      modal.className = 'booking-modal';
+      modal.id = 'booking-modal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'booking-modal-title');
+      modal.hidden = true;
+      modal.innerHTML =
+        '<div class="booking-modal__backdrop" data-close></div>' +
+        '<div class="booking-modal__panel">' +
+          '<div class="booking-modal__head">' +
+            '<h2 class="booking-modal__title" id="booking-modal-title">Book a 30-minute call</h2>' +
+            '<a class="link-quiet booking-modal__newtab" target="_blank" rel="noopener">Open booking page in a new tab</a>' +
+            '<button class="booking-modal__close" type="button" data-close aria-label="Close">✕</button>' +
+          '</div>' +
+        '</div>';
+      panel = modal.querySelector('.booking-modal__panel');
+      modal.querySelector('.booking-modal__newtab').href = BOOKING_URL;
 
-      placeholder.innerHTML = '';
       const frame = document.createElement('iframe');
-      frame.className = 'booking__frame';
-      frame.title = 'Book a 30-minute call';
+      frame.className = 'booking-modal__frame';
+      frame.title = 'Book a 30-minute call (Google Calendar)';
       frame.src = BOOKING_URL;
-      frame.width = '100%';
-      frame.loading = 'lazy';
       frame.setAttribute('frameborder', '0');
-      // Height is pinned in CSS (.booking__frame) so there is no inner scrollbar.
-      placeholder.appendChild(frame);
+      panel.appendChild(frame);
 
-      // Plain link for browsers that block embedded third-party pages.
-      const alt = document.createElement('p');
-      alt.className = 'booking__newtab';
-      const a = document.createElement('a');
-      a.className = 'link-quiet';
-      a.href = BOOKING_URL;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.textContent = 'Open booking page in a new tab';
-      alt.appendChild(a);
-      placeholder.after(alt);
+      modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', close));
+      document.body.appendChild(modal);
     }
 
-    // Google does not post a "booked" event to the host page, so there is
-    // no booking conversion; only the click (book_call_click) is tracked.
-    // Nothing third-party loads until the visitor clicks.
-    placeholder.addEventListener('click', load);
-    // "Book a call" after the impact tiles: the link scrolls to #contact,
-    // and the click itself counts as asking for the calendar.
-    document.querySelectorAll('[data-open-booking]').forEach((a) => a.addEventListener('click', load));
-    placeholder.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
+    function open(trigger) {
+      track('book_call_click');
+      // Restore focus to the control that opened the dialog (a mouse click
+      // does not focus buttons in every browser, e.g. Safari).
+      lastFocus = trigger || document.activeElement;
+      if (!modal) build();
+      modal.hidden = false;
+      requestAnimationFrame(() => modal.classList.add('is-open'));
+      document.body.classList.add('is-locked');
+      modal.querySelector('.booking-modal__close').focus();
+    }
+
+    function close() {
+      if (!modal || modal.hidden) return;
+      modal.classList.remove('is-open');
+      modal.hidden = true;
+      document.body.classList.remove('is-locked');
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+
+    triggers.forEach((el) => {
+      el.addEventListener('click', (e) => {
         e.preventDefault();
-        load();
+        open(el);
+      });
+    });
+    if (placeholder) {
+      placeholder.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open(placeholder);
+        }
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (!modal || modal.hidden) return;
+      if (e.key === 'Escape') close();
+      else trapTab(panel, e);
+    });
+    // Tabbing out of the end of the cross-origin iframe skips our keydown
+    // handler; pull focus back into the dialog if it lands behind it.
+    document.addEventListener('focusin', (e) => {
+      if (modal && !modal.hidden && !modal.contains(e.target)) {
+        modal.querySelector('.booking-modal__close').focus();
       }
     });
   }

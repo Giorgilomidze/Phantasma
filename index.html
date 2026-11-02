@@ -100,7 +100,7 @@
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 
-  <link rel="stylesheet" href="./styles.css?v=20261102a" />
+  <link rel="stylesheet" href="./styles.css?v=20261102b" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -309,7 +309,8 @@
       </div>
     </section>
 
-    <!-- APPROACH -->
+    <!-- Parked 2 Nov 2026 by owner: Approach section, restore by moving out of the template -->
+    <template id="parked-approach">
     <section class="approach" id="approach" aria-labelledby="approach-h">
       <div class="page-grid">
         <p class="eyebrow">How we work</p>
@@ -349,6 +350,7 @@
         </ol>
       </div>
     </section>
+    </template>
 
     <!-- AGGREGATE IMPACT -->
     <section class="impact" aria-labelledby="impact-h">
@@ -379,16 +381,51 @@
             <p class="impact-tile__source">Pharmacy chain</p>
           </article>
         </div>
+      </div>
+    </section>
 
-        <!-- Next step after the proof: Book a call (primary) + short note (secondary) -->
-        <div class="impact-cta">
-          <div class="impact-cta__lead">
-            <h3 id="impact-cta-h" class="impact-cta__h">Have a process like these?</h3>
-            <p class="impact-cta__sub">A 30-minute call is the quickest way to find out whether we can help.</p>
-            <a class="btn btn-primary" href="#contact" data-open-booking>Book a call</a>
+    <!-- ABOUT + WHAT'S MANUAL: two columns from 1024px, stacked on phones -->
+    <section class="about-duo" aria-labelledby="about-h">
+      <div class="page-grid">
+        <div class="about-duo__col">
+          <p class="eyebrow">About Phantasma</p>
+          <h2 id="about-h" class="section-title">Small team. Embedded with your operations.</h2>
+          <div class="about__body">
+            <p>
+              Phantasma is a boutique technology enabler and process transformation consultancy.
+              We work with mid-market teams — typically post-acquisition or post-spreadsheet —
+              who need an architecture that scales without adding headcount and process nodes. We embed with your
+              ops, build the system end-to-end, hand it back with documentation, and then leave.
+            </p>
           </div>
+        </div>
+        <div class="about-duo__col">
+          <h2 id="booking-h" class="booking__h">
+            Tell us what's manual.<br />
+            We'll tell you what's possible.
+          </h2>
+          <div class="about__body">
+            <p>
+              We choose engagements where we can put a number against the outcome. If we cannot
+              tell you what manual hours you will reclaim, what a cycle will cost to run, or what
+              accuracy your forecasts will reach — we are not the right team for that project.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-          <form class="contact-form" id="contact-form" novalidate>
+    <!-- CONTACT: heading on top, then [short note | Book a call]. #contact is the
+         target of the hero and footer "Book a discovery call" links. -->
+    <section class="impact-cta" id="contact" aria-labelledby="impact-cta-h">
+      <div class="page-grid">
+        <div class="impact-cta__head">
+          <h2 id="impact-cta-h" class="impact-cta__h">Have a process like these?</h2>
+          <p class="impact-cta__sub">A 30-minute call is the quickest way to find out whether we can help.</p>
+        </div>
+
+        <div class="impact-cta__cols">
+          <form class="contact-form impact-cta__card" id="contact-form" novalidate>
             <p class="contact-form__intro">Not ready for a call? Send a short note.</p>
             <div class="contact-form__row">
               <div class="contact-form__field">
@@ -420,49 +457,21 @@
                data-invalid="Please fill in your name, a valid email and a message."
                data-error="Could not send just now. Please try again, or email consult@solvephantasma.com."></p>
           </form>
-        </div>
-      </div>
-    </section>
 
-    <!-- ABOUT + CONTACT -->
-    <section class="about-contact" id="contact" aria-labelledby="about-h">
-      <div class="page-grid about-contact__grid">
-        <div class="about-contact__col">
-          <p class="eyebrow">About Phantasma</p>
-          <h2 id="about-h" class="section-title">Small team. Embedded with your operations.</h2>
-          <div class="about__body">
-            <p>
-              Phantasma is a boutique technology enabler and process transformation consultancy.
-              We work with mid-market teams — typically post-acquisition or post-spreadsheet —
-              who need an architecture that scales without adding headcount and process nodes. We embed with your
-              ops, build the system end-to-end, hand it back with documentation, and then leave.
+          <!-- Book a call: the button opens the booking dialog (bootBooking in script.js);
+               nothing from Google loads before the click. -->
+          <div class="impact-cta__card impact-cta__book">
+            <h3 class="impact-cta__card-h">Book a 30-minute call</h3>
+            <p class="booking__sub">
+              30 minutes. We listen, you describe what's manual or operationally inefficient. You leave with a one-page
+              outline of what an automation could look like, what tech brings to the process, what it would cost to run, and
+              roughly what it would reclaim.
             </p>
-            <p>
-              We choose engagements where we can put a number against the outcome. If we cannot
-              tell you what manual hours you will reclaim, what a cycle will cost to run, or what
-              accuracy your forecasts will reach — we are not the right team for that project.
+            <button class="btn btn-primary impact-cta__btn" type="button" data-open-booking>Book a call</button>
+            <p class="booking__fallback">
+              Or just email us:
+              <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
             </p>
-          </div>
-          <h2 id="booking-h" class="booking__h">
-            Tell us what's manual.<br />
-            We'll tell you what's possible.
-          </h2>
-          <p class="booking__sub">
-            30 minutes. We listen, you describe what's manual or operationally inefficient. You leave with a one-page
-            outline of what an automation could look like, what tech brings to the process, what it would cost to run, and
-            roughly what it would reclaim.
-          </p>
-          <p class="booking__fallback">
-            Or just email us:
-            <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
-          </p>
-        </div>
-
-        <div class="booking__embed">
-          <div class="booking__placeholder" id="booking-placeholder" tabindex="0" role="button" aria-label="Book a 30-minute call">
-            <p class="booking__placeholder-eyebrow">Google Calendar</p>
-            <p class="booking__placeholder-h">Book a 30-minute call</p>
-            <p class="booking__placeholder-sub">Loads on demand. No third-party request before you ask for it.</p>
           </div>
         </div>
       </div>
@@ -582,7 +591,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261102a" defer></script>
+  <script src="./script.js?v=20261102b" defer></script>
 
   <!-- SEO: Full case study content, visually hidden, indexed by Google -->
   <section class="visually-hidden">
