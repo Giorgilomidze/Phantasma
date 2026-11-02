@@ -1446,9 +1446,8 @@
   }
 
   /* ---------------------------------------------------------------------
-     Calendly — lazy-on-intent inline embed.
-     The third-party script does not load until the booking section
-     intersects the viewport (or the user activates the placeholder).
+     Booking — Google appointment schedule, lazy iframe (see bootBooking).
+     Nothing third-party loads until the visitor clicks to book.
      --------------------------------------------------------------------- */
 
   // ---------------------------------------------------------------------------
@@ -2511,7 +2510,7 @@
      reach only the Google Ads tag.
      --------------------------------------------------------------------- */
   // Google Ads conversions. Fired from track() below, so they are consent-gated too.
-  // "Lead" conversion: a booked Calendly call or a sent contact form.
+  // "Lead" conversion: a sent contact form (Google booking pages post no booked event).
   const ADS_LEAD_CONVERSION = 'AW-18182297582/4NM8CKTh37EcEO6v_91D';
   // Purchase conversion: EMPTY on purpose. When the owner creates a "Purchase"
   // conversion action in Google Ads, put its full send_to here
@@ -2526,7 +2525,7 @@
     if (consent !== 'accepted') return;
     const p = params || {};
     gtag('event', name, p);
-    if (name === 'calendly_booked' || name === 'contact_submitted') {
+    if (name === 'contact_submitted') {
       gtag('event', 'conversion', { send_to: ADS_LEAD_CONVERSION });
     }
     if (name === 'purchase' && ADS_PURCHASE_LABEL) {
@@ -2620,14 +2619,16 @@
         track('book_call_click');
         return;
       }
-      if (e.target.closest('#calendly-placeholder')) track('book_call_click');
+      if (e.target.closest('#booking-placeholder')) track('book_call_click');
     });
   }
 
-  const CALENDLY_URL = 'https://calendly.com/lomiddze/30min';
+  // Google Workspace appointment schedule (consult@solvephantasma.com), embed mode.
+  // Public booking-page URL, not a secret.
+  const BOOKING_URL = 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0ki0aEhxq8-sjpLOxYytOX1M6SvJYnAomC4oTGmE5Wxq1BSowyQQ9i2R52IIczfYpB18T4IREo?gv=true';
 
-  function bootCalendly() {
-    const placeholder = document.getElementById('calendly-placeholder');
+  function bootBooking() {
+    const placeholder = document.getElementById('booking-placeholder');
     if (!placeholder) return;
 
     let loaded = false;
@@ -2638,40 +2639,35 @@
       placeholder.classList.add('is-loaded');
       placeholder.removeAttribute('role');
       placeholder.removeAttribute('tabindex');
+      placeholder.removeAttribute('aria-label');
 
       placeholder.innerHTML = '';
-      const widget = document.createElement('div');
-      widget.className = 'calendly-inline-widget';
+      const frame = document.createElement('iframe');
+      frame.className = 'booking__frame';
+      frame.title = 'Book a 30-minute call';
+      frame.src = BOOKING_URL;
+      frame.width = '100%';
+      frame.loading = 'lazy';
+      frame.setAttribute('frameborder', '0');
+      // Height is pinned in CSS (.booking__frame) so there is no inner scrollbar.
+      placeholder.appendChild(frame);
 
-      // Theme overrides via Calendly URL params: cream bg, warm graphite text, terracotta accent
-      const params = new URLSearchParams({
-        hide_gdpr_banner: '1',
-        background_color: 'f7f5f2',
-        text_color: '14213d',
-        primary_color: 'f26b1d',
-      });
-      widget.setAttribute('data-url', `${CALENDLY_URL}?${params.toString()}`);
-      widget.style.minWidth = '320px';
-      widget.style.height = '760px';   // Calendly added a time-zone row; 680 showed an inner scrollbar (17 Sep 2026)
-      placeholder.appendChild(widget);
-
-      // Inject Calendly's external script once
-      if (!document.querySelector('script[data-calendly]')) {
-        const s = document.createElement('script');
-        s.src = 'https://assets.calendly.com/assets/external/widget.js';
-        s.async = true;
-        s.setAttribute('data-calendly', '1');
-        document.head.appendChild(s);
-      }
+      // Plain link for browsers that block embedded third-party pages.
+      const alt = document.createElement('p');
+      alt.className = 'booking__newtab';
+      const a = document.createElement('a');
+      a.className = 'link-quiet';
+      a.href = BOOKING_URL;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'Open booking page in a new tab';
+      alt.appendChild(a);
+      placeholder.after(alt);
     }
 
-    // Calendly's embed posts 'calendly.event_scheduled' to the host page
-    // when a booking is confirmed, so no server is needed.
-    window.addEventListener('message', (e) => {
-      if (e.origin !== 'https://calendly.com') return;
-      if (e.data && e.data.event === 'calendly.event_scheduled') track('calendly_booked');
-    });
-
+    // Google does not post a "booked" event to the host page, so there is
+    // no booking conversion; only the click (book_call_click) is tracked.
+    // Nothing third-party loads until the visitor clicks.
     placeholder.addEventListener('click', load);
     // "Book a call" after the impact tiles: the link scrolls to #contact,
     // and the click itself counts as asking for the calendar.
@@ -2682,20 +2678,6 @@
         load();
       }
     });
-
-    // Lazy-on-intent: load when booking section enters viewport
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            load();
-            io.disconnect();
-          }
-        });
-      },
-      { threshold: 0.4 }
-    );
-    io.observe(placeholder);
   }
 
   /* ---------------------------------------------------------------------
@@ -2955,7 +2937,7 @@
     bootAccountNav();
     bootPreferencesPage();
     bootPaymentResult();
-    bootCalendly();
+    bootBooking();
     bootContactForm();
     bootEventTracking();
     bootImageZoom();

@@ -110,7 +110,7 @@ Single IIFE. Order of contents:
 | `bootAuthModal()` | `#auth-modal` on index/blog/projects/projects.ka/account. One form, three modes via `data-mode` (login / signup / forgot); all copy in `data-*` attributes (KA page supplies its own). Esc / backdrop / ✕ close, focus restore, `body.is-locked`. Also intercepts `[data-tier]` Pay now buttons: always `startFlitt()` → Edge Function `flitt-create-order` → browser goes to Flitt checkout (errors such as `already_active` / `payments_not_open` show under the button); signed out → `#pay-modal` (projects pages only): Log in / Create account (no guest payment). Chosen tier kept in `sessionStorage` (`phantasma_pending_tier`); after sign-in `resumePayment()` starts Flitt instead of opening the profile. |
 | `bootAccountPage()` | `account.html` only. Shows `#account-newpass` on the `PASSWORD_RECOVERY` auth event (reset-link landing). Fills `[data-stat]` tiles, each a button opening one `#stat-panel` table, staggered reveal via `.stat-grid.is-in`, then `triggerCountUp()`. No `candidates` row → zeros + "first shortlist is being prepared". |
 | `bootPreferencesPage()` | `preferences.html` only. Fill / count / per-group save via `Auth.loadPreferences` / `savePreferences` (upsert on `user_id`). Warns on leaving with unsaved edits. |
-| `bootCalendly()` | Lazy-loads Calendly on click of `#calendly-placeholder` or any `[data-open-booking]` link |
+| `bootBooking()` | On click of `#booking-placeholder` (or any `[data-open-booking]` link) inserts the Google appointment-schedule `<iframe>` (`BOOKING_URL`) plus an "Open booking page in a new tab" link. Nothing loads before the click. |
 | `bootContactForm()` | `index.html` only. Short form `#contact-form` → Edge Function `contact-submit`; status in `#contact-form-status` (copy from its `data-*`); on success `track('contact_submitted')` (also an Ads conversion, see §6). |
 | `bootImageZoom()` | Click-to-zoom on case images |
 | `bootCookieBanner()` | GDPR banner + Google consent-mode update |
@@ -226,14 +226,14 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 - **Google Ads** tag `AW-18182297582` is live on all 12 root pages. **Conversions
   fire from `track()` in `script.js` only** (consent-gated), never on page load
   (the old head block that counted every page view after cookie consent was
-  removed 1 Nov 2026): `calendly_booked` or `contact_submitted` also send the lead
+  removed 1 Nov 2026): only `contact_submitted` sends the lead
   conversion `ADS_LEAD_CONVERSION` = `AW-18182297582/4NM8CKTh37EcEO6v_91D`;
   `purchase` also sends `ADS_PURCHASE_LABEL` (value, `GEL`, `transaction_id`)
   **once the owner fills that constant** with the send_to of a "Purchase"
   conversion action created in Google Ads (empty = off).
 - **Contact form** (1 Nov 2026): `index.html`, band `.impact-cta` right after the
   impact tiles = **Book a call** (`data-open-booking`: scrolls to `#contact` and
-  loads Calendly) + short form `#contact-form` (name, email, message, honeypot
+  loads the booking iframe) + short form `#contact-form` (name, email, message, honeypot
   `website`, privacy link). `bootContactForm()` POSTs to Edge Function
   **`contact-submit`** (`verify_jwt false`, CORS only `https://solvephantasma.com`
   and `http://localhost:8000`, honeypot → silent 200, max 5 per hashed IP per
@@ -251,11 +251,17 @@ Keyboard: arrow keys change slide, `[` / `]` change case, `Esc` closes.
 - **GA4** `G-Q423P065C1` (since 1 Nov 2026) is configured in the head block of all
   12 root pages, behind consent mode; `track()` events flow to it, and
   `payment-result.html` sends a `purchase` (value, GEL, order id) once per order.
-- **Calendly**: `https://calendly.com/lomiddze/30min`, constant `CALENDLY_URL`
-  in `script.js`. Deliberately lazy-loaded so no third-party request fires
-  before the user asks. Its height is pinned to avoid an internal scrollbar
-  (commits `96ff2f8`, `3c00b15`; raised 680→760px on 17 Sep 2026 when Calendly
-  added a time-zone row) — do not "fix" that by removing the height; raise it.
+- **Booking** (2 Nov 2026, replaced Calendly): Google Workspace appointment
+  schedule under `consult@solvephantasma.com`. Constant `BOOKING_URL` in
+  `script.js` = public booking-page URL + `?gv=true` (embed mode). `bootBooking()`
+  inserts a lazy `<iframe class="booking__frame">` only after the visitor clicks
+  `#booking-placeholder` or a `[data-open-booking]` link (click tracked as
+  `book_call_click`), plus a new-tab fallback link (`.booking__newtab`).
+  Google posts **no booking event** to the page, so there is no "booked"
+  conversion; the Ads lead conversion comes from the contact form only. Frame
+  height is pinned in CSS (700px, 900px ≤767px) to avoid an inner scrollbar —
+  do not "fix" that by removing the height; raise it. Privacy pages name
+  Google Calendar (appointment scheduling) as the booking vendor.
 
 - **Flitt (payments)** — merchant 4058420, hosted checkout, GEL. Keepz is no
   longer used (decision 29 Oct 2026). Two Edge Functions in `supabase/functions/`:

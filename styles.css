@@ -1369,12 +1369,21 @@ html[lang="ka"] .nav-dropdown__btn { font-size: 0.6875rem; letter-spacing: 0.04e
   background: var(--bg);
   border-color: var(--rule);
   padding: 0;
-  min-height: 760px;
   overflow: hidden;
 }
-.booking__placeholder.is-loaded .calendly-inline-widget {
+/* Google appointment-schedule iframe. Height is pinned so the page scrolls,
+   not the frame (no inner scrollbar); taller on phones, see section 20. */
+.booking__frame {
+  display: block;
   width: 100%;
+  height: 700px;
+  border: 0;
   border-radius: var(--radius-md);
+}
+.booking__newtab {
+  font-size: var(--type-body);
+  color: var(--ink-soft);
+  margin: var(--space-3) 0 0;
 }
 .booking__placeholder-eyebrow {
   font-family: var(--font-body);
@@ -2223,6 +2232,10 @@ body.is-locked {
 @media (max-width: 767px) {
   :root {
     --content-max: 100vw;
+  }
+  /* Phones stack the booking page's columns; taller frame avoids an inner scrollbar. */
+  .booking__frame {
+    height: 900px;
   }
   .page-grid {
     max-width: 100%;
