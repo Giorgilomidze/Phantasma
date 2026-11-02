@@ -1963,7 +1963,7 @@
       return wrap;
     }
 
-    // ---- detail row (arrow in the first column): Company + Vacancy blocks.
+    // ---- detail row (arrow in the first column): one full-width block.
     // Every field is optional; only fields with a value are shown.
     const LANG = { ka: 'Georgian', en: 'English', ru: 'Russian' };
     let detailSeq = 0;
@@ -1998,80 +1998,128 @@
       wrap.appendChild(more);
       return wrap;
     }
-    // block: heading + <dl> of [label, value] pairs (value = string or node) + extras.
-    function detailBlock(title, pairs, extras) {
+    // A labelled clamped text (vacancy / company description).
+    function textSection(title, text) {
       const sec = document.createElement('div');
-      sec.className = 't-detail__block';
+      sec.className = 't-detail__section';
       const h = document.createElement('h4');
       h.className = 't-detail__h';
       h.textContent = title;
       sec.appendChild(h);
-      const shown = pairs.filter((p) => p[1] != null && p[1] !== '');
-      if (shown.length) {
-        const dl = document.createElement('dl');
-        dl.className = 't-detail__list';
-        shown.forEach(([k, v]) => {
-          const dt = document.createElement('dt'); dt.textContent = k;
-          const dd = document.createElement('dd');
-          if (v instanceof Node) dd.appendChild(v); else dd.textContent = String(v);
-          dl.appendChild(dt); dl.appendChild(dd);
-        });
-        sec.appendChild(dl);
-      }
-      extras.filter(Boolean).forEach((n) => sec.appendChild(n));
-      if (!shown.length && !extras.some(Boolean)) {
-        const p = document.createElement('p');
-        p.className = 't-detail__none';
-        p.textContent = 'No more details yet.';
-        sec.appendChild(p);
-      }
+      sec.appendChild(clampText(text));
       return sec;
     }
     // r = shortlist or send row; v = its vacancy; c = the vacancy's company.
+    // One full-width block: header (company · industry | dates), a wrapping
+    // row of short facts, then the descriptions and the posting link.
     function detailContent(r) {
       const v = r.vacancies || {};
       const c = v.companies || {};
-      const links = document.createElement('span');
-      links.className = 't-detail__links';
-      const web = safeUrl(c.website), li = safeUrl(c.linkedin_url);
-      if (web) links.appendChild(extLink(web, web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')));
-      if (li) links.appendChild(extLink(li, 'LinkedIn'));
-      const size = c.size_band || (c.employees ? Number(c.employees).toLocaleString('en-GB') + ' employees' : null);
-      const coBlock = detailBlock('Company', [
-        ['Name', c.name || v.company_raw],
-        ['Georgian name', c.name_ka && c.name_ka !== c.name ? c.name_ka : null],
-        ['Industry', c.industry],
-        ['Headquarters', c.hq_city],
-        ['Size', size],
-        ['Founded', c.founded_year],
-        ['Links', links.childNodes.length ? links : null],
-      ], [c.description ? clampText(c.description) : null]);
+      const inner = document.createElement('div');
+      inner.className = 't-detail__inner';
+      let any = false;
 
-      const url = safeUrl(v.url);
-      let open = null;
-      if (url) {
-        open = document.createElement('p');
-        open.className = 't-detail__open';
-        open.appendChild(extLink(url, 'Open original posting'));
-      }
+      // (1) header
+      const name = c.name || v.company_raw;
       const posted = v.posted_at ? fmtDate(v.posted_at) : null;
-      const deadline = v.deadline_at ? fmtDate(v.deadline_at) : null;
-      const vacBlock = detailBlock('Vacancy', [
+      let deadline = null, soon = null;
+      if (v.deadline_at) {
+        deadline = fmtDate(v.deadline_at);
+        const end = new Date(v.deadline_at); end.setHours(0, 0, 0, 0);
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const days = Math.round((end - today) / 86400000);
+        if (days >= 0 && days <= 7) soon = days === 0 ? 'closes today' : days === 1 ? 'closes tomorrow' : 'closes in ' + days + ' days';
+      }
+      if (name || c.industry || posted || deadline) {
+        any = true;
+        const head = document.createElement('div');
+        head.className = 't-detail__head';
+        const who = document.createElement('p');
+        who.className = 't-detail__who';
+        if (name) {
+          const b = document.createElement('strong');
+          b.className = 't-detail__name';
+          b.textContent = name;
+          who.appendChild(b);
+        }
+        if (c.industry) {
+          const ind = document.createElement('span');
+          ind.className = 't-detail__industry';
+          ind.textContent = (name ? ' · ' : '') + c.industry;
+          who.appendChild(ind);
+        }
+        head.appendChild(who);
+        if (posted || deadline) {
+          const dates = document.createElement('p');
+          dates.className = 't-detail__dates';
+          if (posted) {
+            const s = document.createElement('span');
+            s.textContent = 'Posted ' + posted;
+            dates.appendChild(s);
+          }
+          if (deadline) {
+            const s = document.createElement('span');
+            s.textContent = 'Deadline ' + deadline + (soon ? ' · ' + soon : '');
+            if (soon) s.className = 'is-soon';
+            dates.appendChild(s);
+          }
+          head.appendChild(dates);
+        }
+        inner.appendChild(head);
+      }
+
+      // (2) short facts as one wrapping row of label: value pairs
+      const web = safeUrl(c.website), li = safeUrl(c.linkedin_url);
+      const size = c.size_band || (c.employees ? Number(c.employees).toLocaleString('en-GB') + ' employees' : null);
+      const facts = [
         ['English title', v.title_en && v.title_en !== v.title ? v.title_en : null],
         ['Location', v.location],
         ['Function', v.function],
         ['Seniority', v.seniority],
-        ['Salary', r.salary_text || v.salary_text],
         ['Language', v.language ? (LANG[v.language] || v.language) : null],
-        ['Posted', posted],
-        ['Deadline', deadline],
+        ['Salary', r.salary_text || v.salary_text],
         ['Why it matches', r.why_matches],
-      ], [v.description ? clampText(v.description) : null, open]);
+        ['HQ', c.hq_city],
+        ['Size', size],
+        ['Founded', c.founded_year],
+        ['Website', web ? extLink(web, web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')) : null],
+        ['LinkedIn', li ? extLink(li, 'Company page') : null],
+        ['Georgian name', c.name_ka && c.name_ka !== c.name ? c.name_ka : null],
+      ].filter((p) => p[1] != null && p[1] !== '');
+      if (facts.length) {
+        any = true;
+        const dl = document.createElement('dl');
+        dl.className = 't-detail__facts';
+        facts.forEach(([k, val]) => {
+          const pair = document.createElement('div');
+          pair.className = 't-detail__fact';
+          const dt = document.createElement('dt'); dt.textContent = k;
+          const dd = document.createElement('dd');
+          if (val instanceof Node) dd.appendChild(val); else dd.textContent = String(val);
+          pair.appendChild(dt); pair.appendChild(dd);
+          dl.appendChild(pair);
+        });
+        inner.appendChild(dl);
+      }
 
-      const inner = document.createElement('div');
-      inner.className = 't-detail__inner';
-      inner.appendChild(coBlock);
-      inner.appendChild(vacBlock);
+      // (3) descriptions + posting link
+      if (v.description) { any = true; inner.appendChild(textSection('Vacancy', v.description)); }
+      if (c.description) { any = true; inner.appendChild(textSection('About the company', c.description)); }
+      const url = safeUrl(v.url);
+      if (url) {
+        any = true;
+        const open = document.createElement('p');
+        open.className = 't-detail__open';
+        open.appendChild(extLink(url, 'Open original posting'));
+        inner.appendChild(open);
+      }
+
+      if (!any) {
+        const p = document.createElement('p');
+        p.className = 't-detail__none';
+        p.textContent = 'No more details yet.';
+        inner.appendChild(p);
+      }
       return inner;
     }
 

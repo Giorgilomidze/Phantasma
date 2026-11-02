@@ -3894,7 +3894,7 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 }
 .company__name { min-width: 0; overflow-wrap: anywhere; }
 
-/* Row disclosure: arrow column + full-width detail row (Company | Vacancy) */
+/* Row disclosure: arrow column + full-width detail row (header, facts, descriptions) */
 .account-table .t-toggle { width: 1%; padding-right: var(--space-2); }
 .account-table td.t-toggle { padding-top: var(--space-2); }
 .t-toggle__btn {
@@ -3929,14 +3929,46 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   box-sizing: border-box;
   max-width: var(--detail-w, 100%);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5);
+  gap: var(--space-4);
   padding: var(--space-4);
   background: var(--surface);
   border-radius: var(--radius-sm);
   overflow-wrap: anywhere;
 }
-.t-detail__block { min-width: 0; display: grid; gap: var(--space-3); align-content: start; }
+/* (1) header: company · industry, dates right-aligned on wider screens */
+.t-detail__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-5);
+}
+.t-detail__who { margin: 0; min-width: 0; }
+.t-detail__name { font-size: var(--type-body-lg); font-weight: 600; color: var(--ink); }
+.t-detail__industry { color: var(--ink-soft); }
+.t-detail__dates {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--type-body-sm);
+  color: var(--ink-soft);
+}
+.t-detail__dates .is-soon { color: var(--watch); font-weight: 600; }
+/* (2) short facts: one wrapping row of label: value pairs */
+.t-detail__facts {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  font-size: var(--type-body-sm);
+}
+.t-detail__fact { display: flex; gap: var(--space-1); min-width: 0; max-width: 100%; }
+.t-detail__fact dt { flex: none; color: var(--ink-soft); }
+.t-detail__fact dt::after { content: ':'; }
+.t-detail__fact dd { margin: 0; min-width: 0; color: var(--ink); }
+/* (3) descriptions */
+.t-detail__section { display: grid; gap: var(--space-1); }
 .t-detail__h {
   margin: 0;
   font-family: var(--font-body);
@@ -3946,15 +3978,6 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   font-weight: 500;
   color: var(--ink-soft);
 }
-.t-detail__list {
-  margin: 0;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--space-1) var(--space-4);
-}
-.t-detail__list dt { color: var(--ink-soft); }
-.t-detail__list dd { margin: 0; min-width: 0; }
-.t-detail__links { display: inline-flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); }
 .t-detail__text { margin: 0; white-space: pre-line; }
 .t-detail__text.is-clamped {
   display: -webkit-box;
@@ -3976,9 +3999,8 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .t-detail__open { margin: 0; }
 .t-detail__none { margin: 0; color: var(--ink-soft); }
 @media (max-width: 767px) {
-  .t-detail__inner { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); padding: var(--space-3); }
-  .t-detail__list { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .t-detail__list dd + dt { margin-top: var(--space-2); }
+  .t-detail__inner { gap: var(--space-3); padding: var(--space-3); }
+  .t-detail__facts { flex-direction: column; gap: var(--space-1); }
 }
 @media (prefers-reduced-motion: reduce) {
   .t-toggle__chev { transition: none; }
