@@ -3873,6 +3873,56 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .send-check input:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
 .account-table a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .account-table .t-sub { display: block; color: var(--ink-soft); }
+.account-table tbody tr[hidden] { display: none; }
+
+/* Sortable headers: the label is a button, the arrow shows the direction
+   (faint up/down = not sorted). No animation, so nothing for reduced motion. */
+.t-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  letter-spacing: inherit;
+  text-transform: inherit;
+  font-weight: inherit;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+}
+.t-sort:hover { color: var(--ink); }
+.t-sort:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.t-sort__arrow::before { content: "\2195"; opacity: 0.45; }
+.account-table th[aria-sort="ascending"] .t-sort,
+.account-table th[aria-sort="descending"] .t-sort { color: var(--ink); }
+.account-table th[aria-sort="ascending"] .t-sort__arrow::before { content: "\2191"; opacity: 1; }
+.account-table th[aria-sort="descending"] .t-sort__arrow::before { content: "\2193"; opacity: 1; }
+
+/* "Publish date" filter above a vacancy table; stays put while the table
+   scrolls sideways on phones, and wraps onto two lines when narrow. */
+.t-filter {
+  position: sticky;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--type-body-sm);
+}
+.t-filter__label { color: var(--ink-soft); }
+.t-filter__select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  max-width: 100%;
+}
+.t-filter__select:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+.t-filter__count { color: var(--ink-soft); }
 
 /* Company cell: logo (24px high) or round letter badge, then the name */
 .company { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; }

@@ -1919,6 +1919,42 @@
     const SOURCE = { 'jobs.ge': 'jobs.ge', 'hr.ge': 'hr.ge', tbc: 'TBC Bank', bog: 'Bank of Georgia' };
     const OUTCOME = { sent: 'Sent', applied: 'Applied', interview: 'Interview', offer: 'Offer', rejected: 'Rejected', no_reply: 'No reply' };
 
+    // ---- sort / filter helpers (pure; no DOM)
+    // Sort keys are the underlying values: dates as ms, '#' as a number,
+    // text as text. Empty values (null, '', NaN) always go last, both directions.
+    const isEmptyVal = (v) => v == null || v === '' || (typeof v === 'number' && isNaN(v));
+    const dateKey = (v) => { if (!v) return null; const t = Date.parse(v); return isNaN(t) ? null : t; };
+    const numKey = (v) => (v == null || v === '' ? null : Number(v));
+    // One publish date per session day ('2026-10-27T…' and '2026-10-27' are the same day).
+    const dayKey = (v) => { if (!v) return null; const s = String(v); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s; };
+    function compareValues(a, b, dir) {
+      const ea = isEmptyVal(a), eb = isEmptyVal(b);
+      if (ea || eb) return ea === eb ? 0 : (ea ? 1 : -1);
+      const c = typeof a === 'number' && typeof b === 'number'
+        ? a - b
+        : String(a).localeCompare(String(b), ['ka', 'en'], { numeric: true, sensitivity: 'base' });
+      return dir === 'desc' ? -c : c;
+    }
+    // items: [{ r, idx }]; dir 'none' (or no key) = original order.
+    function sortRecords(items, key, dir) {
+      return items.slice().sort((a, b) =>
+        (key && dir !== 'none' ? compareValues(key(a.r), key(b.r), dir) : 0) || a.idx - b.idx);
+    }
+    const nextSortDir = (dir) => (dir === 'asc' ? 'desc' : dir === 'desc' ? 'none' : 'asc');
+    // Distinct publish dates, newest first.
+    function publishDates(values) {
+      const seen = {};
+      values.forEach((v) => { const d = dayKey(v); if (d) seen[d] = true; });
+      return Object.keys(seen).sort((a, b) => (dateKey(b) || 0) - (dateKey(a) || 0) || (a < b ? 1 : -1));
+    }
+    // choice: 'all' | 'latest' | a day key.
+    function matchesPublish(value, choice, latest) {
+      if (choice === 'all') return true;
+      const d = dayKey(value);
+      return choice === 'latest' ? d === latest : d === choice;
+    }
+    // ---- end sort / filter helpers
+
     // Company logos: normalised name (lowercase, trimmed) -> file in images/logos/.
     // Anything not listed gets a round letter badge.
     const COMPANY_LOGOS = {
@@ -2156,6 +2192,11 @@
     // ---- table builders (text via textContent; only hrefs come from data)
     // opts.cls: extra table class; opts.detail(r) -> position name, enables
     // the arrow column + an expandable detail row under each row.
+    // A header { text, sort: (r) => value } makes that column sortable
+    // (button in the <th>, aria-sort; asc → desc → original order).
+    // opts.filter { key, get: (r) => publish date } adds the "Publish date"
+    // select above the table; the choice is kept per key in sessionStorage.
+    const tableRefresh = new WeakMap();   // tbody -> recount after a row is removed
     function table(headers, rows, cells, opts) {
       opts = opts || {};
       if (!rows.length) {
@@ -2176,16 +2217,50 @@
         th.appendChild(sr);
         thead.appendChild(th);
       }
-      headers.forEach((h) => {
+      const recs = [];                 // { r, idx, tr, dr, btn } in original order
+      const sortThs = [];
+      let sortBy = -1, sortDir = 'none';
+      headers.forEach((h, i) => {
         const th = document.createElement('th');
-        th.textContent = typeof h === 'string' ? h : h.text;
+        const text = typeof h === 'string' ? h : h.text;
         if (h.cls) th.className = h.cls;
         if (h.title) th.title = h.title;
+        if (h.sort) {
+          th.setAttribute('aria-sort', 'none');
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 't-sort';
+          b.textContent = text;
+          const arrow = document.createElement('span');
+          arrow.className = 't-sort__arrow';
+          arrow.setAttribute('aria-hidden', 'true');
+          b.appendChild(arrow);
+          b.addEventListener('click', () => sortTable(i));
+          th.appendChild(b);
+          sortThs[i] = th;
+        } else {
+          th.textContent = text;
+        }
         thead.appendChild(th);
       });
+      // Re-append each row together with its detail row (open state kept).
+      function sortTable(i) {
+        sortDir = sortBy === i ? nextSortDir(sortDir) : 'asc';
+        sortBy = sortDir === 'none' ? -1 : i;
+        sortThs.forEach((th, j) => {
+          if (th) th.setAttribute('aria-sort', j === sortBy ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+        });
+        const live = recs.filter((x) => x.tr.isConnected);
+        sortRecords(live, sortBy < 0 ? null : headers[sortBy].sort, sortDir).forEach((x) => {
+          tb.appendChild(x.tr);
+          if (x.dr) tb.appendChild(x.dr);
+        });
+      }
       const tb = t.createTBody();
-      rows.forEach((r) => {
+      rows.forEach((r, idx) => {
         const tr = tb.insertRow();
+        const rec = { r, idx, tr, dr: null, btn: null };
+        recs.push(rec);
         let btn = null;
         if (opts.detail) {
           const id = 'detail-' + (++detailSeq);
@@ -2238,14 +2313,81 @@
           const td = dr.insertCell();
           td.colSpan = tr.cells.length;
           td.appendChild(detailContent(r));
+          rec.dr = dr; rec.btn = btn;
         }
       });
-      return t;
+      if (!opts.filter) return t;
+
+      // ---- "Publish date" filter above the table
+      const get = opts.filter.get;
+      const dates = publishDates(rows.map(get));
+      const bar = document.createElement('div');
+      bar.className = 't-filter';
+      const selId = 'pubdate-' + (++detailSeq);
+      const lab = document.createElement('label');
+      lab.className = 't-filter__label';
+      lab.htmlFor = selId;
+      lab.textContent = 'Publish date:';
+      const sel = document.createElement('select');
+      sel.id = selId;
+      sel.className = 't-filter__select';
+      [['all', 'All dates'], ['latest', 'Latest only']].concat(dates.map((d) => [d, fmtDate(d)])).forEach(([v, txt]) => {
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = txt;
+        sel.appendChild(o);
+      });
+      const count = document.createElement('span');
+      count.className = 't-filter__count';
+      count.setAttribute('aria-live', 'polite');
+      bar.appendChild(lab);
+      bar.appendChild(sel);
+      bar.appendChild(count);
+
+      const storeKey = 'phantasma_pubdate_' + opts.filter.key;
+      let saved = null;
+      try { saved = sessionStorage.getItem(storeKey); } catch (e) { /* storage blocked */ }
+      sel.value = saved && Array.prototype.some.call(sel.options, (o) => o.value === saved) ? saved : 'all';
+
+      function applyFilter() {
+        const live = recs.filter((x) => x.tr.isConnected);
+        let n = 0;
+        live.forEach((x) => {
+          const show = matchesPublish(get(x.r), sel.value, dates[0] || null);
+          x.tr.hidden = !show;
+          if (x.dr) x.dr.hidden = !show || x.btn.getAttribute('aria-expanded') !== 'true';
+          if (show) n++;
+        });
+        count.textContent = 'Showing ' + n + ' of ' + live.length;
+      }
+      sel.addEventListener('change', () => {
+        try { sessionStorage.setItem(storeKey, sel.value); } catch (e) { /* storage blocked */ }
+        applyFilter();
+      });
+      tableRefresh.set(tb, applyFilter);
+      applyFilter();
+
+      const frag = document.createDocumentFragment();
+      frag.appendChild(bar);
+      frag.appendChild(t);
+      return frag;
     }
 
-    function vacancyRows(rows) {
+    // Sort key for the company columns ('—' placeholder counts as empty).
+    const companyKey = (r) => { const c = company(r.vacancies); return c === '—' ? null : c; };
+    const titleKey = (r) => (r.vacancies && r.vacancies.title) || null;
+
+    // "Publish date" = the date the shortlist was published to the client
+    // (the scraping session date, column shortlists.week).
+    function vacancyRows(rows, key) {
       return table(
-        ['Week', '#', 'Company', 'Position', 'Why it matches', 'Source', 'Deadline',
+        [{ text: 'Publish date', sort: (r) => dateKey(r.week) },
+         { text: '#', sort: (r) => numKey(r.rank) },
+         { text: 'Company', sort: companyKey },
+         { text: 'Position', sort: titleKey },
+         { text: 'Why it matches', sort: (r) => r.why_matches || short((r.vacancies || {}).description, 140) || null },
+         { text: 'Source', sort: (r) => { const v = r.vacancies || {}; return SOURCE[v.source] || v.source || null; } },
+         { text: 'Deadline', sort: (r) => dateKey((r.vacancies || {}).deadline_at) },
          { text: 'Send', cls: 't-send', title: 'Tick to have us send your application, with your CV, to this company.' }],
         rows,
         (r) => {
@@ -2260,7 +2402,8 @@
             { check: true, id: r.id, on: r.client_decision === 'interested' },
           ];
         },
-        { cls: 'account-table--vac', detail: (r) => (r.vacancies && r.vacancies.title) || '' });
+        { cls: 'account-table--vac', detail: (r) => (r.vacancies && r.vacancies.title) || '',
+          filter: { key: key, get: (r) => r.week } });
     }
 
     // "Selected by you" = rows the client ticked (client_decision = interested).
@@ -2283,15 +2426,21 @@
       el.textContent = n; el.dataset.countTo = String(n);
       if (openKey === 'selected' && !box.checked) {
         const tr = box.closest('tr');
+        const refresh = tableRefresh.get(tr.parentNode);
         const dr = tr.dataset.detail && document.getElementById(tr.dataset.detail);
         if (dr) dr.remove();
         tr.remove();
+        if (refresh) refresh();          // "Showing N of M" counts the remaining rows
       }
     });
 
     function sendRows(rows) {
       return table(
-        ['Company', 'Position', 'Sent', 'Outcome', 'Updated'],
+        [{ text: 'Company', sort: companyKey },
+         { text: 'Position', sort: titleKey },
+         { text: 'Sent', sort: (r) => dateKey(r.sent_at) },
+         { text: 'Outcome', sort: (r) => OUTCOME[r.outcome] || r.outcome || null },
+         { text: 'Updated', sort: (r) => dateKey(r.outcome_at) }],
         rows,
         (r) => {
           const v = r.vacancies || {};
@@ -2310,7 +2459,7 @@
           return table(['Run', 'Date', 'Vacancies shortlisted'], rows, (r) => [r.n + ' of ' + SERVICE_WEEKS, fmtDate(r.week), r.count]);
         },
       },
-      processed:  { title: 'Vacancies processed', build: (d) => vacancyRows(d.shortlists) },
+      processed:  { title: 'Vacancies processed', build: (d) => vacancyRows(d.shortlists, 'processed') },
       companies:  {
         title: 'Companies reviewed',
         build: (d) => {
@@ -2320,7 +2469,7 @@
           return table(['Company', 'Vacancies shortlisted'], rows, (r) => [r.c, r.n]);
         },
       },
-      selected:   { title: 'Selected by you', build: (d) => vacancyRows(selectedRows(d)) },
+      selected:   { title: 'Selected by you', build: (d) => vacancyRows(selectedRows(d), 'selected') },
       sent:       { title: 'Applications sent', build: (d) => sendRows(d.sends) },
       interviews: { title: 'Interviews', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'interview')) },
       offers:     { title: 'Offers', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'offer')) },
