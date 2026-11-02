@@ -1565,6 +1565,14 @@
 
     // The account page: get_my_stats() (one row, or none while no candidates
     // row is linked yet), every shortlist row with its vacancy, and sends.
+    // Vacancy + company columns for the account tables and their detail rows
+    // (one embedded select, no extra queries). All readable under RLS for the
+    // client's own shortlisted vacancies; any of them may be null.
+    const VACANCY_DETAIL =
+      'title, title_en, company_raw, location, function, seniority, salary_text, language, ' +
+      'posted_at, deadline_at, description, source, url, ' +
+      'companies ( name, name_ka, industry, description, website, linkedin_url, hq_city, size_band, founded_year, employees )';
+
     function loadStats() {
       const sb = getClient();
       return Promise.all([
@@ -1572,10 +1580,10 @@
         sb.from('candidates').select('workbook_path, workbook_uploaded_at, linkedin_audit').maybeSingle(),
         sb.from('shortlists')
           .select('id, week, rank, start_processing, client_decision, why_matches, salary_text, ' +
-                  'vacancies ( id, title, company_raw, location, source, url, deadline_at, description, companies ( name ) )')
+                  'vacancies ( id, ' + VACANCY_DETAIL + ' )')
           .order('week', { ascending: false }).order('rank'),
         sb.from('sends')
-          .select('vacancy_id, sent_at, outcome, outcome_at, vacancies ( title, company_raw, url, companies ( name ) )')
+          .select('vacancy_id, sent_at, outcome, outcome_at, vacancies ( ' + VACANCY_DETAIL + ' )')
           .order('sent_at', { ascending: false }),
       ]).then(([stats, cand, shortlists, sends]) => ({
         stats: (stats.data && stats.data[0]) || null,
@@ -1955,8 +1963,153 @@
       return wrap;
     }
 
+    // ---- detail row (arrow in the first column): Company + Vacancy blocks.
+    // Every field is optional; only fields with a value are shown.
+    const LANG = { ka: 'Georgian', en: 'English', ru: 'Russian' };
+    let detailSeq = 0;
+
+    // Only http(s) links from data; bare "example.com/..." gets https://.
+    function safeUrl(u) {
+      const s = String(u || '').trim();
+      if (/^https?:\/\//i.test(s)) return s;
+      if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(s)) return 'https://' + s;
+      return null;
+    }
+    function extLink(href, text) {
+      const a = document.createElement('a');
+      a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = text;
+      return a;
+    }
+    // Long text clamped to ~6 lines; "Show more" appears only if it overflows
+    // (measured when the row opens, see toggleDetail).
+    function clampText(text) {
+      const wrap = document.createElement('div');
+      wrap.className = 't-detail__clamp';
+      const p = document.createElement('p');
+      p.className = 't-detail__text is-clamped';
+      p.textContent = text;
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 't-detail__more';
+      more.textContent = 'Show more';
+      more.hidden = true;
+      wrap.appendChild(p);
+      wrap.appendChild(more);
+      return wrap;
+    }
+    // block: heading + <dl> of [label, value] pairs (value = string or node) + extras.
+    function detailBlock(title, pairs, extras) {
+      const sec = document.createElement('div');
+      sec.className = 't-detail__block';
+      const h = document.createElement('h4');
+      h.className = 't-detail__h';
+      h.textContent = title;
+      sec.appendChild(h);
+      const shown = pairs.filter((p) => p[1] != null && p[1] !== '');
+      if (shown.length) {
+        const dl = document.createElement('dl');
+        dl.className = 't-detail__list';
+        shown.forEach(([k, v]) => {
+          const dt = document.createElement('dt'); dt.textContent = k;
+          const dd = document.createElement('dd');
+          if (v instanceof Node) dd.appendChild(v); else dd.textContent = String(v);
+          dl.appendChild(dt); dl.appendChild(dd);
+        });
+        sec.appendChild(dl);
+      }
+      extras.filter(Boolean).forEach((n) => sec.appendChild(n));
+      if (!shown.length && !extras.some(Boolean)) {
+        const p = document.createElement('p');
+        p.className = 't-detail__none';
+        p.textContent = 'No more details yet.';
+        sec.appendChild(p);
+      }
+      return sec;
+    }
+    // r = shortlist or send row; v = its vacancy; c = the vacancy's company.
+    function detailContent(r) {
+      const v = r.vacancies || {};
+      const c = v.companies || {};
+      const links = document.createElement('span');
+      links.className = 't-detail__links';
+      const web = safeUrl(c.website), li = safeUrl(c.linkedin_url);
+      if (web) links.appendChild(extLink(web, web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')));
+      if (li) links.appendChild(extLink(li, 'LinkedIn'));
+      const size = c.size_band || (c.employees ? Number(c.employees).toLocaleString('en-GB') + ' employees' : null);
+      const coBlock = detailBlock('Company', [
+        ['Name', c.name || v.company_raw],
+        ['Georgian name', c.name_ka && c.name_ka !== c.name ? c.name_ka : null],
+        ['Industry', c.industry],
+        ['Headquarters', c.hq_city],
+        ['Size', size],
+        ['Founded', c.founded_year],
+        ['Links', links.childNodes.length ? links : null],
+      ], [c.description ? clampText(c.description) : null]);
+
+      const url = safeUrl(v.url);
+      let open = null;
+      if (url) {
+        open = document.createElement('p');
+        open.className = 't-detail__open';
+        open.appendChild(extLink(url, 'Open original posting'));
+      }
+      const posted = v.posted_at ? fmtDate(v.posted_at) : null;
+      const deadline = v.deadline_at ? fmtDate(v.deadline_at) : null;
+      const vacBlock = detailBlock('Vacancy', [
+        ['English title', v.title_en && v.title_en !== v.title ? v.title_en : null],
+        ['Location', v.location],
+        ['Function', v.function],
+        ['Seniority', v.seniority],
+        ['Salary', r.salary_text || v.salary_text],
+        ['Language', v.language ? (LANG[v.language] || v.language) : null],
+        ['Posted', posted],
+        ['Deadline', deadline],
+        ['Why it matches', r.why_matches],
+      ], [v.description ? clampText(v.description) : null, open]);
+
+      const inner = document.createElement('div');
+      inner.className = 't-detail__inner';
+      inner.appendChild(coBlock);
+      inner.appendChild(vacBlock);
+      return inner;
+    }
+
+    // Open / close one detail row; measure clamps once visible.
+    function toggleDetail(btn) {
+      const row = document.getElementById(btn.getAttribute('aria-controls'));
+      if (!row) return;
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open));
+      row.hidden = !open;
+      if (!open) return;
+      pBody.style.setProperty('--detail-w', pBody.clientWidth + 'px');
+      row.querySelectorAll('.t-detail__clamp').forEach((w) => {
+        const p = w.firstChild, more = w.lastChild;
+        if (!p.classList.contains('is-clamped')) return;
+        more.hidden = p.scrollHeight <= p.clientHeight + 1;
+      });
+    }
+    pBody.addEventListener('click', (e) => {
+      const tog = e.target.closest('.t-toggle__btn');
+      if (tog) { toggleDetail(tog); return; }
+      const more = e.target.closest('.t-detail__more');
+      if (more) {
+        const p = more.previousElementSibling;
+        const clamped = p.classList.toggle('is-clamped');
+        more.textContent = clamped ? 'Show more' : 'Show less';
+      }
+    });
+    // Keep the detail panel as wide as the visible table area (phones scroll the table).
+    window.addEventListener('resize', () => {
+      if (pBody.querySelector('.t-detail:not([hidden])')) pBody.style.setProperty('--detail-w', pBody.clientWidth + 'px');
+    });
+
     // ---- table builders (text via textContent; only hrefs come from data)
-    function table(headers, rows, cells) {
+    // opts.cls: extra table class; opts.detail(r) -> position name, enables
+    // the arrow column + an expandable detail row under each row.
+    function table(headers, rows, cells, opts) {
+      opts = opts || {};
       if (!rows.length) {
         const p = document.createElement('p');
         p.className = 'account__empty';
@@ -1964,8 +2117,17 @@
         return p;
       }
       const t = document.createElement('table');
-      t.className = 'account-table';
+      t.className = 'account-table' + (opts.cls ? ' ' + opts.cls : '');
       const thead = t.createTHead().insertRow();
+      if (opts.detail) {
+        const th = document.createElement('th');
+        th.className = 't-toggle';
+        const sr = document.createElement('span');
+        sr.className = 'visually-hidden';
+        sr.textContent = 'Details';
+        th.appendChild(sr);
+        thead.appendChild(th);
+      }
       headers.forEach((h) => {
         const th = document.createElement('th');
         th.textContent = typeof h === 'string' ? h : h.text;
@@ -1976,6 +2138,24 @@
       const tb = t.createTBody();
       rows.forEach((r) => {
         const tr = tb.insertRow();
+        let btn = null;
+        if (opts.detail) {
+          const id = 'detail-' + (++detailSeq);
+          const td = tr.insertCell();
+          td.className = 't-toggle';
+          btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 't-toggle__btn';
+          btn.setAttribute('aria-expanded', 'false');
+          btn.setAttribute('aria-controls', id);
+          btn.setAttribute('aria-label', 'Show details for ' + (opts.detail(r) || 'this vacancy'));
+          const chev = document.createElement('span');
+          chev.className = 't-toggle__chev';
+          chev.setAttribute('aria-hidden', 'true');
+          btn.appendChild(chev);
+          td.appendChild(btn);
+          tr.dataset.detail = id;
+        }
         cells(r).forEach((c) => {
           const td = tr.insertCell();
           if (c && c.check) {
@@ -2001,6 +2181,16 @@
             td.textContent = c == null ? '—' : c;
           }
         });
+        if (btn) {
+          // Full-width row under it, collapsed by default.
+          const dr = tb.insertRow();
+          dr.id = btn.getAttribute('aria-controls');
+          dr.className = 't-detail';
+          dr.hidden = true;
+          const td = dr.insertCell();
+          td.colSpan = tr.cells.length;
+          td.appendChild(detailContent(r));
+        }
       });
       return t;
     }
@@ -2021,7 +2211,8 @@
             fmtDate(v.deadline_at),
             { check: true, id: r.id, on: r.client_decision === 'interested' },
           ];
-        });
+        },
+        { cls: 'account-table--vac', detail: (r) => (r.vacancies && r.vacancies.title) || '' });
     }
 
     // "Selected by you" = rows the client ticked (client_decision = interested).
@@ -2042,7 +2233,12 @@
       const n = selectedRows(data).length;
       const el = root.querySelector('[data-stat="selected"]');
       el.textContent = n; el.dataset.countTo = String(n);
-      if (openKey === 'selected' && !box.checked) box.closest('tr').remove();
+      if (openKey === 'selected' && !box.checked) {
+        const tr = box.closest('tr');
+        const dr = tr.dataset.detail && document.getElementById(tr.dataset.detail);
+        if (dr) dr.remove();
+        tr.remove();
+      }
     });
 
     function sendRows(rows) {
@@ -2052,7 +2248,8 @@
         (r) => {
           const v = r.vacancies || {};
           return [{ company: company(v) }, { href: v.url, text: v.title || '—' }, fmtDate(r.sent_at), OUTCOME[r.outcome] || r.outcome, fmtDate(r.outcome_at)];
-        });
+        },
+        { cls: 'account-table--sends', detail: (r) => (r.vacancies && r.vacancies.title) || '' });
     }
 
     const PANELS = {
