@@ -2323,47 +2323,79 @@
       const dates = publishDates(rows.map(get));
       const bar = document.createElement('div');
       bar.className = 't-filter';
-      const selId = 'pubdate-' + (++detailSeq);
-      const lab = document.createElement('label');
+      // Multi-select: a <details> menu of checkboxes, one per publish date.
+      const menuId = 'pubdate-' + (++detailSeq);
+      const lab = document.createElement('span');
       lab.className = 't-filter__label';
-      lab.htmlFor = selId;
+      lab.id = menuId + '-label';
       lab.textContent = 'Publish date:';
-      const sel = document.createElement('select');
-      sel.id = selId;
-      sel.className = 't-filter__select';
-      [['all', 'All dates'], ['latest', 'Latest only']].concat(dates.map((d) => [d, fmtDate(d)])).forEach(([v, txt]) => {
-        const o = document.createElement('option');
-        o.value = v;
-        o.textContent = txt;
-        sel.appendChild(o);
+      const menu = document.createElement('details');
+      menu.className = 't-filter__menu';
+      const summary = document.createElement('summary');
+      summary.className = 't-filter__select';
+      summary.setAttribute('aria-labelledby', lab.id + ' ' + menuId + '-sum');
+      const sumText = document.createElement('span');
+      sumText.id = menuId + '-sum';
+      summary.appendChild(sumText);
+      menu.appendChild(summary);
+      const panel = document.createElement('div');
+      panel.className = 't-filter__panel';
+      panel.setAttribute('role', 'group');
+      panel.setAttribute('aria-labelledby', lab.id);
+      const quick = document.createElement('div');
+      quick.className = 't-filter__quick';
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button'; allBtn.className = 't-filter__qbtn'; allBtn.textContent = 'All dates';
+      const latestBtn = document.createElement('button');
+      latestBtn.type = 'button'; latestBtn.className = 't-filter__qbtn'; latestBtn.textContent = 'Latest only';
+      quick.appendChild(allBtn); quick.appendChild(latestBtn);
+      panel.appendChild(quick);
+      const boxes = dates.map((d) => {
+        const l = document.createElement('label');
+        l.className = 't-filter__opt';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = d;
+        l.appendChild(cb);
+        l.appendChild(document.createTextNode(' ' + fmtDate(d)));
+        panel.appendChild(l);
+        return cb;
       });
+      menu.appendChild(panel);
       const count = document.createElement('span');
       count.className = 't-filter__count';
       count.setAttribute('aria-live', 'polite');
       bar.appendChild(lab);
-      bar.appendChild(sel);
+      bar.appendChild(menu);
       bar.appendChild(count);
 
-      const storeKey = 'phantasma_pubdate_' + opts.filter.key;
-      let saved = null;
-      try { saved = sessionStorage.getItem(storeKey); } catch (e) { /* storage blocked */ }
-      sel.value = saved && Array.prototype.some.call(sel.options, (o) => o.value === saved) ? saved : 'all';
+      // Saved choice: JSON array of day keys; empty array = all dates.
+      const storeKey = 'phantasma_pubdates_' + opts.filter.key;
+      let saved = [];
+      try { saved = JSON.parse(sessionStorage.getItem(storeKey) || '[]') || []; } catch (e) { saved = []; }
+      boxes.forEach((cb) => { cb.checked = saved.indexOf(cb.value) !== -1; });
 
+      function chosen() { return boxes.filter((cb) => cb.checked).map((cb) => cb.value); }
       function applyFilter() {
+        const pick = chosen();
         const live = recs.filter((x) => x.tr.isConnected);
         let n = 0;
         live.forEach((x) => {
-          const show = matchesPublish(get(x.r), sel.value, dates[0] || null);
+          const show = !pick.length || pick.indexOf(dayKey(get(x.r))) !== -1;
           x.tr.hidden = !show;
           if (x.dr) x.dr.hidden = !show || x.btn.getAttribute('aria-expanded') !== 'true';
           if (show) n++;
         });
+        sumText.textContent = !pick.length ? 'All dates'
+          : pick.length === 1 ? fmtDate(pick[0]) : pick.length + ' dates';
         count.textContent = 'Showing ' + n + ' of ' + live.length;
+        try { sessionStorage.setItem(storeKey, JSON.stringify(pick)); } catch (e) { /* storage blocked */ }
       }
-      sel.addEventListener('change', () => {
-        try { sessionStorage.setItem(storeKey, sel.value); } catch (e) { /* storage blocked */ }
-        applyFilter();
-      });
+      boxes.forEach((cb) => cb.addEventListener('change', applyFilter));
+      allBtn.addEventListener('click', () => { boxes.forEach((cb) => { cb.checked = false; }); applyFilter(); });
+      latestBtn.addEventListener('click', () => { boxes.forEach((cb, i) => { cb.checked = i === 0; }); applyFilter(); });
+      // Close the menu on outside click or Esc.
+      document.addEventListener('click', (e) => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+      menu.addEventListener('keydown', (e) => { if (e.key === 'Escape' && menu.open) { menu.open = false; summary.focus(); } });
       tableRefresh.set(tb, applyFilter);
       applyFilter();
 
@@ -2456,7 +2488,7 @@
           const byWeek = {};
           d.shortlists.forEach((r) => { byWeek[r.week] = (byWeek[r.week] || 0) + 1; });
           const rows = Object.keys(byWeek).sort().reverse().map((w, i, arr) => ({ n: arr.length - i, week: w, count: byWeek[w] }));
-          return table(['Run', 'Date', 'Vacancies shortlisted'], rows, (r) => [r.n + ' of ' + SERVICE_WEEKS, fmtDate(r.week), r.count]);
+          return table(['Run', 'Date', 'Vacancies shortlisted'], rows, (r) => ['Run ' + r.n, fmtDate(r.week), r.count]);
         },
       },
       processed:  { title: 'Vacancies processed', build: (d) => vacancyRows(d.shortlists, 'processed') },
@@ -2530,7 +2562,7 @@
     function renderStats(d) {
       const st = d.stats;
       const nums = {
-        weeks:      Math.min(d.weeks, SERVICE_WEEKS),
+        weeks:      d.weeks,
         processed:  st ? st.vacancies_processed : 0,
         companies:  st ? st.companies_processed : 0,
         selected:   selectedRows(d).length,

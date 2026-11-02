@@ -3923,6 +3923,18 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   border-color: var(--accent);
 }
 .t-filter__count { color: var(--ink-soft); }
+/* Multi-select publish-date menu (details/summary + checkboxes) */
+.t-filter__menu { position: relative; }
+.t-filter__menu > summary { list-style: none; cursor: pointer; }
+.t-filter__menu > summary::-webkit-details-marker { display: none; }
+.t-filter__menu > summary::after { content: ' BE'; color: var(--ink-soft); }
+.t-filter__panel { margin-top: var(--space-1); min-width: 14rem; max-height: 18rem; overflow-y: auto; background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(20, 33, 61, 0.12); padding: var(--space-2); display: grid; gap: var(--space-1); }
+.t-filter__quick { display: flex; gap: var(--space-2); padding-bottom: var(--space-2); border-bottom: 1px solid var(--rule); margin-bottom: var(--space-1); }
+.t-filter__qbtn { background: transparent; border: 1px solid var(--rule); border-radius: var(--radius-sm, 6px); padding: var(--space-1) var(--space-2); font: inherit; font-size: var(--type-body-sm); color: var(--ink); cursor: pointer; }
+.t-filter__qbtn:hover { background: var(--surface); }
+.t-filter__opt { display: flex; align-items: center; gap: var(--space-2); min-height: 36px; padding: 0 var(--space-2); border-radius: var(--radius-sm, 6px); cursor: pointer; }
+.t-filter__opt:hover { background: var(--surface); }
+.t-filter__opt input { accent-color: var(--accent-deep); width: 18px; height: 18px; }
 
 /* Company cell: logo (24px high) or round letter badge, then the name */
 .company { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; }
