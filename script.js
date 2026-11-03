@@ -1550,8 +1550,13 @@
       return getClient().rpc('request_account_deletion');
     }
 
-    function signInWithGoogle() {
-      return getClient().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: returnUrl() } });
+    // Google sign-in: Google's own button (see bootAuthModal) hands over a
+    // signed ID token; Supabase checks it and signs the user in on this page.
+    // Users are matched by their Google account id, so it is the same account
+    // as with the old redirect login. `nonce` is the raw value whose SHA-256
+    // went to Google.
+    function signInWithGoogleToken(token, nonce) {
+      return getClient().auth.signInWithIdToken({ provider: 'google', token, nonce });
     }
 
     function signOut() {
@@ -1640,7 +1645,7 @@
       workbookUrl,
       loadPreferences,
       savePreferences,
-      signInWithGoogle,
+      signInWithGoogleToken,
       signOut,
       loadStats,
       db,
@@ -1668,6 +1673,38 @@
       e.preventDefault();
       first.focus();
     }
+  }
+
+  // Google Identity Services ("Sign in with Google" button). Loaded only when
+  // the login dialog first opens, so no Google sign-in script runs for
+  // visitors who never log in. The client id is public (it is in every Google
+  // sign-in URL); Google Cloud project phantasma-508619. Its Authorized
+  // JavaScript origins must list https://solvephantasma.com and, for local
+  // tests, http://localhost and http://localhost:8000.
+  const GOOGLE_CLIENT_ID = '396544181713-ecijt1nf7u1qs4tej5n51vh7p4uu7m66.apps.googleusercontent.com';
+  let gisLoading = null;
+  function loadGis() {
+    if (window.google && window.google.accounts && window.google.accounts.id) return Promise.resolve();
+    if (!gisLoading) {
+      gisLoading = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = () => { s.remove(); gisLoading = null; reject(new Error('gis')); };
+        document.head.appendChild(s);
+      });
+    }
+    return gisLoading;
+  }
+
+  // Raw nonce for Supabase, its SHA-256 (hex) for Google: Supabase hashes the
+  // raw value and compares it with the nonce inside Google's token.
+  async function googleNonce() {
+    const raw = btoa(String.fromCharCode.apply(null, crypto.getRandomValues(new Uint8Array(32))));
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    const hashed = Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+    return { raw, hashed };
   }
 
   // Login modal (#auth-modal): Google, or email + password with three modes
@@ -1719,6 +1756,7 @@
       requestAnimationFrame(() => modal.classList.add('is-open'));
       document.body.classList.add('is-locked');
       email.focus();
+      showGoogle().catch(() => {});   // #auth-google stays as the fallback
     }
 
     function close() {
@@ -1773,10 +1811,42 @@
       }
     });
 
-    google.addEventListener('click', async () => {
+    // Google: Google's own button replaces #auth-google once the GIS script
+    // has loaded, so Google's window names solvephantasma.com instead of the
+    // Supabase project address. Initialised and drawn once per page; it stays
+    // in the dialog for later opens. If the script cannot load (blocked),
+    // #auth-google stays: clicking it tries again, then explains.
+    let gisShown = null;
+    function showGoogle() {
+      if (!gisShown) {
+        gisShown = Promise.all([loadGis(), googleNonce()]).then(([, nonce]) => {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            nonce: nonce.hashed,
+            callback: async (res) => {
+              say('busy', form.dataset.msgSending);
+              const { error } = await Auth.signInWithGoogleToken(res.credential, nonce.raw);
+              if (error) say('error', form.dataset.msgError);   // success closes via phantasma:auth
+            },
+          });
+          const slot = document.createElement('div');
+          slot.className = 'auth-modal__gis';
+          google.after(slot);
+          window.google.accounts.id.renderButton(slot, {
+            type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular',
+            text: 'continue_with', logo_alignment: 'center',
+            width: Math.max(200, Math.min(400, slot.offsetWidth || 320)),   // Google allows 200–400 px
+            locale: document.documentElement.lang === 'ka' ? 'ka' : 'en',
+          });
+          google.hidden = true;
+        }).catch((err) => { gisShown = null; throw err; });
+      }
+      return gisShown;
+    }
+
+    google.addEventListener('click', () => {
       say('busy', form.dataset.msgSending);
-      const { error } = await Auth.signInWithGoogle();
-      if (error) say('error', form.dataset.msgError);
+      showGoogle().then(() => say('', ''), () => say('error', form.dataset.msgError));
     });
 
     // Header / nav auth links: signed out → open modal; signed in → follow

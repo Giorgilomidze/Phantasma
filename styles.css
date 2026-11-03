@@ -3373,6 +3373,10 @@ body.is-locked {
 }
 .auth-modal__google:hover { background: var(--surface); }
 .auth-modal__google svg { width: 18px; height: 18px; flex: none; }
+.auth-modal__google[hidden] { display: none; }
+/* Google's own sign-in button (an iframe drawn by Google), centred where
+   #auth-google was; bootAuthModal swaps them once the GIS script has loaded. */
+.auth-modal__gis { display: flex; justify-content: center; min-height: 44px; }
 .auth-modal__or {
   display: flex;
   align-items: center;
