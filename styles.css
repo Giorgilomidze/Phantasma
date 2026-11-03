@@ -2919,11 +2919,24 @@ body.is-locked {
 /* KPI funnel — bands built by bootKpiFunnel(). Each band carries two
    custom props set inline: --w (target width %) and --mix (how far from
    --surface toward --accent, 0-100%). */
-/* Split overview: prose on the left 7 columns, funnel aside on the right 5.
-   The section heading spans the full row above both. */
-.project-section--split > .project-section__h { grid-column: content-start / content-end; }
-.project-section--split > .project-prose { grid-column: content-start / span 7; }
-.project-section--split > .project-funnel { grid-column: span 5 / content-end; }
+/* Top of the projects pages (.project-intro): from 1024px the title and the
+   overview take the left 7 columns and the funnel aside the right 5, starting on
+   the eyebrow line. Row 2 is 1fr, so a taller funnel only stretches the overview
+   row, never the gap under the title. Below 1024px all three stack. */
+.project-intro > .project-funnel { padding-bottom: var(--space-5); }
+@media (min-width: 1024px) {
+  .project-intro { grid-template-rows: auto 1fr; }
+  .project-intro > .project-hero,
+  .project-intro > .project-section { grid-column: content-start / span 7; }
+  .project-intro > .project-funnel {
+    grid-column: span 5 / content-end;
+    grid-row: 1 / span 2;
+    align-self: start;
+    padding-top: var(--space-5); /* = .project-hero padding-top, so both eyebrows share a line */
+  }
+  .project-intro .project-hero__sub { font-size: var(--type-body); }
+  .project-intro .project-prose p { font-size: var(--type-body-sm); }
+}
 .project-funnel .eyebrow { margin-bottom: var(--space-2); }
 .project-funnel__h {
   font-family: var(--font-display);
@@ -3188,10 +3201,9 @@ body.is-locked {
   .pricing-grid {
     grid-template-columns: 1fr;
   }
-  /* Funnel stacks under the prose; 5 of 12 columns is too narrow here */
-  .project-section--split > .project-prose,
-  .project-section--split > .project-funnel { grid-column: content-start / content-end; }
-  .project-funnel { margin-top: var(--space-6); }
+  /* Funnel stacks under the overview; 5 of 12 columns is too narrow here.
+     8px + the section's 24px bottom padding = the old 32px gap. */
+  .project-funnel { margin-top: var(--space-2); }
 }
 
 @media (max-width: 767px) {
@@ -3421,6 +3433,7 @@ body.is-locked {
 .auth-modal__link[hidden] { display: none; }
 .auth-modal__switch { justify-self: center; margin-top: var(--space-2); }
 .account__identity { display: grid; gap: var(--space-2); min-width: 0; }
+.account__identity[hidden] { display: none; }
 .account-li {
   display: flex;
   align-items: center;
@@ -3536,7 +3549,14 @@ body.is-locked {
 .auth-modal__status[data-kind="busy"]  { color: var(--ink-soft); }
 
 /* Account page — v1: the numbers */
-.account { padding-block: var(--space-9) var(--space-8); }
+.account { padding-block: var(--space-5) var(--space-8); }
+/* Title row: eyebrow + title; when signed in, name / email / LinkedIn on its
+   right from 768px (stacked under it below that). */
+.account__head { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); }
+@media (min-width: 768px) {
+  .account__head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-6); }
+  .account__head .account__identity { justify-items: end; text-align: right; }
+}
 .account__panel {
   max-width: 640px;
   display: grid;
@@ -3577,7 +3597,7 @@ body.is-locked {
 .account__delete:hover { color: var(--act); box-shadow: inset 0 0 0 1px var(--act); }
 
 .account__intro { max-width: 640px; }
-.account__intro .project-hero__sub { margin-bottom: var(--space-4); }
+.account__intro .project-hero__sub { margin-bottom: var(--space-4); font-size: var(--type-body-sm); }
 .account__stats-note {
   font-size: var(--type-body-sm);
   color: var(--ink-soft);
@@ -3597,8 +3617,14 @@ body.is-locked {
 /* Account side panel. Mobile first: a horizontally scrollable chip row;
    >=1024px a sticky left column. The grid lives on .account-layout (inside
    #account-signed-in) so the signed-out state is unchanged. */
-.account-layout { display: grid; gap: var(--space-5); grid-template-columns: minmax(0, 1fr); }
-.account-main { display: grid; gap: var(--space-8); min-width: 0; }
+.account-layout {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--rule);   /* under the title row, signed in only */
+}
+.account-main { display: grid; gap: var(--space-6); min-width: 0; }
 .account-nav { min-width: 0; }
 .account-nav ul { list-style: none; margin: 0; padding: 0; }
 .account-nav__list {

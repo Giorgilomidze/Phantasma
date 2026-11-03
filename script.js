@@ -1905,6 +1905,7 @@
 
     const out   = root.querySelector('#account-signed-out');
     const inn   = root.querySelector('#account-signed-in');
+    const who   = root.querySelector('#account-who');   // identity in the title row
     const grid  = root.querySelector('#stat-grid');
     const panel = root.querySelector('#stat-panel');
     const pTitle = root.querySelector('#stat-panel-title');
@@ -2600,6 +2601,7 @@
     async function render(session) {
       out.hidden = !!session;
       inn.hidden = !session;
+      if (who) who.hidden = !session;
       closePanel();
       if (!session) return;
       root.querySelector('#account-email').textContent = session.user.email;
