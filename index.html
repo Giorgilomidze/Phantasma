@@ -10,6 +10,9 @@
 
   <!-- Canonical -->
   <link rel="canonical" href="https://solvephantasma.com/" />
+  <link rel="alternate" hreflang="en" href="https://solvephantasma.com/" />
+  <link rel="alternate" hreflang="ka" href="https://solvephantasma.com/index.ka.html" />
+  <link rel="alternate" hreflang="x-default" href="https://solvephantasma.com/" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -101,7 +104,7 @@
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 
-  <link rel="stylesheet" href="./styles.css?v=20261105e" />
+  <link rel="stylesheet" href="./styles.css?v=20261105f" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -113,7 +116,7 @@
 
   <!-- Header -->
   <header class="site-header" id="site-header">
-    <div class="page-grid site-header__row">
+    <div class="page-grid site-header__row site-header__row--lang">
       <a href="./landing.html" class="wordmark" aria-label="Phantasma — landing page">Phantasma</a>
       <nav class="site-nav" id="site-nav" aria-label="Primary">
         <!-- "What we do" / "Work" / "Approach" anchors removed 17 Sep 2026 to
@@ -125,6 +128,16 @@
         <a href="#contact">Contact</a>
         <a href="./account.html" class="js-auth site-nav__auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
       </nav>
+      <div class="lang-switch" aria-label="Language">
+        <a href="./index.html" hreflang="en" lang="en" aria-label="English" aria-current="page">
+          <svg viewBox="0 0 60 30" aria-hidden="true" focusable="false"><clipPath id="uk-c"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-c)" stroke="#C8102E" stroke-width="4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></svg>
+          <span>EN</span>
+        </a>
+        <a href="./index.ka.html" hreflang="ka" lang="ka" aria-label="ქართული">
+          <svg viewBox="0 0 300 200" aria-hidden="true" focusable="false"><rect width="300" height="200" fill="#fff"/><path d="M130 0h40v200h-40zM0 80h300v40H0z" fill="#e8112d"/><g fill="#e8112d"><path id="ge-c" d="M59 30h12v14h14v12H71v14H59V56H45V44h14z"/><use href="#ge-c" x="170"/><use href="#ge-c" y="100"/><use href="#ge-c" x="170" y="100"/></g></svg>
+          <span>KA</span>
+        </a>
+      </div>
       <!-- Consulting pages: "Book a call" is the main button, "Log in" a quiet link (D-03, 5 Nov 2026) -->
       <div class="site-header__actions">
         <a href="./account.html" class="site-header__login js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
@@ -595,7 +608,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261105e" defer></script>
+  <script src="./script.js?v=20261105f" defer></script>
 
   <!-- SEO: Full case study content, visually hidden, indexed by Google -->
   <section class="visually-hidden">

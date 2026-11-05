@@ -525,14 +525,16 @@ kbd {
 .site-header.is-open .nav-toggle__bar     { opacity: 0; }
 .site-header.is-open .nav-toggle::after   { transform: translateY(-6px) rotate(-45deg); }
 
-/* Language switch (projects pages only). Two flag+code links; the current
-   language carries aria-current="page". The header row gets the --lang
-   modifier so the switch has its own column between nav and CTA. */
+/* Language switch (home, services, projects and legal pages). Two flag+code
+   links; the current language carries aria-current="page". The header row
+   gets the --lang modifier so the switch has its own column between nav and
+   CTA (the CTA is a .btn, or on the home pages the Log in + Book a call pair). */
 .site-header__row--lang {
   grid-template-columns: auto 1fr auto auto;
 }
 .site-header__row--lang > .lang-switch { grid-column: 3; }
 .site-header__row--lang > .btn         { grid-column: 4; }
+.site-header__row--lang > .site-header__actions { grid-column: 4; }
 
 .lang-switch {
   display: inline-flex;
@@ -639,6 +641,9 @@ kbd {
   max-width: 100%;
   white-space: nowrap;
 }
+/* Georgian runs ~40% wider than English: on one line the headline would be
+   cut off at every width, so on the Georgian homepage it wraps (balanced). */
+html[lang="ka"] .hero__h { white-space: normal; text-wrap: balance; }
 .hero__line {
   display: inline;
 }
@@ -1042,6 +1047,9 @@ kbd {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+/* Georgian: "6 აფთიაქი" is one long word at this size and broke out of its
+   tile at 1024px (four columns); a slightly smaller scale keeps it inside. */
+html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25rem); }
 .impact-tile__label {
   font-size: var(--type-body);
   color: var(--ink);
@@ -2194,6 +2202,9 @@ body.is-locked {
   .hero__strip .eyebrow--strip,
   .hero__strip .metric { text-align: left; align-items: flex-start; }
   .metric { flex: 1; }
+  /* Georgian labels have long single words; five in one row pushed the last
+     metric off screen around 768px, so the row may wrap there. */
+  html[lang="ka"] .hero__strip { flex-wrap: wrap; }
 
   /* Approach on tablet+mobile stacks vertically — replace horizontal
      connector with a vertical one. */
@@ -2264,12 +2275,14 @@ body.is-locked {
   .site-header__login { display: none; } /* Log in moves into the menu panel */
   .site-header__row > .nav-toggle { grid-column: 4; display: block; }
   /* With the language switch there is no room for the CTA button too;
-     the page's own Pay now buttons and the Contact link carry that. */
+     the page's own Pay now / Book a call buttons and the Contact link carry
+     that, and Log in sits in the menu panel (.site-nav__auth). */
   .site-header__row--lang {
     grid-template-columns: auto 1fr auto auto;
   }
   .site-header__row--lang > .lang-switch { grid-column: 3; }
   .site-header__row--lang > .btn         { display: none; }
+  .site-header__row--lang > .site-header__actions { display: none; }
   .site-header__row--lang > .nav-toggle  { grid-column: 4; }
   .lang-switch a span { display: none; } /* flags only — no room for codes */
   .site-header__row > .site-nav {
@@ -2349,8 +2362,9 @@ body.is-locked {
   .lightbox__hint { display: none; }
 
   /* Case reel phone layout lives in section 23 (it must come after the base
-     rules there, otherwise the base flex-basis wins the cascade). */
-  .case-reel__header .section-title { white-space: normal; }
+     rules there, otherwise the base flex-basis wins the cascade). The title's
+     white-space: normal moved there too: here the later nowrap base rule won,
+     so the title ran off the screen on phones. */
 }
 
 /* -------------------------------------------------------------------------
@@ -2538,6 +2552,7 @@ body.is-locked {
 
 /* Phones: one large card at a time, 44px tap targets */
 @media (max-width: 767px) {
+  .case-reel__header .section-title { white-space: normal; }
   .case-reel__track-wrap::before,
   .case-reel__track-wrap::after { display: none; }
   .case-reel__slide { flex-basis: 100%; padding: 0; }
