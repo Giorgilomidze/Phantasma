@@ -38,7 +38,6 @@ import argparse
 import glob
 import json
 import os
-import re
 import sqlite3
 import sys
 import urllib.error
@@ -51,9 +50,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sb  # noqa: E402  (.env, service key)
 
 SUPABASE_URL = sb.SUPABASE_URL
-PROSPECTS_XLSX = r"D:\Web Development\Solve Assistant\Linkedin profiles.xlsx"
-DB_PATH = r"D:\Web Development\SQLite Databases\vacancies.db"
-SHORTLIST_GLOB = r"D:\Web Development\Solve Assistant\Job Seek for candidates\*\* Job Shortlist.xlsx"
+# Server: PHANTASMA_ROOT mirrors D:\Web Development (see Solve Assistant\scripts\paths.py).
+_ROOT = os.environ.get("PHANTASMA_ROOT")
+
+
+def _local_path(path):
+    if not _ROOT:
+        return path
+    return os.path.join(_ROOT, *path[len("D:\\Web Development\\"):].split("\\"))
+
+
+PROSPECTS_XLSX = _local_path(r"D:\Web Development\Solve Assistant\Linkedin profiles.xlsx")
+DB_PATH = _local_path(r"D:\Web Development\SQLite Databases\vacancies.db")
+SHORTLIST_GLOB = _local_path(r"D:\Web Development\Solve Assistant\Job Seek for candidates\*\* Job Shortlist.xlsx")
 BATCH = 500
 
 ALLOWED_CANDIDATE_STATUS = {"lead", "prospect", "client", "paused", "churned"}
@@ -116,18 +125,16 @@ class Rest:
             )
         print(f"  {table:<12} upserted {len(rows)} rows")
 
+    def delete(self, table, filters):
+        """filters are PostgREST params, e.g. {"candidate": "eq.x", "vacancy_id": "in.(1,2)"}."""
+        if self.dry_run:
+            return
+        self._req("DELETE", table, prefer="return=minimal", params=filters)
+
 
 def workbooks():
     """Every shortlist workbook, skipping Excel's ~$ lock files (workbook open)."""
     return sorted(p for p in glob.glob(SHORTLIST_GLOB) if not os.path.basename(p).startswith("~$"))
-
-
-def linkedin_slug(url):
-    """'https://www.linkedin.com/in/Giorgi-Lomidze-00425972/' -> 'giorgi-lomidze-00425972'"""
-    if not url:
-        return None
-    m = re.search(r"linkedin\.com/in/([^/?#]+)", url, re.I)
-    return m.group(1).strip().lower() if m else None
 
 
 def rows_of(con, sql, args=()):
@@ -198,12 +205,8 @@ def sync_candidates(con, rest):
     prof = rest.select("profiles", "id,email,linkedin_url,cv_path")
     cv_by_profile = {p["id"]: p.get("cv_path") for p in prof}
     profiles = {p["email"].lower(): p["id"] for p in prof if p.get("email")}
-    # LinkedIn slug (the part after /in/) -> profile id, from what clients typed
-    by_slug = {}
-    for p in prof:
-        sl = linkedin_slug(p.get("linkedin_url"))
-        if sl:
-            by_slug[sl] = p["id"]
+    # Logins are linked by email only. A LinkedIn link typed on the site is not
+    # proof of identity: anyone could type someone else's (audit 5 Nov 2026).
     existing = {c["slug"]: c for c in rest.select("candidates", "slug,account_id,status")}
     cols = ["name", "headline", "function", "seniority", "started_at", "sheet_no", "profile_url",
             "company_current", "folder", "match_rules", "notes"]
@@ -228,13 +231,9 @@ def sync_candidates(con, rest):
         prev = existing.get(r["slug"]) or {}
         row["account_id"] = prev.get("account_id")
         if not row["account_id"]:
-            sl = linkedin_slug(r.get("profile_url")) or r["slug"].lower()
             if email and email in profiles:
                 row["account_id"] = profiles[email]
                 linked.append(f"{r['slug']} -> {email}")
-            elif sl in by_slug:
-                row["account_id"] = by_slug[sl]
-                linked.append(f"{r['slug']} -> linkedin.com/in/{sl}")
             elif email:
                 unlinked.append(f"{r['slug']} ({email} has not signed in yet)")
         # the CV the client uploaded on the site, once the login is linked
@@ -356,8 +355,28 @@ def read_shortlists(con, by_local, by_url):
 def sync_shortlists(con, rest, by_local, by_url):
     rows, unmatched = read_shortlists(con, by_local, by_url)
     rest.upsert("shortlists", rows, "candidate,vacancy_id,week")
+    prune_shortlists(rest, rows)
     for line in unmatched:
         print(f"  unmatched {line}")
+
+
+def prune_shortlists(rest, rows):
+    """A rebuilt week replaces the old one: cloud rows for a synced (candidate, week) that the workbook no longer
+    lists are deleted, unless the client has already acted on them (client_decision set)."""
+    keep = {}
+    for r in rows:
+        keep.setdefault((r["candidate"], r["week"]), set()).add(r["vacancy_id"])
+    stale = {}
+    for c in rest.select("shortlists", "candidate,week,vacancy_id,client_decision"):
+        k = (c["candidate"], c["week"])
+        if k in keep and c["vacancy_id"] not in keep[k] and not c.get("client_decision"):
+            stale.setdefault(k, []).append(c["vacancy_id"])
+    for (cand, week), ids in stale.items():
+        rest.delete("shortlists", {"candidate": f"eq.{cand}", "week": f"eq.{week}",
+                                   "vacancy_id": "in.(%s)" % ",".join(map(str, ids)), "client_decision": "is.null"})
+    n = sum(len(v) for v in stale.values())
+    if n:
+        print(f"  shortlists   {'would remove' if rest.dry_run else 'removed'} {n} outdated rows")
 
 
 def sync_workbooks(con, rest):

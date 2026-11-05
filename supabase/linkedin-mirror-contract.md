@@ -65,7 +65,7 @@ Stopped because LinkedIn retrieval is unreliable. State when parked:
   before the Change password button — and bump the cache version.
 - **Cloud:** `candidates.linkedin_audit` jsonb exists (`0011`). Giorgi Lomidze's
   row holds a real text-shape mirror (~15k chars); 13 rows hold empty old-shape
-  placeholders; Ani Gogitidze none. Harmless — nothing reads the column now.
+  placeholders; one client row none. Harmless — nothing reads the column now.
 - **Sync:** `sync_local.py --only audits` works and stays.
 
 ## Planned next step (agreed, not built)

@@ -137,7 +137,7 @@
         { h: 'Executive Summary', p: 'A rapidly expanding mining and raw materials producer faced severe operational bottlenecks following a series of acquisitions. Disconnected data silos — spreadsheets, local drives, and manual accounting — hindered management of the full mining lifecycle from land acquisition to ecological restoration. We designed an integrated data ecosystem that automated document processing, unified task management with financial flows, and provided C-level executives with real-time decision-making snapshots.' },
         { h: 'The Challenge', p: 'Rapid acquisition of new companies led to non-standardized processes across different mining sites. Critical information was trapped in local computers, manual invoices, and isolated accounting software. The lifecycle involved high-stakes legal documentation, land rights, mining operations, and green-coverage regeneration. Massive human effort was required to map cash flows to specific tasks and process physical invoices.' },
         { h: 'Technical Solution', p: 'Used Azure Data Factory and Databricks to ingest data from the Accounting API and ClickUp API. Implemented Azure Machine Learning OCR to digitize manual invoices, extract metadata, and automatically map them to project tasks. Centralized all operations in ClickUp, ensuring every task was linked to its respective financial cash flow. Developed Power Apps for structured data entry and used SharePoint as a governed document library. Implemented Row-Level Security and Active Directory integration to ensure departments only accessed relevant data.' },
-        { h: 'Business Impact', p: 'Monthly task capacity grew from 40 to 280 tasks — 700% increase. Raw material processing increased from 3,500 to 11,000 units — 314% increase. Labor inefficiency reduced 40%. Data accessibility expanded from under 10% siloed to 80% organization-wide. Total cost of ownership €15,000 over two years covering all cloud services and IT support.' },
+        { h: 'Business Impact', p: 'Monthly task capacity grew from 40 to 280 tasks — 7× as many (+600%). Raw material processing increased from 3,500 to 11,000 units — +214% (3.1×). Labor inefficiency reduced 40%. Data accessibility expanded from under 10% siloed to 80% organization-wide. Total cost of ownership €15,000 over two years covering all cloud services and IT support.' },
         { h: 'Technology Stack', p: 'Azure Databricks, Azure Data Factory, Azure Machine Learning (OCR), Power BI, Power Apps, SharePoint, ClickUp API, Azure Active Directory, Row-Level Security.' },
       ],
     },
@@ -599,69 +599,6 @@
     const mq = window.matchMedia('(max-width: 1023px)');
     mq.addEventListener('change', (ev) => {
       if (!ev.matches) setOpen(false);
-    });
-  }
-
-  /* ---------------------------------------------------------------------
-     Header "Projects" dropdown — button + small menu of links.
-     Click / Enter / Space toggle; Arrow keys move between items; Esc closes
-     and refocuses the button; click outside closes. Same markup serves the
-     desktop popover and the accordion inside the hamburger panel (CSS only).
-     --------------------------------------------------------------------- */
-  function bootNavDropdown() {
-    const dd = document.querySelector('.nav-dropdown');
-    const btn = dd && dd.querySelector('.nav-dropdown__btn');
-    const menu = dd && dd.querySelector('.nav-dropdown__menu');
-    if (!dd || !btn || !menu) return;
-    const items = Array.from(menu.querySelectorAll('a'));
-
-    function setOpen(open) {
-      dd.classList.toggle('is-open', open);
-      btn.setAttribute('aria-expanded', String(open));
-    }
-    function isOpen() { return dd.classList.contains('is-open'); }
-
-    btn.addEventListener('click', () => setOpen(!isOpen()));
-
-    btn.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setOpen(true);
-        if (items[0]) items[0].focus();
-      }
-    });
-
-    menu.addEventListener('keydown', (e) => {
-      const i = items.indexOf(document.activeElement);
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        items[(i + 1) % items.length].focus();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        items[(i - 1 + items.length) % items.length].focus();
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        items[0].focus();
-      } else if (e.key === 'End') {
-        e.preventDefault();
-        items[items.length - 1].focus();
-      }
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isOpen()) {
-        setOpen(false);
-        if (btn.offsetParent !== null) btn.focus();
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      if (isOpen() && !dd.contains(e.target)) setOpen(false);
-    });
-
-    // Tabbing out of the menu closes it
-    dd.addEventListener('focusout', (e) => {
-      if (isOpen() && e.relatedTarget && !dd.contains(e.relatedTarget)) setOpen(false);
     });
   }
 
@@ -3300,11 +3237,8 @@
           ad_user_data: 'granted',
           ad_personalization: 'granted'
         });
-        gtag('event', 'conversion', {
-          send_to: 'AW-18182297582/4NM8CKTh37EcEO6v_91D',
-          value: 1.0,
-          currency: 'USD'
-        });
+        // No conversion here: accepting cookies is not a lead. The Ads lead
+        // conversion fires only from track('contact_submitted') (CLAUDE.md §6).
       }
     });
 
@@ -3476,7 +3410,6 @@
     bootHeroReveal();
     bootHeader();
     bootNavToggle();
-    bootNavDropdown();
     bootCookieBanner();
     bootCaseReel();
     Lightbox.bind();

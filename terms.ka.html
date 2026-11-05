@@ -69,7 +69,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261103f" />
+  <link rel="stylesheet" href="./styles.css?v=20261105a" />
 </head>
 <body>
   <a class="skip-link" href="#main">მთავარ შინაარსზე გადასვლა</a>
@@ -84,15 +84,9 @@
       <nav class="site-nav" id="site-nav" aria-label="Primary">
         <a href="./index.html">მთავარი</a>
         <a href="./blog.html">ბლოგი</a>
-        <div class="nav-dropdown">
-          <button class="nav-dropdown__btn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="nav-projects-menu">პროექტები</button>
-          <div class="nav-dropdown__menu" id="nav-projects-menu">
-            <a href="./projects.ka.html">სამსახურის ძიება</a>
-            <a href="./campaigns/">რეკლამის მართვა</a>
-          </div>
-        </div>
+        <a href="./services.ka.html">სერვისები</a>
         <a href="./index.html#contact">კონტაქტი</a>
-        <a href="./account.html" class="js-auth site-nav__auth" data-label-login="შესვლა" data-label-account="ჩემი პროფილი">შესვლა</a>
+        <a href="./account.html" class="js-auth site-nav__auth" data-label-login="შესვლა" data-label-account="პროფილის მართვა">შესვლა</a>
       </nav>
       <div class="lang-switch" aria-label="Language">
         <a href="./terms.html" hreflang="en" lang="en" aria-label="English">
@@ -104,7 +98,7 @@
           <span>KA</span>
         </a>
       </div>
-      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="შესვლა" data-label-account="ჩემი პროფილი">შესვლა</a>
+      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="შესვლა" data-label-account="პროფილის მართვა">შესვლა</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="მენიუს გახსნა" data-label-open="მენიუს გახსნა" data-label-close="მენიუს დახურვა">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -247,6 +241,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261103f" defer></script>
+  <script src="./script.js?v=20261105a" defer></script>
 </body>
 </html>

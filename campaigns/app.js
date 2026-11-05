@@ -13,10 +13,9 @@
   // Same project and PUBLISHABLE key as ../script.js (publishable by design).
   var SUPABASE_URL = 'https://muumpjtpjnoxxdkhqtik.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_R6Ruxp1ehYAGVcFRqrM_Lg_n1ahoV8e';
-  // Empty = any signed-in user may open the tool while the data is MOCK.
-  // This check runs in the browser, so it is cosmetic only. Real data later
-  // needs a server-side check (RLS / edge function), not this list.
-  var ALLOWED_EMAILS = [];
+  // Who may open the tool is decided by the database (ads_roles, read through
+  // the ads_is_member() function), also for sample data. RLS and the Edge
+  // Functions check again on every live call.
 
   var api = AdsApi;
   // t() always offers {cur} (currency of the current business) to the strings.
@@ -1190,10 +1189,6 @@
     else card.appendChild(h('a', { class: 'ads-btn ads-btn--ghost', href: '../index.html' }, t('menu.back')));
     g.appendChild(card);
   }
-  function allowed(email) {
-    if (!ALLOWED_EMAILS.length) return true;
-    return !!email && ALLOWED_EMAILS.map(function (e) { return e.toLowerCase(); }).indexOf(email.toLowerCase()) !== -1;
-  }
   function start(session) {
     if (started) return;
     started = true;
@@ -1226,8 +1221,12 @@
       var s = res && res.data && res.data.session;
       if (res.error) return showGate('error');
       if (!s) return showGate('login');
-      if (!allowed(s.user.email)) return showGate('denied');
-      start(s);
+      // Members only (fail closed): signed-in people without a role see "No access".
+      return client.rpc('ads_is_member').then(function (m) {
+        if (m.error) return showGate('error');
+        if (m.data !== true) return showGate('denied');
+        start(s);
+      });
     }).catch(function () { showGate('error'); });
     client.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT' && started) location.reload(); });
   }
