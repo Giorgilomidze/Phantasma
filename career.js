@@ -896,6 +896,101 @@
       tableBox.replaceChildren(t);
     }
 
+    // ---- a client's preference answers (career_admin_preferences, 0027), compact, under the row.
+    // Question texts and groups come from preferences.html itself, so they never drift.
+    let prefLabels = null;
+    function loadPrefLabels() {
+      if (!prefLabels) {
+        prefLabels = fetch('./preferences.html', { cache: 'no-cache' })
+          .then((r) => r.text())
+          .then((html) => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const label = {}, groups = [];
+            let cur = null;
+            doc.querySelectorAll('.pref-group__title, .pref-q__label[for]').forEach((n) => {
+              if (n.classList.contains('pref-group__title')) {
+                cur = { title: n.textContent.trim(), ids: [] };
+                groups.push(cur);
+              } else {
+                const id = n.getAttribute('for');
+                label[id] = n.textContent.trim();
+                if (cur) cur.ids.push(id);
+              }
+            });
+            return { groups, label };
+          })
+          .catch(() => ({ groups: [], label: {} }));
+      }
+      return prefLabels;
+    }
+
+    function fmtAnswer(v) {
+      if (Array.isArray(v)) return v.map(fmtAnswer).filter(Boolean).join(', ');
+      if (v && typeof v === 'object') {
+        return Object.entries(v).map(([k, x]) => { const a = fmtAnswer(x); return a ? k + ': ' + a : ''; }).filter(Boolean).join('; ');
+      }
+      return v == null ? '' : String(v).trim();
+    }
+
+    function togglePrefs(tr, btn, c) {
+      const open = btn.getAttribute('aria-expanded') === 'true';
+      const next = tr.nextElementSibling;
+      if (next && next.classList.contains('admin-prefs-row')) next.remove();
+      btn.setAttribute('aria-expanded', String(!open));
+      if (open) return;
+      const row = document.createElement('tr');
+      row.className = 'admin-prefs-row';
+      const td = row.insertCell();
+      td.colSpan = COLS.length;
+      const box = el('div', 'admin-prefs', 'Loading…');
+      box.id = 'prefs-' + c.user_id;
+      box.setAttribute('aria-live', 'polite');
+      btn.setAttribute('aria-controls', box.id);
+      td.appendChild(box);
+      tr.after(row);
+      Promise.all([call(db().rpc('career_admin_preferences', { p_user: c.user_id })), loadPrefLabels()])
+        .then(([res, labels]) => paintPrefs(box, res, labels));
+    }
+
+    function paintPrefs(box, res, labels) {
+      box.replaceChildren();
+      if (!res || res.error) { box.textContent = 'Could not load the answers. Please try again.'; return; }
+      const p = res.data;
+      if (!p) { box.textContent = 'No preferences saved yet.'; return; }
+      const answers = p.answers || {};
+      if (p.updated_at) box.appendChild(el('p', 'admin-prefs__meta', 'Last saved ' + fmtDate(p.updated_at)));
+      const grid = el('div', 'admin-prefs__groups');
+      function section(title, items) {
+        if (!items.length) return;
+        const s = el('section', 'admin-prefs__group');
+        s.appendChild(el('h4', 'admin-prefs__title', title));
+        const dl = document.createElement('dl');
+        items.forEach(([q, a]) => { dl.appendChild(el('dt', null, q)); dl.appendChild(el('dd', null, a)); });
+        s.appendChild(dl);
+        grid.appendChild(s);
+      }
+      const seen = new Set();
+      const salary = (p.salary_min != null || p.salary_max != null)
+        ? [p.salary_min, p.salary_max].map((n) => (n == null ? '…' : Number(n).toLocaleString('en-GB'))).join(' – ') + (p.currency ? ' ' + p.currency : '')
+        : '';
+      labels.groups.forEach((g, i) => {
+        const items = [];
+        if (i === 0 && salary) items.push(['Salary range', salary]);
+        g.ids.forEach((id) => {
+          seen.add(id);
+          const a = fmtAnswer(answers[id]);
+          if (a) items.push([labels.label[id] || id, a]);
+        });
+        section(g.title, items);
+      });
+      // Anything the page no longer asks (or a page that failed to load): show it by its key
+      const rest = Object.keys(answers).filter((k) => !seen.has(k)).map((k) => [labels.label[k] || k, fmtAnswer(answers[k])]).filter((x) => x[1]);
+      if (!labels.groups.length && salary) rest.unshift(['Salary range', salary]);
+      section(labels.groups.length ? 'Other answers' : 'Answers', rest);
+      if (!grid.childElementCount) { box.appendChild(el('p', null, 'No answers filled in yet.')); return; }
+      box.appendChild(grid);
+    }
+
     function clientRow(c) {
       const tr = document.createElement('tr');
       const name = tr.insertCell();
@@ -934,7 +1029,14 @@
       fill.style.setProperty('--pct', pct + '%');
       bar.appendChild(fill);
       wrap.appendChild(bar);
-      tr.insertCell().appendChild(wrap);
+      // A button: opens this client's answers in a compact row under theirs (0027)
+      const pb = el('button', 'admin-prefs-btn');
+      pb.type = 'button';
+      pb.setAttribute('aria-expanded', 'false');
+      pb.setAttribute('aria-label', 'Preferences ' + pct + '% filled: show the answers of ' + nameOf(c));
+      pb.appendChild(wrap);
+      pb.addEventListener('click', () => togglePrefs(tr, pb, c));
+      tr.insertCell().appendChild(pb);
 
       // Unread: opens this client's chat (also with nothing unread, to write first)
       const unread = Number(c.unread) || 0;
