@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var STORE_KEY = 'ads_mock_state_v1';
+  var STORE_KEY = 'ads_mock_state_v2';   // v2: more sample data, 5 Nov 2026
   var MODE_KEY = 'ads_backend_mode'; // 'mock' (default) | 'live'
   var REVIEW_DELAY_MS = 15000; // mock "Meta review" takes 15 seconds
 

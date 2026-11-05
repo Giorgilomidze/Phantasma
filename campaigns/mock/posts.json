@@ -4,5 +4,15 @@
   { "id": "post_3", "business": "edelweiss", "status": "scheduled", "productId": "p_edel_breakfast", "caption": "Breakfast on the terrace, every morning.", "imageId": "img_2", "dateOffset": 3 },
   { "id": "post_4", "business": "breeze", "status": "needs_approval", "productId": "p_breeze_coffee", "caption": "Guaranteed best coffee in town, with a free dessert.", "imageId": "img_5", "dateOffset": null },
   { "id": "post_5", "business": "breeze", "status": "published", "productId": "p_breeze_event", "caption": "Book a sunset table for two. Message us.", "imageId": "img_4", "dateOffset": -2 },
-  { "id": "post_6", "business": "breeze", "status": "approved", "productId": "p_breeze_lunch", "caption": "Sea-view lunch set, ready from noon.", "imageId": "img_6", "dateOffset": null }
+  { "id": "post_6", "business": "breeze", "status": "approved", "productId": "p_breeze_lunch", "caption": "Sea-view lunch set, ready from noon.", "imageId": "img_6", "dateOffset": null },
+  { "id": "post_7", "business": "edelweiss", "status": "published", "productId": "p_edel_ski", "caption": "Ski weekend in Mestia: rooms close to the lift.", "imageId": "img_7", "dateOffset": -4 },
+  { "id": "post_8", "business": "edelweiss", "status": "scheduled", "productId": "p_edel_newyear", "caption": "New Year dinner by the fireplace. Seats are limited.", "imageId": "img_8", "dateOffset": 7 },
+  { "id": "post_9", "business": "edelweiss", "status": "needs_approval", "productId": "p_edel_spa", "caption": "Spa evening after a day on the slopes.", "imageId": "img_9", "dateOffset": null },
+  { "id": "post_10", "business": "edelweiss", "status": "draft", "productId": "p_edel_family", "caption": "A family room with space for four.", "imageId": "img_10", "dateOffset": null },
+  { "id": "post_11", "business": "edelweiss", "status": "approved", "productId": "p_edel_room", "caption": "Weekday stay: quiet rooms and mountain air.", "imageId": "img_1", "dateOffset": null },
+  { "id": "post_12", "business": "breeze", "status": "published", "productId": "p_breeze_seafood", "caption": "Seafood night every Thursday. Message us to book.", "imageId": "img_11", "dateOffset": -1 },
+  { "id": "post_13", "business": "breeze", "status": "scheduled", "productId": "p_breeze_brunch", "caption": "Weekend brunch on the terrace from 11:00.", "imageId": "img_12", "dateOffset": 2 },
+  { "id": "post_14", "business": "breeze", "status": "needs_approval", "productId": "p_breeze_music", "caption": "Live music this Friday from 20:00.", "imageId": "img_13", "dateOffset": null },
+  { "id": "post_15", "business": "breeze", "status": "draft", "productId": "p_breeze_birthday", "caption": "Celebrate your birthday by the sea.", "imageId": "img_14", "dateOffset": null },
+  { "id": "post_16", "business": "breeze", "status": "published", "productId": "p_breeze_coffee", "caption": "Takeaway coffee, ready in two minutes.", "imageId": "img_5", "dateOffset": -9 }
 ]

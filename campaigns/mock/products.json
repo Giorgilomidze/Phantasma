@@ -4,5 +4,13 @@
   { "id": "p_edel_tour", "business": "edelweiss", "name_en": "Guided valley walk (MOCK)", "name_ka": "გიდით ბილიკზე გასეირნება (MOCK)", "price": 60 },
   { "id": "p_breeze_lunch", "business": "breeze", "name_en": "Sea-view lunch set (MOCK)", "name_ka": "სადილის სეტი ზღვის ხედით (MOCK)", "price": 32 },
   { "id": "p_breeze_coffee", "business": "breeze", "name_en": "Coffee and dessert (MOCK)", "name_ka": "ყავა და დესერტი (MOCK)", "price": 14 },
-  { "id": "p_breeze_event", "business": "breeze", "name_en": "Sunset table for two (MOCK)", "name_ka": "მაგიდა ორისთვის მზის ჩასვლისას (MOCK)", "price": 70 }
+  { "id": "p_breeze_event", "business": "breeze", "name_en": "Sunset table for two (MOCK)", "name_ka": "მაგიდა ორისთვის მზის ჩასვლისას (MOCK)", "price": 70 },
+  { "id": "p_edel_ski", "business": "edelweiss", "name_en": "Ski weekend package (MOCK)", "name_ka": "სათხილამურო შაბათ-კვირის პაკეტი (MOCK)", "price": 260 },
+  { "id": "p_edel_newyear", "business": "edelweiss", "name_en": "New Year dinner (MOCK)", "name_ka": "საახალწლო ვახშამი (MOCK)", "price": 90 },
+  { "id": "p_edel_spa", "business": "edelweiss", "name_en": "Spa evening for two (MOCK)", "name_ka": "სპა საღამო ორისთვის (MOCK)", "price": 110 },
+  { "id": "p_edel_family", "business": "edelweiss", "name_en": "Family room, 4 guests (MOCK)", "name_ka": "საოჯახო ოთახი, 4 სტუმარი (MOCK)", "price": 180 },
+  { "id": "p_breeze_seafood", "business": "breeze", "name_en": "Seafood night set (MOCK)", "name_ka": "ზღვის პროდუქტების საღამოს სეტი (MOCK)", "price": 85 },
+  { "id": "p_breeze_brunch", "business": "breeze", "name_en": "Weekend brunch (MOCK)", "name_ka": "შაბათ-კვირის ბრანჩი (MOCK)", "price": 38 },
+  { "id": "p_breeze_music", "business": "breeze", "name_en": "Live music table (MOCK)", "name_ka": "მაგიდა ცოცხალ მუსიკაზე (MOCK)", "price": 50 },
+  { "id": "p_breeze_birthday", "business": "breeze", "name_en": "Birthday table package (MOCK)", "name_ka": "დაბადების დღის მაგიდის პაკეტი (MOCK)", "price": 150 }
 ]

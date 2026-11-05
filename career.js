@@ -855,9 +855,10 @@
     const COLS = [
       { text: 'Client',      sort: (c) => (c.full_name || c.email || '').toLowerCase() },
       { text: 'Plan',        sort: (c) => c.plan_code || null },
-      { text: 'Searches',    sort: (c) => Number(c.runs) || 0, title: 'Search runs (weekly shortlists delivered)' },
+      { text: 'Searches',    sort: (c) => Number(c.runs) || 0,
+        title: 'Search runs (weekly shortlists delivered). Below: vacancies matched, confirmed by the client (ticked or already sent) and sent' },
       { text: 'LinkedIn',    sort: (c) => (c.linkedin_connected ? 2 : c.linkedin_link ? 1 : 0),
-        title: 'Connected = logs in with LinkedIn; Link only = profile link saved' },
+        title: 'Signed in = the client logs in with LinkedIn, so the profile is confirmed as theirs; Link added = only a profile link typed in Profile details' },
       { text: 'CV',          sort: (c) => (c.has_cv ? 1 : 0) },
       { text: 'Preferences', sort: (c) => Number(c.prefs_pct) || 0, title: 'Share of the preferences questionnaire filled in' },
       { text: 'Unread',      sort: (c) => Number(c.unread) || 0 },
@@ -911,8 +912,16 @@
         plan.textContent = '—';
       }
 
-      tr.insertCell().textContent = String(Number(c.runs) || 0);
-      tr.insertCell().textContent = c.linkedin_connected ? 'Connected' : c.linkedin_link ? 'Link only' : '—';
+      // Searches + the funnel for this client (0026): matched → confirmed (ticked or sent) → sent
+      const runs = tr.insertCell();
+      runs.appendChild(el('span', null, String(Number(c.runs) || 0)));
+      runs.appendChild(el('span', 't-sub', (Number(c.matched) || 0) + ' matched'));
+      runs.appendChild(el('span', 't-sub', (Number(c.confirmed) || 0) + ' confirmed · ' + (Number(c.sent) || 0) + ' sent'));
+
+      const li = tr.insertCell();
+      li.textContent = c.linkedin_connected ? 'Signed in' : c.linkedin_link ? 'Link added' : '—';
+      if (c.linkedin_connected) li.title = 'Logs in with LinkedIn: the profile is confirmed as theirs';
+      else if (c.linkedin_link) li.title = 'Only typed a LinkedIn link in Profile details; not confirmed by a LinkedIn sign-in';
       tr.insertCell().textContent = c.has_cv ? 'Yes' : '—';
 
       // Preferences filled: number + slim bar

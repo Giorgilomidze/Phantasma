@@ -5,11 +5,24 @@
     "c_2": { "reachPerDay": 900, "messagesPerDay": 1.1 },
     "c_3": { "reachPerDay": 1100, "messagesPerDay": 0.8 },
     "c_5": { "reachPerDay": 2300, "messagesPerDay": 7.4 },
-    "c_6": { "reachPerDay": 300, "messagesPerDay": 0.2 }
+    "c_6": { "reachPerDay": 300, "messagesPerDay": 0.2 },
+    "c_8": { "reachPerDay": 2400, "messagesPerDay": 6.8 },
+    "c_10": { "reachPerDay": 800, "messagesPerDay": 0.9 },
+    "c_11": { "reachPerDay": 950, "messagesPerDay": 0.4 },
+    "c_14": { "reachPerDay": 2100, "messagesPerDay": 6.1 },
+    "c_15": { "reachPerDay": 1300, "messagesPerDay": 1.5 },
+    "c_16": { "reachPerDay": 700, "messagesPerDay": 0.5 },
+    "c_17": { "reachPerDay": 2600, "messagesPerDay": 8.2 },
+    "c_20": { "reachPerDay": 1500, "messagesPerDay": 3.9 }
   },
   "alerts": [
     { "id": "a_1", "level": "act", "business": "breeze", "en": "Campaign 'Coffee promo' was rejected: caption has a risky word.", "ka": "კამპანია 'Coffee promo' უარყოფილია: ტექსტში რისკიანი სიტყვაა." },
     { "id": "a_2", "level": "watch", "business": "edelweiss", "en": "'Breakfast add-on' is paused but still has 6 days of budget left.", "ka": "'Breakfast add-on' შეჩერებულია, ბიუჯეტი კიდევ 6 დღისაა დარჩენილი." },
-    { "id": "a_3", "level": "ok", "business": "breeze", "en": "'Sunset tables' cost per message is 12% below last week.", "ka": "'Sunset tables'-ის შეტყობინების ფასი გასულ კვირაზე 12%-ით დაბალია." }
+    { "id": "a_3", "level": "ok", "business": "breeze", "en": "'Sunset tables' cost per message is 12% below last week.", "ka": "'Sunset tables'-ის შეტყობინების ფასი გასულ კვირაზე 12%-ით დაბალია." },
+    { "id": "a_4", "level": "watch", "business": "edelweiss", "en": "'Ski weekend' spends 20% faster than planned; check the daily budget.", "ka": "'Ski weekend' გეგმაზე 20%-ით სწრაფად ხარჯავს; შეამოწმეთ დღიური ბიუჯეტი." },
+    { "id": "a_5", "level": "act", "business": "edelweiss", "en": "Campaign 'Long-stay discount' was rejected: '100%' is an absolute claim.", "ka": "კამპანია 'Long-stay discount' უარყოფილია: '100%' აბსოლუტური მტკიცებაა." },
+    { "id": "a_6", "level": "ok", "business": "breeze", "en": "'Seafood night' brought 18 messages in 3 days.", "ka": "'Seafood night'-მა 3 დღეში 18 შეტყობინება მოიტანა." },
+    { "id": "a_7", "level": "watch", "business": "breeze", "en": "Two posts are waiting for your approval.", "ka": "ორი პოსტი თქვენს დამტკიცებას ელოდება." },
+    { "id": "a_8", "level": "ok", "business": "edelweiss", "en": "'Tbilisi weekenders' cost per message fell 9% this week.", "ka": "'Tbilisi weekenders'-ის შეტყობინების ფასი ამ კვირაში 9%-ით შემცირდა." }
   ]
 }

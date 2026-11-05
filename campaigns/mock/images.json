@@ -4,5 +4,13 @@
   { "id": "img_3", "business": "edelweiss", "title_en": "Valley trail (placeholder)", "title_ka": "ხეობის ბილიკი (მაკეტი)", "c1": "#1f7a4d", "c2": "#fcfbf9", "shape": "mountain" },
   { "id": "img_4", "business": "breeze", "title_en": "Terrace at sunset (placeholder)", "title_ka": "ტერასა მზის ჩასვლისას (მაკეტი)", "c1": "#b8420a", "c2": "#14213d", "shape": "wave" },
   { "id": "img_5", "business": "breeze", "title_en": "Coffee cup (placeholder)", "title_ka": "ყავის ფინჯანი (მაკეტი)", "c1": "#4a5568", "c2": "#f7f5f2", "shape": "circle" },
-  { "id": "img_6", "business": "breeze", "title_en": "Lunch set (placeholder)", "title_ka": "სადილის სეტი (მაკეტი)", "c1": "#0e4f6b", "c2": "#f26b1d", "shape": "wave" }
+  { "id": "img_6", "business": "breeze", "title_en": "Lunch set (placeholder)", "title_ka": "სადილის სეტი (მაკეტი)", "c1": "#0e4f6b", "c2": "#f26b1d", "shape": "wave" },
+  { "id": "img_7", "business": "edelweiss", "title_en": "Ski lift view (placeholder)", "title_ka": "საბაგიროს ხედი (მაკეტი)", "c1": "#0e4f6b", "c2": "#fcfbf9", "shape": "mountain" },
+  { "id": "img_8", "business": "edelweiss", "title_en": "Fireplace dinner (placeholder)", "title_ka": "ვახშამი ბუხართან (მაკეტი)", "c1": "#b8420a", "c2": "#efece6", "shape": "circle" },
+  { "id": "img_9", "business": "edelweiss", "title_en": "Spa room (placeholder)", "title_ka": "სპა ოთახი (მაკეტი)", "c1": "#1f7a4d", "c2": "#f7f5f2", "shape": "wave" },
+  { "id": "img_10", "business": "edelweiss", "title_en": "Family room (placeholder)", "title_ka": "საოჯახო ოთახი (მაკეტი)", "c1": "#14213d", "c2": "#efece6", "shape": "mountain" },
+  { "id": "img_11", "business": "breeze", "title_en": "Seafood platter (placeholder)", "title_ka": "ზღვის პროდუქტების თეფში (მაკეტი)", "c1": "#0e4f6b", "c2": "#f26b1d", "shape": "circle" },
+  { "id": "img_12", "business": "breeze", "title_en": "Brunch table (placeholder)", "title_ka": "ბრანჩის მაგიდა (მაკეტი)", "c1": "#8a5a00", "c2": "#f7f5f2", "shape": "wave" },
+  { "id": "img_13", "business": "breeze", "title_en": "Live music stage (placeholder)", "title_ka": "ცოცხალი მუსიკის სცენა (მაკეტი)", "c1": "#14213d", "c2": "#f26b1d", "shape": "wave" },
+  { "id": "img_14", "business": "breeze", "title_en": "Birthday cake (placeholder)", "title_ka": "დაბადების დღის ტორტი (მაკეტი)", "c1": "#b3261e", "c2": "#fcfbf9", "shape": "circle" }
 ]
