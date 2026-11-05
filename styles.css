@@ -407,6 +407,26 @@ kbd {
   align-items: center;
 }
 .site-header__row > .btn       { grid-column: 3; justify-self: end; }
+/* Consulting pages (index, blog): "Book a call" button + a quiet "Log in" link (D-03) */
+.site-header__row > .site-header__actions {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+.site-header__login {
+  font-weight: 500;
+  font-size: var(--type-eyebrow);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  padding: 8px 0;
+  transition: color 150ms ease-out;
+}
+.site-header__login:hover { color: var(--ink); }
+.site-header__login:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 4px; border-radius: 2px; }
 
 .wordmark {
   position: relative;
@@ -2240,6 +2260,8 @@ body.is-locked {
     column-gap: var(--space-3);
   }
   .site-header__row > .btn        { grid-column: 3; }
+  .site-header__row > .site-header__actions { grid-column: 3; }
+  .site-header__login { display: none; } /* Log in moves into the menu panel */
   .site-header__row > .nav-toggle { grid-column: 4; display: block; }
   /* With the language switch there is no room for the CTA button too;
      the page's own Pay now buttons and the Contact link carry that. */
@@ -2275,7 +2297,8 @@ body.is-locked {
   .site-header__row > .site-nav a[aria-current] { color: var(--ink); }
   /* Projects pages hide the header CTA at this width, so Log in / Account
      lives in the nav panel instead (hidden on desktop, see section 26). */
-  .site-nav__auth { display: block; }
+  /* .site-nav prefix: must beat the later base rule in section 26, which hid it everywhere */
+  .site-nav .site-nav__auth { display: block; }
 }
 
 @media (max-width: 767px) {

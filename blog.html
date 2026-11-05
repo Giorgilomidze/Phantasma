@@ -62,7 +62,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105a" />
+  <link rel="stylesheet" href="./styles.css?v=20261105c" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -79,8 +79,13 @@
         <a href="./blog.html" aria-current="page">Blog</a>
         <a href="./services.html">Services</a>
         <a href="./index.html#contact">Contact</a>
+        <a href="./account.html" class="js-auth site-nav__auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
       </nav>
-      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+      <!-- Consulting pages: "Book a call" is the main button, "Log in" a quiet link (D-03, 5 Nov 2026) -->
+      <div class="site-header__actions">
+        <a href="./account.html" class="site-header__login js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+        <button class="btn btn-primary btn-sm" type="button" data-open-booking>Book a call</button>
+      </div>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -556,6 +561,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261105a" defer></script>
+  <script src="./script.js?v=20261105c" defer></script>
 </body>
 </html>
