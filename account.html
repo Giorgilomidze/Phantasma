@@ -63,7 +63,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105g" />
+  <link rel="stylesheet" href="./styles.css?v=20261105h" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -81,7 +81,7 @@
         <a href="./services.html">Services</a>
         <a href="./index.html#contact">Contact</a>
       </nav>
-      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+      <a href="./services.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -93,12 +93,15 @@
     <!-- Client dashboard, v1: the numbers only. Filled by bootAccountPage
          (script.js) from get_my_stats(); forms and tables come later. -->
     <section class="account page-grid" id="account" aria-labelledby="account-h">
-      <!-- Title row. From 768px the signed-in identity sits on its right;
-           #account-who is shown together with #account-signed-in (bootAccountPage). -->
-      <div class="account__head">
-        <div>
-          <p class="eyebrow">Account</p>
+      <!-- Title row (5 Nov 2026): one compact row. Left: the title, then the
+           client's name (under it on phones). Right, when signed in: email and
+           three status controls (LinkedIn connected / CV uploaded / preferences
+           filled), painted by bootAccountPage. #account-who is shown together
+           with #account-signed-in. The LinkedIn link is edited in Profile details. -->
+      <div class="account__head account__head--row">
+        <div class="account__title">
           <h1 class="project-hero__title" id="account-h">Your account</h1>
+          <p class="account__name" id="account-name" hidden></p>
           <!-- Client | Admin switch: shown only to career-service admins, after
                login (career.js asks is_career_admin()). admin.html has the same. -->
           <nav class="role-switch" id="role-switch" aria-label="Switch view" hidden>
@@ -107,14 +110,30 @@
           </nav>
         </div>
         <div class="account__identity" id="account-who" hidden>
-          <p class="account__name" id="account-name" hidden></p>
           <p class="account__email" id="account-email"></p>
-          <!-- LinkedIn: read-only line; editing happens in the profile modal. -->
-          <div class="account-li" id="account-linkedin-view">
-            <svg class="account-li__icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
-            <span class="account-li__slug" id="linkedin-slug" data-empty="Add your LinkedIn profile"></span>
-            <button class="account-li__edit" type="button" id="linkedin-edit" data-label-edit="Edit" data-label-add="Add">Edit</button>
+          <div class="account-status" role="group" aria-label="Your setup">
+            <button class="account-status__btn" type="button" id="status-linkedin" data-state="off"
+                    data-label-on="LinkedIn connected. Open Profile details" data-label-off="LinkedIn not connected. Connect your LinkedIn account"
+                    aria-label="LinkedIn not connected. Connect your LinkedIn account" title="LinkedIn not connected. Connect your LinkedIn account">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
+              <span class="account-status__check" aria-hidden="true"></span>
+            </button>
+            <button class="account-status__btn" type="button" id="status-cv" data-state="off"
+                    data-label-on="CV uploaded. Review your CV" data-label-off="No CV yet. Upload your CV"
+                    aria-label="No CV yet. Upload your CV" title="No CV yet. Upload your CV">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+              <span class="account-status__check" aria-hidden="true"></span>
+            </button>
+            <!-- A link, not a button: it goes to another page (middle-click works). -->
+            <a class="account-status__btn account-status__btn--pct" href="./preferences.html" id="status-prefs"
+               data-label="Preferences {n}% filled. Open Preferences"
+               aria-label="Preferences 0% filled. Open Preferences" title="Preferences 0% filled. Open Preferences">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+              <span class="account-status__pct" id="status-prefs-pct">0%</span>
+            </a>
           </div>
+          <p class="account-status__note" id="status-note" role="status" aria-live="polite" hidden
+             data-msg-linkedin-off="Connecting LinkedIn is not switched on yet — please try again later."></p>
         </div>
       </div>
 
@@ -141,7 +160,6 @@
           <ul class="account-nav__list">
             <li><a class="account-nav__item" href="#account-stats" data-nav-target="account-stats" aria-current="true">Overview</a></li>
             <li class="account-nav__group">
-              <span class="account-nav__title">Vacancies</span>
               <ul>
                 <li><button class="account-nav__item" type="button" data-nav-panel="processed">Vacancy lists</button></li>
                 <li><a class="account-nav__item" id="account-workbook" href="#" hidden
@@ -164,10 +182,18 @@
               <ul>
                 <li><button class="account-nav__item" type="button" id="account-changepass" aria-controls="account-newpass" aria-expanded="false">Change password</button></li>
                 <li><button class="account-nav__item" type="button" id="account-signout">Sign out</button></li>
-                <li><a class="account-nav__item account-nav__item--danger" href="#account-danger" data-nav-target="account-danger">Delete my account</a></li>
+                <!-- The only way to delete (5 Nov 2026), same look as the old button at
+                     the bottom of the overview: hover / keyboard focus shows #delete-tip,
+                     a click opens #delete-pop (bootAccountPage). -->
+                <li class="account-nav__delete"><button class="btn btn-sm account__quiet account__delete" type="button" id="account-delete-open"
+                            aria-haspopup="dialog" aria-controls="delete-pop" aria-describedby="delete-tip">Delete my account</button></li>
               </ul>
             </li>
           </ul>
+          <p class="account-tip" id="delete-tip" role="tooltip" hidden>
+            Want to leave? Deleting your account removes your login at once; we then erase
+            your CV, brief and shortlists by hand within 7 days and confirm by email.
+          </p>
         </nav>
         <div class="account-main">
 
@@ -228,17 +254,6 @@
             <a href="./projects.html" class="link-quiet">Personal Career Strategist</a> page.
           </p>
         </div>
-
-        <div class="account__danger" id="account-danger" tabindex="-1">
-          <p class="account__hint">
-            Want to leave? Deleting your account removes your login at once; we then erase
-            your CV, brief and shortlists by hand within 7 days and confirm by email.
-          </p>
-          <button class="btn btn-sm account__quiet account__delete" type="button" id="account-delete"
-                  data-confirm="Delete your account? This cannot be undone."
-                  data-msg-busy="Deleting…" data-msg-error="Could not delete the account — please email consult@solvephantasma.com.">Delete my account</button>
-          <p class="account-form__status" id="delete-status" role="status" aria-live="polite" hidden></p>
-        </div>
         </div><!-- /.account-main -->
         </div><!-- /.account-layout -->
       </div>
@@ -268,6 +283,31 @@
       </div>
     </div>
   </footer>
+
+  <!-- Delete my account — opened only from the side panel (#account-delete-open).
+       From 1024px it sits next to that button (bootAccountPage sets left / top, the
+       backdrop is clear); below that it is a small centred dialog. This window is
+       the confirmation: its Delete button deletes at once (no browser confirm),
+       with the old busy / error messages (data-* below). -->
+  <div class="auth-modal delete-pop" id="delete-pop" role="alertdialog" aria-modal="true"
+       aria-labelledby="delete-pop-title" aria-describedby="delete-pop-text" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel delete-pop__panel">
+      <h2 class="auth-modal__title" id="delete-pop-title">Delete your account?</h2>
+      <ul class="delete-pop__list" id="delete-pop-text">
+        <li>Your login is removed at once.</li>
+        <li>We then erase your CV, preferences, vacancy lists and messages by hand within 7 days and confirm by email.</li>
+        <li>Your data is private: only you and the Phantasma team can see it, and it is never sold.</li>
+        <li>If you come back later, you start from scratch: a new account, your CV uploaded again, your preferences filled in again.</li>
+      </ul>
+      <div class="delete-pop__actions">
+        <button class="btn btn-sm delete-pop__confirm" type="button" id="account-delete"
+                data-msg-busy="Deleting…" data-msg-error="Could not delete the account — please email consult@solvephantasma.com.">Delete my account</button>
+        <button class="btn btn-sm account__quiet delete-pop__cancel" type="button" data-close>Cancel</button>
+      </div>
+      <p class="account-form__status" id="delete-status" role="status" aria-live="polite" hidden></p>
+    </div>
+  </div>
 
   <!-- Profile details modal — names + LinkedIn → profiles. -->
   <div class="auth-modal" id="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title" hidden>
@@ -388,8 +428,8 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261105g"></script>
+  <script src="./script.js?v=20261105h"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
-  <script src="./career.js?v=20261105g"></script>
+  <script src="./career.js?v=20261105i"></script>
 </body>
 </html>

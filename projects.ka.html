@@ -68,7 +68,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105g" />
+  <link rel="stylesheet" href="./styles.css?v=20261105h" />
 </head>
 <body>
   <a class="skip-link" href="#main">მთავარ შინაარსზე გადასვლა</a>
@@ -85,7 +85,7 @@
         <a href="./blog.html">ბლოგი</a>
         <a href="./services.ka.html" aria-current="true">სერვისები</a>
         <a href="./index.ka.html#contact">კონტაქტი</a>
-        <a href="./account.html" class="js-auth site-nav__auth" data-label-login="შესვლა" data-label-account="პროფილის მართვა">შესვლა</a>
+        <a href="./services.ka.html" class="js-auth site-nav__auth" data-label-login="შესვლა" data-label-account="პროფილის მართვა">შესვლა</a>
       </nav>
       <div class="lang-switch" aria-label="Language">
         <a href="./projects.html" hreflang="en" lang="en" aria-label="English">
@@ -97,7 +97,7 @@
           <span>KA</span>
         </a>
       </div>
-      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="შესვლა" data-label-account="პროფილის მართვა">შესვლა</a>
+      <a href="./services.ka.html" class="btn btn-primary btn-sm js-auth" data-label-login="შესვლა" data-label-account="პროფილის მართვა">შესვლა</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="მენიუს გახსნა" data-label-open="მენიუს გახსნა" data-label-close="მენიუს დახურვა">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -110,7 +110,6 @@
          line down (.project-intro, styles.css section 25). -->
     <div class="project-intro page-grid">
       <header class="project-hero">
-        <p class="eyebrow">სამსახურის ძიება</p>
         <h1 class="project-hero__title">პერსონალური კარიერული სტრატეგი</h1>
         <p class="project-hero__sub">
           მართული სამსახურის ძიების სერვისი — ძიებას, წერასა და განაცხადების გაგზავნას
@@ -145,7 +144,6 @@
         <!-- Live KPI funnel. Numbers come from data/kpis.json at load
              (bootKpiFunnel in script.js); replace that file to update. -->
         <aside class="project-funnel" aria-labelledby="progress-h">
-          <p class="eyebrow">პროგრესი</p>
           <h3 id="progress-h" class="project-funnel__h">მთელი ბაზრიდან თქვენს საფოსტო ყუთამდე</h3>
           <p class="kpi-funnel__lede" id="kpi-funnel-lede" aria-live="polite"
              data-text="ყველა რიცხვი ცოცხალია და პირდაპირ ჩვენი სამუშაო მონაცემებიდან მოდის."
@@ -159,50 +157,78 @@
     <section class="project-section page-grid" aria-labelledby="plans-h">
       <h2 id="plans-h" class="project-section__h">პაკეტები</h2>
 
-      <!-- Pay now buttons (data-tier): handled in script.js, bootAuthModal. -->
+      <!-- Plan cards: collapsed to their header button; bootPricingCards (script.js)
+           opens each one on its own. Pay now buttons (data-tier): bootAuthModal. -->
       <div class="pricing-grid">
         <article class="pricing-card">
-          <p class="pricing-card__tier">პაკეტი 1</p>
-          <h3 class="pricing-card__name">დეტექტივი</h3>
-          <p class="pricing-card__price">₾10 <span>/ 4 კვირა</span></p>
-          <p class="pricing-card__desc">შრომის ბაზრის კვლევა თქვენი სახელით; შედეგი არის Excel ფაილი შესაბამისი ვაკანსიებით: კომპანია, პოზიცია, აღწერა და ორიგინალი განცხადების ბმული.</p>
-          <ul class="pricing-card__list">
-            <li>შრომის ბაზრის კვლევა თქვენი სახელით</li>
-            <li>Excel ფაილი ყველა შესაბამისი ვაკანსიით: კომპანია, პოზიცია, აღწერა და ბმული ორიგინალ განცხადებაზე</li>
-            <li>თქვენ გვიგზავნით CV-ს და იმ ინფორმაციას, რომლის გაზიარებაც გსურთ — ძიება მასზე იგება</li>
-          </ul>
-          <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="#" data-tier="detective">გადახდა</a>
+          <h3 class="pricing-card__head">
+            <button class="pricing-card__toggle" type="button" aria-expanded="false" aria-controls="plan-detective">
+              <span class="pricing-card__tier">პაკეტი 1</span>
+              <span class="pricing-card__name">დეტექტივი</span>
+              <span class="pricing-card__price">₾10 <span>/ 4 კვირა</span></span>
+              <span class="pricing-card__chev" aria-hidden="true"></span>
+            </button>
+          </h3>
+          <div class="pricing-card__body" id="plan-detective">
+            <div class="pricing-card__more">
+              <p class="pricing-card__desc">შრომის ბაზრის კვლევა თქვენი სახელით; შედეგი არის Excel ფაილი შესაბამისი ვაკანსიებით: კომპანია, პოზიცია, აღწერა და ორიგინალი განცხადების ბმული.</p>
+              <ul class="pricing-card__list">
+                <li>შრომის ბაზრის კვლევა თქვენი სახელით</li>
+                <li>Excel ფაილი ყველა შესაბამისი ვაკანსიით: კომპანია, პოზიცია, აღწერა და ბმული ორიგინალ განცხადებაზე</li>
+                <li>თქვენ გვიგზავნით CV-ს და იმ ინფორმაციას, რომლის გაზიარებაც გსურთ — ძიება მასზე იგება</li>
+              </ul>
+              <div class="pricing-card__cta">
+                <a class="btn btn-primary" href="#" data-tier="detective">გადახდა</a>
+              </div>
+            </div>
           </div>
         </article>
 
         <article class="pricing-card">
-          <p class="pricing-card__tier">პაკეტი 2</p>
-          <h3 class="pricing-card__name">ძირითადი</h3>
-          <p class="pricing-card__price">₾50 <span>/ 4 კვირა</span></p>
-          <p class="pricing-card__desc">სამუშაოს ძიება 5 HR და ვაკანსიების წყაროში, პროფესიონალურად დაწერილი CV, მოტივაციის წერილები საჭიროებისამებრ და სრული ანგარიში თითოეულ გაგზავნილ განაცხადზე.</p>
-          <ul class="pricing-card__list">
-            <li>ვაკანსიების ძიება 5 HR და სამუშაოს საძიებო წყაროზე</li>
-            <li>თანამედროვე, პროფესიონალურად დაწერილი CV</li>
-            <li>სამოტივაციო წერილები იქ, სადაც ვაკანსია ამას მოითხოვს</li>
-            <li>სრული ანგარიშგება ყველა გაგზავნილ განაცხადსა და მის პროგრესზე</li>
-          </ul>
-          <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="#" data-tier="essential">გადახდა</a>
+          <h3 class="pricing-card__head">
+            <button class="pricing-card__toggle" type="button" aria-expanded="false" aria-controls="plan-essential">
+              <span class="pricing-card__tier">პაკეტი 2</span>
+              <span class="pricing-card__name">ძირითადი</span>
+              <span class="pricing-card__price">₾50 <span>/ 4 კვირა</span></span>
+              <span class="pricing-card__chev" aria-hidden="true"></span>
+            </button>
+          </h3>
+          <div class="pricing-card__body" id="plan-essential">
+            <div class="pricing-card__more">
+              <p class="pricing-card__desc">სამუშაოს ძიება 5 HR და ვაკანსიების წყაროში, პროფესიონალურად დაწერილი CV, მოტივაციის წერილები საჭიროებისამებრ და სრული ანგარიში თითოეულ გაგზავნილ განაცხადზე.</p>
+              <ul class="pricing-card__list">
+                <li>ვაკანსიების ძიება 5 HR და სამუშაოს საძიებო წყაროზე</li>
+                <li>თანამედროვე, პროფესიონალურად დაწერილი CV</li>
+                <li>სამოტივაციო წერილები იქ, სადაც ვაკანსია ამას მოითხოვს</li>
+                <li>სრული ანგარიშგება ყველა გაგზავნილ განაცხადსა და მის პროგრესზე</li>
+              </ul>
+              <div class="pricing-card__cta">
+                <a class="btn btn-primary" href="#" data-tier="essential">გადახდა</a>
+              </div>
+            </div>
           </div>
         </article>
 
         <article class="pricing-card">
-          <p class="pricing-card__tier">პაკეტი 3</p>
-          <h3 class="pricing-card__name">გაფართოებული</h3>
-          <p class="pricing-card__price">₾80 <span>/ 4 კვირა</span></p>
-          <p class="pricing-card__desc">ყველაფერი, რაც Essential-ში, პლუს თითოეულ ვაკანსიაზე მორგებული CV და სულ 9 წყაროს კვლევა.</p>
-          <ul class="pricing-card__list">
-            <li>თითოეულ ვაკანსიაზე ინდივიდუალურად მორგებული CV</li>
-            <li>4 დამატებითი წყარო — სულ 9</li>
-          </ul>
-          <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="#" data-tier="advanced">გადახდა</a>
+          <h3 class="pricing-card__head">
+            <button class="pricing-card__toggle" type="button" aria-expanded="false" aria-controls="plan-advanced">
+              <span class="pricing-card__tier">პაკეტი 3</span>
+              <span class="pricing-card__name">გაფართოებული</span>
+              <span class="pricing-card__price">₾80 <span>/ 4 კვირა</span></span>
+              <span class="pricing-card__chev" aria-hidden="true"></span>
+            </button>
+          </h3>
+          <div class="pricing-card__body" id="plan-advanced">
+            <div class="pricing-card__more">
+              <p class="pricing-card__desc">ყველაფერი, რაც Essential-ში, პლუს თითოეულ ვაკანსიაზე მორგებული CV და სულ 9 წყაროს კვლევა.</p>
+              <ul class="pricing-card__list">
+                <li>თითოეულ ვაკანსიაზე ინდივიდუალურად მორგებული CV</li>
+                <li>4 დამატებითი წყარო — სულ 9</li>
+              </ul>
+              <div class="pricing-card__cta">
+                <a class="btn btn-primary" href="#" data-tier="advanced">გადახდა</a>
+              </div>
+            </div>
           </div>
         </article>
       </div>
@@ -318,6 +344,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261105g" defer></script>
+  <script src="./script.js?v=20261105h" defer></script>
 </body>
 </html>

@@ -65,7 +65,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105g" />
+  <link rel="stylesheet" href="./styles.css?v=20261105h" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -82,7 +82,7 @@
         <a href="./blog.html">Blog</a>
         <a href="./services.html" aria-current="page">Services</a>
         <a href="./index.html#contact">Contact</a>
-        <a href="./account.html" class="js-auth site-nav__auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+        <a href="./services.html" class="js-auth site-nav__auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
       </nav>
       <div class="lang-switch" aria-label="Language">
         <a href="./services.html" hreflang="en" lang="en" aria-label="English" aria-current="page">
@@ -94,7 +94,7 @@
           <span>KA</span>
         </a>
       </div>
-      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+      <a href="./services.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -104,7 +104,9 @@
   <main id="main" tabindex="-1">
 
     <!-- Services hub (5 Nov 2026): one tile per service, opened with the one
-         platform login. Add a service = add one <li>. Styles: section 27. -->
+         platform login. Add a service = add one <li>. Styles: section 27.
+         The title link covers the tile; data-needs-login = signed out it opens
+         the login and continues to the href afterwards (bootAuthModal). -->
     <header class="project-hero page-grid">
       <p class="eyebrow">Phantasma</p>
       <h1 class="project-hero__title">Services</h1>
@@ -115,19 +117,24 @@
       <h2 id="services-h" class="visually-hidden">All services</h2>
       <ul class="service-grid" role="list">
         <li>
-          <a class="service-tile" href="./projects.html" data-service="career">
+          <div class="service-tile" data-service="career">
             <span class="service-tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg></span>
-            <span class="service-tile__title">Career development</span>
-            <span class="service-tile__text">We find matching vacancies, tailor your CV and send the applications you approve.</span>
-          </a>
+            <a class="service-tile__link" href="./account.html" data-needs-login aria-describedby="svc-career-text">
+              <span class="service-tile__title">Career development</span>
+            </a>
+            <span class="service-tile__text" id="svc-career-text">We find matching vacancies, tailor your CV and send the applications you approve.</span>
+            <a class="service-tile__more" href="./projects.html">Plans and prices</a>
+          </div>
         </li>
         <li>
-          <a class="service-tile" href="./campaigns/" data-service="ads">
+          <div class="service-tile" data-service="ads">
             <span class="service-tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></span>
-            <span class="service-tile__title">Advertising platform</span>
-            <span class="service-tile__text">Create, plan and publish social media posts and ads, with help from AI.</span>
+            <a class="service-tile__link" href="./campaigns/" data-needs-login aria-describedby="svc-ads-text">
+              <span class="service-tile__title">Advertising platform</span>
+            </a>
+            <span class="service-tile__text" id="svc-ads-text">Create, plan and publish social media posts and ads, with help from AI.</span>
             <span class="service-tile__badge">Private beta</span>
-          </a>
+          </div>
         </li>
       </ul>
     </section>
@@ -211,6 +218,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261105g" defer></script>
+  <script src="./script.js?v=20261105h" defer></script>
 </body>
 </html>

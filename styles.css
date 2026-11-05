@@ -2859,6 +2859,11 @@ body.is-locked {
   max-width: 92ch;
   margin: var(--space-3) 0 0;
 }
+/* Projects pages only (.project-intro wraps their top): title and lead one step
+   (~12%) smaller than on the account / legal pages that share these classes.
+   These pages have no eyebrow over the title or the funnel (removed 5 Nov 2026). */
+.project-intro .project-hero__title { font-size: clamp(1.75rem, 3.5vw, 2.625rem); margin-top: 0; }  /* no eyebrow above it here */
+.project-intro .project-hero__sub { font-size: clamp(0.9375rem, 0.875rem + 0.3vw, 1.125rem); }
 .project-section {
   padding-top: var(--space-3);
   padding-bottom: var(--space-5);
@@ -2873,7 +2878,7 @@ body.is-locked {
   margin: 0 0 var(--space-3);
 }
 .project-prose p {
-  font-size: var(--type-body);
+  font-size: clamp(0.9375rem, 0.85rem + 0.35vw, 1rem);
   line-height: 1.6;
   color: var(--ink);
   max-width: 96ch;
@@ -2888,7 +2893,7 @@ body.is-locked {
    --surface toward --accent, 0-100%). */
 /* Top of the projects pages (.project-intro): from 1024px the title and the
    overview take the left 7 columns and the funnel aside the right 5, starting on
-   the eyebrow line. Row 2 is 1fr, so a taller funnel only stretches the overview
+   the title line. Row 2 is 1fr, so a taller funnel only stretches the overview
    row, never the gap under the title. Below 1024px all three stack. */
 .project-intro > .project-funnel { padding-bottom: var(--space-5); }
 @media (min-width: 1024px) {
@@ -2899,12 +2904,11 @@ body.is-locked {
     grid-column: span 5 / content-end;
     grid-row: 1 / span 2;
     align-self: start;
-    padding-top: var(--space-5); /* = .project-hero padding-top, so both eyebrows share a line */
+    padding-top: var(--space-5); /* = .project-hero padding-top: title and funnel heading share the top line */
   }
-  .project-intro .project-hero__sub { font-size: var(--type-body); }
-  .project-intro .project-prose p { font-size: var(--type-body-sm); }
+  .project-intro .project-hero__sub { font-size: clamp(0.875rem, 0.8rem + 0.4vw, 1rem); }
+  .project-intro .project-prose p { font-size: 0.875rem; }
 }
-.project-funnel .eyebrow { margin-bottom: var(--space-2); }
 .project-funnel__h {
   font-family: var(--font-display);
   font-weight: 500;
@@ -2947,7 +2951,7 @@ body.is-locked {
 .kpi-band--dark { color: var(--ink); }
 .kpi-band__label {
   font-family: var(--font-body);
-  font-size: var(--type-body-sm);
+  font-size: var(--type-caption);
   font-weight: 500;
   line-height: 1.3;
   min-width: 0;
@@ -2956,7 +2960,7 @@ body.is-locked {
   font-family: var(--font-display);
   font-weight: 600;
   font-variation-settings: "opsz" 48, "SOFT" 30;
-  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  font-size: clamp(1.125rem, 0.875rem + 0.9vw, 1.5rem);
   letter-spacing: -0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -2977,21 +2981,24 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .kpi-funnel.js-animate .kpi-band:nth-child(5) { transition-delay: 240ms; }
 .kpi-funnel.js-animate.is-in .kpi-band { width: var(--w); }
 
-/* Pricing tiers — same card + hover language as .cap-col */
+/* Pricing tiers — same card + hover language as .cap-col. Each card starts
+   collapsed to its header: a button (h3 > button, like .pref-group) with tier,
+   name, price and a chevron. bootPricingCards (script.js) sets aria-expanded and
+   .is-open; the body then grows open (grid rows 0fr -> 1fr) and shows the
+   description, the list and Pay now. Closed bodies are visibility: hidden, so
+   their links are out of the tab order and the accessibility tree.
+   align-items: start, so an open card never stretches its closed neighbours. */
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-5);
-  align-items: stretch;
+  align-items: start;
   margin-top: var(--space-2);
 }
 .pricing-card {
-  display: flex;
-  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
-  padding: var(--space-6);
   transition: background-color 200ms ease-out, transform 200ms ease-out,
               box-shadow 200ms ease-out;
   box-shadow: var(--shadow-tile-rest);
@@ -3001,40 +3008,89 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   transform: translateY(-1.5px);
   box-shadow: var(--shadow-tile-hover);
 }
+.pricing-card__head { margin: 0; font: inherit; }
+/* Name and price share a line (price pushed right); a long Georgian name
+   moves the price to its own line. Right padding keeps the chevron clear. */
+.pricing-card__toggle {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-4);
+  row-gap: var(--space-1);
+  padding: var(--space-5) calc(var(--space-5) + var(--space-6)) var(--space-5) var(--space-5);
+  border-radius: var(--radius-md);
+  text-align: left;
+  color: var(--ink);
+}
+.pricing-card__toggle:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
 .pricing-card__tier {
+  flex-basis: 100%;
   font-family: var(--font-body);
   font-weight: 500;
   font-size: var(--type-eyebrow);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-deep);
-  margin: 0 0 var(--space-2);
 }
 .pricing-card__name {
   font-family: var(--font-display);
   font-weight: 500;
   font-variation-settings: "opsz" 72, "SOFT" 30;
-  font-size: var(--type-h3);
+  font-size: 1.125rem;
+  line-height: 1.2;
   letter-spacing: -0.01em;
   color: var(--ink);
-  margin: 0 0 var(--space-3);
 }
 .pricing-card__price {
+  margin-left: auto;
+  white-space: nowrap;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  line-height: 1.1;
   letter-spacing: -0.02em;
   color: var(--ink);
-  margin: 0 0 var(--space-4);
 }
 .pricing-card__price span {
   font-family: var(--font-body);
   font-weight: 500;
-  font-size: var(--type-body-sm);
+  font-size: var(--type-caption);
+  letter-spacing: 0;
   color: var(--ink-soft);
 }
+/* Same chevron as .pref-group__chev: down when closed, up when open. */
+.pricing-card__chev {
+  position: absolute;
+  top: 50%;
+  right: var(--space-5);
+  width: 10px;
+  height: 10px;
+  border-right: 1.5px solid var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink-soft);
+  transform: translateY(-75%) rotate(45deg);
+  transition: transform 200ms ease-out, border-color 200ms ease-out;
+}
+.pricing-card__toggle:hover .pricing-card__chev { border-color: var(--ink); }
+.pricing-card__toggle[aria-expanded="true"] .pricing-card__chev { transform: translateY(-25%) rotate(-135deg); }
+.pricing-card__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 260ms cubic-bezier(0.16, 1, 0.3, 1), visibility 260ms;
+}
+.pricing-card.is-open .pricing-card__body {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+.pricing-card__more {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--space-5);
+}
 .pricing-card__desc {
-  font-size: var(--type-body-sm);
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--ink-soft);
   margin: 0 0 var(--space-4);
@@ -3054,7 +3110,7 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .pricing-card__list li {
   position: relative;
   padding-left: var(--space-5);
-  font-size: var(--type-body-sm);
+  font-size: 0.875rem;
   color: var(--ink);
   line-height: 1.5;
 }
@@ -3065,10 +3121,11 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   color: var(--accent-deep);
 }
 .pricing-card__cta {
-  margin-top: auto;
+  padding-bottom: var(--space-5);   /* inside the clipping box, so it folds away too */
 }
 .pricing-card__cta .btn {
   width: 100%;
+  font-size: var(--type-body-sm);
 }
 .pricing-note {
   font-size: var(--type-body-sm);
@@ -3168,8 +3225,10 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 }
 
 @media (max-width: 1023px) {
+  /* Cards stack as a short list of headers. */
   .pricing-grid {
     grid-template-columns: 1fr;
+    gap: var(--space-3);
   }
   /* Funnel stacks under the overview; 5 of 12 columns is too narrow here.
      8px + the section's 24px bottom padding = the old 32px gap. */
@@ -3178,9 +3237,13 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 
 @media (max-width: 767px) {
   .kpi-band { min-width: min(100%, 220px); } /* label + value must fit at 375px */
-  .pricing-card {
-    padding: var(--space-5);
+  .pricing-card__toggle {
+    column-gap: var(--space-3);
+    padding: var(--space-4) calc(var(--space-4) + var(--space-6)) var(--space-4) var(--space-4);
   }
+  .pricing-card__chev { right: var(--space-4); }
+  .pricing-card__more { padding: 0 var(--space-4); }
+  .pricing-card__cta { padding-bottom: var(--space-4); }
 }
 
 /* -------------------------------------------------------------------------
@@ -3418,43 +3481,14 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .auth-modal__switch { justify-self: center; margin-top: var(--space-2); }
 .account__identity { display: grid; gap: var(--space-2); min-width: 0; }
 .account__identity[hidden] { display: none; }
-.account-li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  font-size: var(--type-body-sm);
-  color: var(--ink-soft);
-}
-.account-li[hidden] { display: none; }
-.account-li__icon { width: 16px; height: 16px; flex: none; color: var(--ink-soft); }
-.account-li__slug.is-empty { font-style: italic; }
-.account-li__edit {
-  font: inherit;
-  font-size: var(--type-body-sm);
-  color: var(--ink-soft);
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.account-li__edit:hover { color: var(--ink); }
-/* Nothing saved yet → "Add" reads as a small primary button. */
-.account-li__edit.is-add {
-  text-decoration: none;
-  background: var(--accent);
-  color: var(--on-accent);
+.account__name {
+  margin: 0;
+  font-family: var(--font-display);
   font-weight: 500;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  margin-left: var(--space-1);
-  transition: background-color 180ms ease-out, transform 180ms ease-out;
+  font-size: clamp(1.125rem, 0.9rem + 0.8vw, 1.5rem);
+  line-height: 1.2;
+  color: var(--ink-soft);
 }
-.account-li__edit.is-add:hover { background: var(--accent-deep); color: var(--bg); transform: translateY(-1px); }
-.account-li__edit:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
-.account__name { margin: 0; font-family: var(--font-display); font-size: var(--type-h3); font-weight: 500; }
 .account__name[hidden] { display: none; }
 .auth-modal__panel--wide {
   width: min(880px, 100%);
@@ -3534,13 +3568,102 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 
 /* Account page — v1: the numbers */
 .account { padding-block: var(--space-5) var(--space-8); }
-/* Title row: eyebrow + title; when signed in, name / email / LinkedIn on its
-   right from 768px (stacked under it below that). */
+/* Title row: eyebrow + title; when signed in, the identity on its right from
+   768px (stacked under it below that). admin.html uses this as is. */
 .account__head { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); }
 @media (min-width: 768px) {
   .account__head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-6); }
   .account__head .account__identity { justify-items: end; text-align: right; }
 }
+/* account.html (5 Nov 2026): one compact row, no eyebrow. Left: title + name
+   on one baseline (name under the title on phones). Right: email + the three
+   status controls (.account-status). Tighter space above and below the rule. */
+#account { padding-top: var(--space-3); }
+.account__head--row { margin-bottom: var(--space-3); }
+.account__head--row .project-hero__title { margin: 0; }
+.account__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-4);
+  row-gap: var(--space-1);
+  min-width: 0;
+}
+.account__title .role-switch { margin-top: 0; align-self: center; }
+.account__head--row .account__identity:not([hidden]) {   /* [hidden] must still win */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-4);
+  row-gap: var(--space-2);
+}
+@media (max-width: 767px) {
+  .account__title .account__name { flex-basis: 100%; }
+}
+@media (min-width: 768px) {
+  .account__head--row { align-items: baseline; }
+  .account__head--row .account__identity { justify-content: flex-end; }
+}
+.account-status { display: flex; align-items: center; gap: var(--space-2); }
+.account-status__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--type-caption);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 150ms ease-out;
+}
+.account-status__btn:hover { background: var(--surface); }
+.account-status__btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.account-status__btn svg { width: 18px; height: 18px; flex: none; }
+.account-status__btn[data-state="on"] { color: var(--ink); }
+#status-linkedin[data-state="on"] { color: #0A66C2; }   /* LinkedIn's own blue, as on the login button */
+.account-status__btn--pct { color: var(--ink); padding-right: var(--space-3); }
+/* Green check, bottom-right of the icon, only when done. */
+.account-status__check {
+  display: none;
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 1.5px var(--bg);
+}
+.account-status__check::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 2px;
+  width: 3px;
+  height: 6px;
+  border: solid var(--bg);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.account-status__btn[data-state="on"] .account-status__check { display: block; }
+.account-status__note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--type-caption);
+  color: var(--act);
+}
+.account-status__note[hidden] { display: none; }
 .account__panel {
   max-width: 640px;
   display: grid;
@@ -3570,14 +3693,6 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .account__download { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 .account__download:hover { background: var(--accent-deep); color: var(--bg); }
 .account__download[hidden] { display: none; }
-.account__danger {
-  max-width: 640px;
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--rule);
-  display: grid;
-  gap: var(--space-3);
-  justify-items: start;
-}
 .account__delete:hover { color: var(--act); box-shadow: inset 0 0 0 1px var(--act); }
 
 .account__intro { max-width: 640px; }
@@ -3605,7 +3720,7 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   display: grid;
   gap: var(--space-5);
   grid-template-columns: minmax(0, 1fr);
-  padding-top: var(--space-6);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--rule);   /* under the title row, signed in only */
 }
 /* minmax(0, 1fr): an open wide table must scroll inside .account-table-wrap,
@@ -3654,10 +3769,51 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .account-nav__item[aria-expanded="true"] { background: var(--surface); }
 .account-nav__item[aria-current] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 .account-nav__item:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
-.account-nav__item--danger { color: var(--act); }
-.account-nav__item--danger:hover { box-shadow: inset 0 0 0 1px var(--act); }
-.account__danger:focus { outline: none; }
 main:focus { outline: none; }
+
+/* Delete my account (5 Nov 2026): the side-panel button is the only way in.
+   .account-tip = its hover / keyboard-focus tooltip, fixed and placed by
+   bootAccountPage (the phone chip row scrolls sideways and would clip it).
+   .delete-pop = the window the button opens (it is the confirmation): the
+   auth-modal look (centred, dimmed) below 1024px; from 1024px .is-anchored puts
+   the panel next to the button (left / top set by script) over a clear
+   backdrop that still closes it. */
+.account-tip {
+  position: fixed;
+  z-index: 60;
+  max-width: min(320px, calc(100vw - 2 * var(--space-2)));
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: var(--type-caption);
+  line-height: 1.45;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgb(20 33 61 / 0.12);
+}
+.account-tip[hidden] { display: none; }
+.delete-pop .delete-pop__panel { width: min(380px, 100%); padding: var(--space-5); }
+.delete-pop__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 var(--space-5);
+  padding-left: var(--space-5);
+  list-style: disc;
+  font-size: var(--type-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+.delete-pop__list li::marker { color: var(--act); }
+.delete-pop__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.delete-pop__actions .btn { min-height: 44px; }
+.delete-pop__confirm { background: var(--act); color: var(--bg); }
+.delete-pop__confirm:hover { background: color-mix(in oklch, var(--act), var(--ink) 25%); }
+.delete-pop__confirm:disabled { opacity: 0.6; cursor: wait; }
+.delete-pop__actions .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.delete-pop .account-form__status { margin-top: var(--space-3); }
+.delete-pop.is-anchored:not([hidden]) { display: block; padding: 0; }   /* [hidden] must still win */
+.delete-pop.is-anchored .auth-modal__backdrop { background: transparent; }
+.delete-pop.is-anchored .delete-pop__panel { position: fixed; width: 360px; }
 @media (min-width: 1024px) {
   .account-layout { grid-template-columns: 240px minmax(0, 1fr); gap: var(--space-7); align-items: start; }
   .account-nav { position: sticky; top: calc(var(--space-9) + var(--space-8)); }
@@ -3672,7 +3828,9 @@ main:focus { outline: none; }
   .account-nav__item { display: flex; width: 100%; min-height: 40px; border-radius: var(--radius-sm); background: transparent; box-shadow: none; white-space: normal; text-align: left; }
   .account-nav__item:hover { background: var(--surface-soft); }
   .account-nav__group--security { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--rule); }
-  .account-nav__item--danger { margin-top: var(--space-4); border-top: 1px solid var(--rule); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+  /* Delete my account: the old overview button (btn btn-sm account__quiet
+     account__delete), set a little apart under Sign out. */
+  .account-nav__delete { margin-top: var(--space-3); }
 }
 
 /* Stat tiles — a horizontal band of bordered squares, set into the page
@@ -3884,6 +4042,15 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   cursor: pointer;
 }
 .send-check input:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+/* Sent = approved (CAR-17): tick checked + disabled, with a small "Sent" mark. */
+.send-check.is-locked { align-items: center; gap: var(--space-1); cursor: default; }
+.send-check.is-locked input { cursor: default; }
+.send-check__mark {
+  font-size: var(--type-caption);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ok);
+}
 .account-table a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .account-table .t-sub { display: block; color: var(--ink-soft); }
 .account-table tbody tr[hidden] { display: none; }
@@ -4196,7 +4363,9 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
    ========================================================================= */
 /* About 5 tiles per row on a laptop, fewer on smaller screens, 2 on a phone.
    .is-active (set by script for services the signed-in person uses) draws the
-   orange outline. */
+   orange outline. The tile is a box; its title link (.service-tile__link)
+   stretches over the whole tile with ::after, so the tile still clicks as one,
+   and .service-tile__more (career: "Plans and prices") sits above that layer. */
 .services { padding-bottom: var(--space-9); }
 .service-grid {
   list-style: none;
@@ -4222,7 +4391,10 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   transition: border-color 150ms ease-out, box-shadow 150ms ease-out, transform 150ms ease-out;
 }
 .service-tile:hover { border-color: var(--ink-soft); box-shadow: var(--shadow-tile-hover); transform: translateY(-2px); }
-.service-tile:focus-visible { outline: 3px solid var(--accent-deep); outline-offset: 2px; }
+.service-tile__link { color: inherit; text-decoration: none; }
+.service-tile__link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.service-tile__link:focus-visible { outline: none; }
+.service-tile__link:focus-visible::after { outline: 3px solid var(--accent-deep); outline-offset: 2px; }
 .service-tile.is-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .service-tile__icon {
   width: 44px;
@@ -4252,6 +4424,19 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   font-size: var(--type-caption);
   color: var(--ink-soft);
 }
+.service-tile__more {
+  position: relative;          /* above the stretched title link */
+  z-index: 1;
+  align-self: flex-start;
+  margin-top: auto;
+  padding: var(--space-1) 0;   /* >= 24px tall tap target */
+  font-size: var(--type-caption);
+  color: var(--accent-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.service-tile__more:hover { color: var(--ink); }
+.service-tile__more:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; border-radius: 2px; }
 @media (min-width: 768px)  { .service-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .service-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 1200px) { .service-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

@@ -65,7 +65,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105g" />
+  <link rel="stylesheet" href="./styles.css?v=20261105h" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -82,7 +82,7 @@
         <a href="./blog.html">Blog</a>
         <a href="./services.html" aria-current="true">Services</a>
         <a href="./index.html#contact">Contact</a>
-        <a href="./account.html" class="js-auth site-nav__auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+        <a href="./services.html" class="js-auth site-nav__auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
       </nav>
       <div class="lang-switch" aria-label="Language">
         <a href="./projects.html" hreflang="en" lang="en" aria-label="English" aria-current="page">
@@ -94,7 +94,7 @@
           <span>KA</span>
         </a>
       </div>
-      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+      <a href="./services.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
         <span class="nav-toggle__bar" aria-hidden="true"></span>
       </button>
@@ -107,7 +107,6 @@
          line down (.project-intro, styles.css section 25). -->
     <div class="project-intro page-grid">
       <header class="project-hero">
-        <p class="eyebrow">Job Seek</p>
         <h1 class="project-hero__title">Personal Career Strategist</h1>
         <p class="project-hero__sub">
           A managed job-search service — we do the searching, writing and applying, you
@@ -142,7 +141,6 @@
         <!-- Live KPI funnel. Numbers come from data/kpis.json at load
              (bootKpiFunnel in script.js); replace that file to update. -->
         <aside class="project-funnel" aria-labelledby="progress-h">
-          <p class="eyebrow">Progress</p>
           <h3 id="progress-h" class="project-funnel__h">From the whole market to your inbox</h3>
           <p class="kpi-funnel__lede" id="kpi-funnel-lede" aria-live="polite">Loading live figures…</p>
           <div class="kpi-funnel" id="kpi-funnel" data-src="./data/kpis.json"
@@ -153,50 +151,78 @@
     <section class="project-section page-grid" aria-labelledby="plans-h">
       <h2 id="plans-h" class="project-section__h">Plans</h2>
 
-      <!-- Pay now buttons (data-tier): handled in script.js, bootAuthModal. -->
+      <!-- Plan cards: collapsed to their header button; bootPricingCards (script.js)
+           opens each one on its own. Pay now buttons (data-tier): bootAuthModal. -->
       <div class="pricing-grid">
         <article class="pricing-card">
-          <p class="pricing-card__tier">Tier 1</p>
-          <h3 class="pricing-card__name">Detective</h3>
-          <p class="pricing-card__price">₾10 <span>/ 4 weeks</span></p>
-          <p class="pricing-card__desc">Job-market research on your behalf, delivered as an Excel file of matching vacancies with company, role, description and a link to the original posting.</p>
-          <ul class="pricing-card__list">
-            <li>Job-market research on your behalf</li>
-            <li>An Excel file of every matching vacancy: company, role, description and a link to the original posting</li>
-            <li>You send your CV and whatever background you're comfortable sharing — the search is built around it</li>
-          </ul>
-          <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="#" data-tier="detective">Pay now</a>
+          <h3 class="pricing-card__head">
+            <button class="pricing-card__toggle" type="button" aria-expanded="false" aria-controls="plan-detective">
+              <span class="pricing-card__tier">Tier 1</span>
+              <span class="pricing-card__name">Detective</span>
+              <span class="pricing-card__price">₾10 <span>/ 4 weeks</span></span>
+              <span class="pricing-card__chev" aria-hidden="true"></span>
+            </button>
+          </h3>
+          <div class="pricing-card__body" id="plan-detective">
+            <div class="pricing-card__more">
+              <p class="pricing-card__desc">Job-market research on your behalf, delivered as an Excel file of matching vacancies with company, role, description and a link to the original posting.</p>
+              <ul class="pricing-card__list">
+                <li>Job-market research on your behalf</li>
+                <li>An Excel file of every matching vacancy: company, role, description and a link to the original posting</li>
+                <li>You send your CV and whatever background you're comfortable sharing — the search is built around it</li>
+              </ul>
+              <div class="pricing-card__cta">
+                <a class="btn btn-primary" href="#" data-tier="detective">Pay now</a>
+              </div>
+            </div>
           </div>
         </article>
 
         <article class="pricing-card">
-          <p class="pricing-card__tier">Tier 2</p>
-          <h3 class="pricing-card__name">Essential</h3>
-          <p class="pricing-card__price">₾50 <span>/ 4 weeks</span></p>
-          <p class="pricing-card__desc">Job research across 5 HR and job-board sources, a professionally written CV, motivation letters where a vacancy needs one, and full reporting on every application sent.</p>
-          <ul class="pricing-card__list">
-            <li>Job research across 5 HR and job-board sources</li>
-            <li>A modern, professionally written CV</li>
-            <li>Motivation letters written where the vacancy needs one</li>
-            <li>Full reporting on every application sent and its progress</li>
-          </ul>
-          <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="#" data-tier="essential">Pay now</a>
+          <h3 class="pricing-card__head">
+            <button class="pricing-card__toggle" type="button" aria-expanded="false" aria-controls="plan-essential">
+              <span class="pricing-card__tier">Tier 2</span>
+              <span class="pricing-card__name">Essential</span>
+              <span class="pricing-card__price">₾50 <span>/ 4 weeks</span></span>
+              <span class="pricing-card__chev" aria-hidden="true"></span>
+            </button>
+          </h3>
+          <div class="pricing-card__body" id="plan-essential">
+            <div class="pricing-card__more">
+              <p class="pricing-card__desc">Job research across 5 HR and job-board sources, a professionally written CV, motivation letters where a vacancy needs one, and full reporting on every application sent.</p>
+              <ul class="pricing-card__list">
+                <li>Job research across 5 HR and job-board sources</li>
+                <li>A modern, professionally written CV</li>
+                <li>Motivation letters written where the vacancy needs one</li>
+                <li>Full reporting on every application sent and its progress</li>
+              </ul>
+              <div class="pricing-card__cta">
+                <a class="btn btn-primary" href="#" data-tier="essential">Pay now</a>
+              </div>
+            </div>
           </div>
         </article>
 
         <article class="pricing-card">
-          <p class="pricing-card__tier">Tier 3</p>
-          <h3 class="pricing-card__name">Advanced</h3>
-          <p class="pricing-card__price">₾80 <span>/ 4 weeks</span></p>
-          <p class="pricing-card__desc">Everything in Essential, plus a CV tailored to each vacancy and 9 sources researched in total.</p>
-          <ul class="pricing-card__list">
-            <li>A CV tailored specifically to each individual vacancy</li>
-            <li>4 additional sources researched — 9 in total</li>
-          </ul>
-          <div class="pricing-card__cta">
-            <a class="btn btn-primary" href="#" data-tier="advanced">Pay now</a>
+          <h3 class="pricing-card__head">
+            <button class="pricing-card__toggle" type="button" aria-expanded="false" aria-controls="plan-advanced">
+              <span class="pricing-card__tier">Tier 3</span>
+              <span class="pricing-card__name">Advanced</span>
+              <span class="pricing-card__price">₾80 <span>/ 4 weeks</span></span>
+              <span class="pricing-card__chev" aria-hidden="true"></span>
+            </button>
+          </h3>
+          <div class="pricing-card__body" id="plan-advanced">
+            <div class="pricing-card__more">
+              <p class="pricing-card__desc">Everything in Essential, plus a CV tailored to each vacancy and 9 sources researched in total.</p>
+              <ul class="pricing-card__list">
+                <li>A CV tailored specifically to each individual vacancy</li>
+                <li>4 additional sources researched — 9 in total</li>
+              </ul>
+              <div class="pricing-card__cta">
+                <a class="btn btn-primary" href="#" data-tier="advanced">Pay now</a>
+              </div>
+            </div>
           </div>
         </article>
       </div>
@@ -312,6 +338,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261105g" defer></script>
+  <script src="./script.js?v=20261105h" defer></script>
 </body>
 </html>

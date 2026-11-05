@@ -1382,6 +1382,26 @@
     fromView().catch(fromFile).then(render).catch(unavailable);
   }
 
+  // Plan cards on the projects pages (5 Nov 2026): each card starts collapsed
+  // to its header button (tier, name, price, chevron); a click opens or closes
+  // that card only. The open state lives in aria-expanded + .is-open (the CSS
+  // animates the body; reduced motion is handled in section 21). startFlitt
+  // also opens the card, so a payment message under Pay now is never hidden.
+  function setPlanOpen(card, open) {
+    const btn = card && card.querySelector('.pricing-card__toggle');
+    if (!btn) return;
+    btn.setAttribute('aria-expanded', String(open));
+    card.classList.toggle('is-open', open);
+  }
+
+  function bootPricingCards() {
+    document.querySelectorAll('.pricing-card').forEach((card) => {
+      const btn = card.querySelector('.pricing-card__toggle');
+      if (!btn) return;
+      btn.addEventListener('click', () => setPlanOpen(card, btn.getAttribute('aria-expanded') !== 'true'));
+    });
+  }
+
   /* ---------------------------------------------------------------------
      Booking — Google appointment schedule, lazy iframe (see bootBooking).
      Nothing third-party loads until the visitor clicks to book.
@@ -1504,6 +1524,14 @@
       return getClient().auth.signInWithOAuth({ provider: 'linkedin_oidc', options: { redirectTo: returnUrl() } });
     }
 
+    // Account page, LinkedIn status button (5 Nov 2026): add LinkedIn to the
+    // signed-in account (round trip through LinkedIn, back to this page).
+    // Needs "manual linking" switched on in Supabase; until then it returns an
+    // error. Never fall back to signInWithOAuth: that could make a second account.
+    function linkLinkedIn() {
+      return getClient().auth.linkIdentity({ provider: 'linkedin_oidc', options: { redirectTo: location.href } });
+    }
+
     function signOut() {
       return getClient().auth.signOut();
     }
@@ -1592,6 +1620,7 @@
       savePreferences,
       signInWithGoogleToken,
       signInWithLinkedIn,
+      linkLinkedIn,
       signOut,
       loadStats,
       db,
@@ -1712,9 +1741,17 @@
       if (lastFocus && lastFocus.focus) lastFocus.focus();
     }
 
-    closeEls.forEach((el) => el.addEventListener('click', close));
+    // Closed by the visitor (✕, backdrop, Esc) = no sign-in: forget a Services
+    // tile they had clicked, so a later login does not jump there.
+    const SERVICE_KEY = 'phantasma_pending_service';
+    function dismiss() {
+      sessionStorage.removeItem(SERVICE_KEY);
+      close();
+    }
+
+    closeEls.forEach((el) => el.addEventListener('click', dismiss));
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !modal.hidden) close();
+      if (e.key === 'Escape' && !modal.hidden) dismiss();
       else if (!modal.hidden) trapTab(modal, e);
     });
     switcher.addEventListener('click', () => setMode(form.dataset.mode === 'login' ? 'signup' : 'login'));
@@ -1804,7 +1841,7 @@
     });
 
     // Header / nav auth links: signed out → open modal; signed in → follow
-    // the href to account.html.
+    // the href to the Services page (services.html / services.ka.html).
     document.querySelectorAll('.js-auth').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (Auth.getSession()) return;
@@ -1812,6 +1849,28 @@
         open('login');
       });
     });
+
+    // Services tiles ([data-needs-login], services*.html): a service needs a
+    // login. Signed in, the link goes straight through. Signed out, the login
+    // dialog opens and the target waits in sessionStorage (like
+    // phantasma_pending_tier, it survives the Google / LinkedIn round trip);
+    // resumeService() sends the browser there right after the sign-in.
+    document.querySelectorAll('[data-needs-login]').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        if (Auth.getSession()) return;
+        e.preventDefault();
+        sessionStorage.setItem(SERVICE_KEY, a.getAttribute('href'));
+        open('login');
+      });
+    });
+    function resumeService() {
+      const target = sessionStorage.getItem(SERVICE_KEY);
+      if (!target) return false;
+      sessionStorage.removeItem(SERVICE_KEY);
+      if (!/^\.\/[\w./-]*$/.test(target)) return false;   // only our own relative links
+      location.assign(target);                             // Back returns to Services
+      return true;
+    }
 
     // Pay now buttons. Signed in: flitt-create-order, then the browser goes to
     // Flitt's hosted checkout. Signed out: #pay-modal offers Log in / Create
@@ -1824,6 +1883,7 @@
 
     function startFlitt(tier, btn) {
       const label = btn.textContent;
+      setPlanOpen(btn.closest('.pricing-card'), true);   // resumePayment() runs without a click
       let note = btn.parentNode.querySelector('.pay-status');
       if (!note) {
         note = document.createElement('p');
@@ -1904,17 +1964,22 @@
     }
 
     // After an actual sign-in (modal login, or arriving back from Google /
-    // a confirmation link with tokens in the URL) go straight to the profile.
-    // Not on plain page loads with an existing session, and not when already
-    // on a profile page (admin.html counts: an invited admin logs in there).
+    // a confirmation link with tokens in the URL) go to the Services page
+    // (owner, 5 Nov 2026), in the page's language. Not on plain page loads
+    // with an existing session, not when already on a profile page (admin.html
+    // counts: an invited admin logs in there) or on the Services page itself.
+    // A pending Pay now goes to Flitt; a clicked Services tile to its service.
     const arrivedWithTokens = /access_token=|[?&]code=/.test(location.hash + location.search);
+    const servicesHome = document.documentElement.lang === 'ka' ? './services.ka.html' : './services.html';
     document.addEventListener('phantasma:auth', (e) => {
       if (!e.detail.session) return;
       const onProfile = /\/(account|preferences|payment-result|admin)\.html$/.test(location.pathname);
+      const onServices = /\/services(\.ka)?(\.html)?$/.test(location.pathname);
       const fresh = e.detail.event === 'SIGNED_IN' && (!modal.hidden || arrivedWithTokens);
       if (!modal.hidden) close();
       if (fresh && resumePayment()) return;      // came here to pay → Flitt, not the profile
-      if (fresh && !onProfile) location.replace('./account.html');
+      if (fresh && resumeService()) return;      // came from a Services tile → that service
+      if (fresh && !onProfile && !onServices) location.replace(servicesHome);
     });
   }
 
@@ -2313,17 +2378,36 @@
             const box = document.createElement('input');
             box.type = 'checkbox';
             box.checked = !!c.on;
-            box.dataset.id = c.id;
-            box.setAttribute('aria-label', 'Send my application for this vacancy');
-            lab.appendChild(box);
+            if (c.locked) {
+              // Already sent = approved (CAR-17): ticked for good, no data-id,
+              // so the change handler below never sees it.
+              box.checked = true;
+              box.disabled = true;
+              lab.classList.add('is-locked');
+              lab.title = "Already sent — can't be undone";
+              box.setAttribute('aria-label', "Application already sent for this vacancy — can't be undone");
+              lab.appendChild(box);
+              const mark = document.createElement('span');
+              mark.className = 'send-check__mark';
+              mark.setAttribute('aria-hidden', 'true');
+              mark.textContent = 'Sent';
+              lab.appendChild(mark);
+            } else {
+              box.dataset.id = c.id;
+              box.setAttribute('aria-label', 'Send my application for this vacancy');
+              lab.appendChild(box);
+            }
             td.appendChild(lab);
           } else if (c && c.company !== undefined) {
             td.appendChild(companyCell(c.company));
-          } else if (c && c.href) {
-            const a =document.createElement('a');
-            a.href = c.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
-            a.textContent = c.text;
-            td.appendChild(a);
+          } else if (c && typeof c === 'object' && 'text' in c) {
+            // { href, text, sub }: a link when href is a safe http(s) URL,
+            // plain text otherwise (a vacancy hidden by RLS has neither).
+            const href = safeUrl(c.href);
+            const main = document.createElement(href ? 'a' : 'span');
+            if (href) { main.href = href; main.target = '_blank'; main.rel = 'noopener noreferrer'; }
+            main.textContent = c.text == null || c.text === '' ? '—' : c.text;
+            td.appendChild(main);
             if (c.sub) { const s = document.createElement('span'); s.className = 't-sub'; s.textContent = c.sub; td.appendChild(s); }
           } else {
             td.textContent = c == null ? '—' : c;
@@ -2443,9 +2527,18 @@
     const companyKey = (r) => { const c = company(r.vacancies); return c === '—' ? null : c; };
     const titleKey = (r) => (r.vacancies && r.vacancies.title) || null;
 
+    // Owner rule (CAR-17, 5 Nov 2026): a vacancy we have sent counts as
+    // approved. In every vacancy list its Send tick is checked and locked, and
+    // it always counts as "Selected by you". Shortlist rows carry the vacancy
+    // id as vacancies.id, sends as vacancy_id.
+    const vacIdOf = (r) => (r.vacancies && r.vacancies.id != null ? r.vacancies.id : r.vacancy_id);
+    const sentIds = (d) => new Set(d.sends.map((s) => String(s.vacancy_id)));
+    const isSent = (sent, r) => { const id = vacIdOf(r); return id != null && sent.has(String(id)); };
+
     // "Publish date" = the date the shortlist was published to the client
     // (the scraping session date, column shortlists.week).
-    function vacancyRows(rows, key) {
+    // sent = sentIds(data), for the locked ticks.
+    function vacancyRows(rows, key, sent) {
       return table(
         [{ text: 'Publish date', sort: (r) => dateKey(r.week) },
          { text: '#', sort: (r) => numKey(r.rank) },
@@ -2465,20 +2558,44 @@
             r.why_matches || short(v.description, 140),
             SOURCE[v.source] || v.source,
             fmtDate(v.deadline_at),
-            { check: true, id: r.id, on: r.client_decision === 'interested' },
+            { check: true, id: r.id, on: r.client_decision === 'interested', locked: isSent(sent, r) },
           ];
         },
         { cls: 'account-table--vac', detail: (r) => (r.vacancies && r.vacancies.title) || '',
           filter: { key: key, get: (r) => r.week } });
     }
 
-    // "Selected by you" = rows the client ticked (client_decision = interested).
-    const selectedRows = (d) => d.shortlists.filter((r) => r.client_decision === 'interested');
+    // "Selected by you" = rows the client ticked (client_decision = interested)
+    // plus every sent vacancy, once per vacancy, so it is never lower than
+    // "Applications sent". A sent vacancy that is in no shortlist gets a
+    // read-only stand-in row (no shortlist id, no publish date, locked tick).
+    function selectedRows(d) {
+      const sent = sentIds(d);
+      const seen = new Set();
+      const rows = [];
+      d.shortlists.forEach((r) => {
+        if (r.client_decision !== 'interested' && !isSent(sent, r)) return;
+        const id = vacIdOf(r);
+        const k = id != null ? 'v' + id : 'r' + r.id;
+        if (seen.has(k)) return;
+        seen.add(k);
+        rows.push(r);
+      });
+      d.sends.forEach((s) => {
+        const k = 'v' + s.vacancy_id;
+        if (seen.has(k)) return;
+        seen.add(k);
+        rows.push({ id: null, week: null, rank: null, client_decision: null, why_matches: null,
+                    salary_text: null, vacancy_id: s.vacancy_id, vacancies: s.vacancies });
+      });
+      return rows;
+    }
 
     // Checkbox → shortlists.client_decision (the only column a client may write).
+    // Locked (sent) ticks carry no data-id and are disabled, so they never get here.
     pBody.addEventListener('change', async (e) => {
       const box = e.target;
-      if (box.type !== 'checkbox' || !box.dataset.id) return;
+      if (box.type !== 'checkbox' || !box.dataset.id || box.closest('.send-check.is-locked')) return;
       const row = data.shortlists.find((r) => String(r.id) === box.dataset.id);
       if (!row) return;
       const next = box.checked ? 'interested' : null;
@@ -2525,7 +2642,7 @@
           return table(['Run', 'Date', 'Vacancies shortlisted'], rows, (r) => ['Run ' + r.n, fmtDate(r.week), r.count]);
         },
       },
-      processed:  { title: 'Vacancies processed', build: (d) => vacancyRows(d.shortlists, 'processed') },
+      processed:  { title: 'Vacancies processed', build: (d) => vacancyRows(d.shortlists, 'processed', sentIds(d)) },
       companies:  {
         title: 'Companies reviewed',
         build: (d) => {
@@ -2535,7 +2652,7 @@
           return table(['Company', 'Vacancies shortlisted'], rows, (r) => [r.c, r.n]);
         },
       },
-      selected:   { title: 'Selected by you', build: (d) => vacancyRows(selectedRows(d), 'selected') },
+      selected:   { title: 'Selected by you', build: (d) => vacancyRows(selectedRows(d), 'selected', sentIds(d)) },
       sent:       { title: 'Applications sent', build: (d) => sendRows(d.sends) },
       interviews: { title: 'Interviews', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'interview')) },
       offers:     { title: 'Offers', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'offer')) },
@@ -2627,12 +2744,14 @@
       inn.hidden = !session;
       if (who) who.hidden = !session;
       closePanel();
-      if (!session) return;
+      if (!session) { nameEl.hidden = true; return; }   // the name sits outside #account-who
       root.querySelector('#account-email').textContent = session.user.email;
+      paintStatus(stLi, hasLinkedIn(session));
       Auth.loadProfile().then(({ data: p }) => {
         profile = p || {}; paintProfile();
         cvPath = (p && p.cv_path) || null; paintCv();
       });
+      Auth.loadPreferences().then(({ data: pr }) => paintPrefs(prefsPct(pr)), () => paintPrefs(0));
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
       workbookPath = data.workbook;
@@ -2699,18 +2818,13 @@
     const pfModal = modalCtl(document.getElementById('profile-modal'));
     const pfForm  = document.getElementById('profile-form');
     const pfNote  = document.getElementById('profile-status');
-    const liSlug  = root.querySelector('#linkedin-slug');
-    const liEdit  = root.querySelector('#linkedin-edit');
-    const nameEl  = root.querySelector('#account-name');
+    const nameEl  = root.querySelector('#account-name');   // next to the title (5 Nov 2026)
     const slugOf  = (u) => { const m = /linkedin\.com\/in\/([^/?#]+)/i.exec(u || ''); return m ? m[1] : ''; };
     const pfSay   = (kind, text) => { pfNote.textContent = text; pfNote.dataset.kind = kind; pfNote.hidden = !text; };
 
+    // The LinkedIn link is edited only here, in Profile details (the header
+    // line with the slug and Edit / Add was removed 5 Nov 2026).
     function paintProfile() {
-      const sl = slugOf(profile.linkedin_url);
-      liSlug.textContent = sl ? 'linkedin.com/in/' + sl : liSlug.dataset.empty;
-      liSlug.classList.toggle('is-empty', !sl);
-      liEdit.textContent = sl ? liEdit.dataset.labelEdit : liEdit.dataset.labelAdd;
-      liEdit.classList.toggle('is-add', !sl);
       const full = [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(' ');
       nameEl.textContent = full;
       nameEl.hidden = !full;
@@ -2721,7 +2835,49 @@
       pfModal.open('#pf-first');
     }
     root.querySelector('#account-profile-btn').addEventListener('click', openProfile);
-    liEdit.addEventListener('click', openProfile);
+
+    // ---- status controls in the title row (5 Nov 2026): LinkedIn connected
+    // (a linkedin_oidc identity on the login), CV uploaded, preferences filled.
+    // Each shows its state in the icon (green check) and in aria-label + title.
+    const stLi    = root.querySelector('#status-linkedin');
+    const stCv    = root.querySelector('#status-cv');
+    const stPrefs = root.querySelector('#status-prefs');
+    const stPct   = root.querySelector('#status-prefs-pct');
+    const stNote  = root.querySelector('#status-note');
+    function paintStatus(btn, on) {
+      btn.dataset.state = on ? 'on' : 'off';
+      const label = btn.dataset[on ? 'labelOn' : 'labelOff'];
+      btn.setAttribute('aria-label', label);
+      btn.title = label;
+    }
+    const hasLinkedIn = (s) => !!(s && s.user && (s.user.identities || []).some((i) => i.provider === 'linkedin_oidc'));
+    // Same count as the admin panel (career_admin_clients, 0024): the salary
+    // range (min or max set) + every non-empty answer, out of 24 items.
+    function prefsPct(p) {
+      if (!p) return 0;
+      let n = p.salary_min != null || p.salary_max != null ? 1 : 0;
+      const a = p.answers || {};
+      Object.keys(a).forEach((k) => {
+        const v = a[k];
+        const s = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+        if (['', '[]', '{}'].indexOf(s.trim()) === -1) n++;
+      });
+      return Math.min(100, Math.round(100 * n / 24));
+    }
+    function paintPrefs(pct) {
+      stPct.textContent = pct + '%';
+      const label = stPrefs.dataset.label.replace('{n}', pct);
+      stPrefs.setAttribute('aria-label', label);
+      stPrefs.title = label;
+    }
+    stLi.addEventListener('click', async () => {
+      if (stLi.dataset.state === 'on') { openProfile(); return; }
+      stNote.hidden = true;
+      let error = null;
+      try { ({ error } = await Auth.linkLinkedIn()); } catch (err) { error = err; }
+      // Success leaves the page for LinkedIn; anything else means linking is off.
+      if (error) { stNote.textContent = stNote.dataset.msgLinkedinOff; stNote.hidden = false; }
+    });
     pfForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fields = {
@@ -2784,6 +2940,7 @@
 
     function paintCv() {
       cvBtn.textContent = cvPath ? cvBtn.dataset.labelReview : cvBtn.dataset.labelUpload;
+      paintStatus(stCv, !!cvPath);
     }
     async function showCv() {
       cvSay('', '');
@@ -2798,6 +2955,7 @@
       cvPrev.hidden = false;
     }
     cvBtn.addEventListener('click', () => { if (cvPath) showCv(); else cvFile.click(); });
+    stCv.addEventListener('click', () => { if (cvPath) showCv(); else cvFile.click(); });   // same as the side panel
     document.getElementById('account-cv-replace').addEventListener('click', () => cvFile.click());
     cvFile.addEventListener('change', async () => {
       const file = cvFile.files[0];
@@ -2840,22 +2998,94 @@
       window.location.href = data.signedUrl;
     });
 
-    // Delete my account
-    const del = root.querySelector('#account-delete');
+    // Delete my account (5 Nov 2026): the side-panel button is the only way
+    // in. Hover or keyboard focus shows #delete-tip (also its
+    // aria-describedby); a click opens #delete-pop: next to the button from
+    // 1024px, a small centred dialog below that. modalCtl gives Esc / Cancel /
+    // outside click, the trapTab focus trap and focus back on the button.
+    // The window is the confirmation (owner: no browser confirm()); its
+    // Delete button deletes at once, with the old busy / error messages.
+    const delOpen  = root.querySelector('#account-delete-open');
+    const delTip   = root.querySelector('#delete-tip');
+    const delEl    = document.getElementById('delete-pop');
+    const delPanel = delEl.querySelector('.delete-pop__panel');
+    const delPop   = modalCtl(delEl);
+    const del      = document.getElementById('account-delete');
+    const delNote  = document.getElementById('delete-status');
+    const wideMq   = window.matchMedia('(min-width: 1024px)');
+    const EDGE = 8;                      // px kept free at the viewport edges
+
+    // Tooltip: fixed, under the link (above it if there is no room), so the
+    // phone chip row's horizontal scroll never clips it. Hides on scroll.
+    let tipTimer = 0;
+    function showTip() {
+      clearTimeout(tipTimer);
+      if (delPop.isOpen) return;
+      delTip.hidden = false;
+      const r = delOpen.getBoundingClientRect();
+      const w = delTip.offsetWidth, h = delTip.offsetHeight;
+      let top = r.bottom + EDGE;
+      if (top + h > window.innerHeight - EDGE) top = Math.max(EDGE, r.top - EDGE - h);
+      delTip.style.left = Math.max(EDGE, Math.min(r.left, window.innerWidth - w - EDGE)) + 'px';
+      delTip.style.top = top + 'px';
+    }
+    function hideTip(later) {
+      clearTimeout(tipTimer);
+      if (later) tipTimer = setTimeout(() => { delTip.hidden = true; }, 150);
+      else delTip.hidden = true;
+    }
+    const focusVisible = (el) => { try { return el.matches(':focus-visible'); } catch (_e) { return true; } };
+    if (window.matchMedia('(hover: hover)').matches) {
+      delOpen.addEventListener('mouseenter', showTip);
+      delOpen.addEventListener('mouseleave', () => hideTip(true));
+      delTip.addEventListener('mouseenter', showTip);         // the pointer may move onto the tip
+      delTip.addEventListener('mouseleave', () => hideTip(true));
+    }
+    delOpen.addEventListener('focus', () => { if (focusVisible(delOpen)) showTip(); });
+    delOpen.addEventListener('blur', () => hideTip(false));
+    delOpen.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTip(false); });
+    window.addEventListener('scroll', () => { if (!delTip.hidden) hideTip(false); }, { passive: true, capture: true });
+
+    // >=1024px: the panel sits right of the button, top-aligned, kept on
+    // screen and above the cookie banner while that is open (it sits on top).
+    function placePop() {
+      const wide = wideMq.matches;
+      delEl.classList.toggle('is-anchored', wide);
+      if (!wide) { delPanel.style.left = ''; delPanel.style.top = ''; return; }
+      const r = delOpen.getBoundingClientRect();
+      const w = delPanel.offsetWidth, h = delPanel.offsetHeight;
+      const banner = document.getElementById('cookie-banner');
+      const floor = window.innerHeight - (banner && !banner.hidden ? banner.offsetHeight : 0);
+      delPanel.style.left = Math.max(EDGE, Math.min(r.right + 2 * EDGE, window.innerWidth - w - 2 * EDGE)) + 'px';
+      delPanel.style.top = Math.max(2 * EDGE, Math.min(r.top, floor - h - 2 * EDGE)) + 'px';
+    }
+    delOpen.addEventListener('click', () => {
+      if (!del.disabled) { delNote.hidden = true; delNote.textContent = ''; }   // fresh window unless a deletion is running
+      delOpen.focus({ preventScroll: true });   // Safari does not focus a clicked button; modalCtl returns focus here
+      hideTip(false);                           // after the focus, which may have shown it
+      delPop.open('.delete-pop__cancel');
+      placePop();
+    });
+    window.addEventListener('resize', () => { if (delPop.isOpen) placePop(); });
+
     del.addEventListener('click', async () => {
-      if (!window.confirm(del.dataset.confirm)) return;
-      const st = root.querySelector('#delete-status');
-      st.textContent = del.dataset.msgBusy; st.dataset.kind = 'busy'; st.hidden = false;
+      if (del.disabled) return;
+      delNote.textContent = del.dataset.msgBusy; delNote.dataset.kind = 'busy'; delNote.hidden = false;
       del.disabled = true;
       const { error } = await Auth.deleteAccount();
       if (error) {
-        st.textContent = del.dataset.msgError; st.dataset.kind = 'error';
+        delNote.textContent = del.dataset.msgError; delNote.dataset.kind = 'error';
         del.disabled = false;
         return;
       }
       try { await Auth.signOut(); } catch (_) { /* user is already gone */ }
-      root.querySelector('#account-deleted').hidden = false;
+      del.disabled = false; delNote.hidden = true;
+      if (delPop.isOpen) delPop.close();
+      const gone = root.querySelector('#account-deleted');
+      gone.hidden = false;
       render(null);
+      gone.setAttribute('tabindex', '-1');      // the link is gone with the signed-in view; land on the notice
+      gone.focus();
     });
     newpass.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -3432,6 +3662,7 @@
     Lightbox.bind();
     bootApproachStrip();
     bootKpiFunnel();
+    bootPricingCards();
     Auth.boot();
     bootAuthModal();
     bootAccountPage();
