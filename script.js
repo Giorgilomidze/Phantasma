@@ -1496,6 +1496,14 @@
       return getClient().auth.signInWithIdToken({ provider: 'google', token, nonce });
     }
 
+    // LinkedIn sign-in (OpenID Connect, 5 Nov 2026): a round trip through
+    // LinkedIn's own login page and Supabase that lands back on this page
+    // (returnUrl), where supabase-js picks the session up from the URL.
+    // Supabase links logins that share the same verified email.
+    function signInWithLinkedIn() {
+      return getClient().auth.signInWithOAuth({ provider: 'linkedin_oidc', options: { redirectTo: returnUrl() } });
+    }
+
     function signOut() {
       return getClient().auth.signOut();
     }
@@ -1583,6 +1591,7 @@
       loadPreferences,
       savePreferences,
       signInWithGoogleToken,
+      signInWithLinkedIn,
       signOut,
       loadStats,
       db,
@@ -1784,6 +1793,14 @@
     google.addEventListener('click', () => {
       say('busy', form.dataset.msgSending);
       showGoogle().then(() => say('', ''), () => say('error', form.dataset.msgError));
+    });
+
+    // LinkedIn: the browser goes to LinkedIn and comes back signed in.
+    const linkedin = modal.querySelector('#auth-linkedin');
+    if (linkedin) linkedin.addEventListener('click', async () => {
+      say('busy', form.dataset.msgSending);
+      const { error } = await Auth.signInWithLinkedIn();
+      if (error) say('error', form.dataset.msgError);
     });
 
     // Header / nav auth links: signed out → open modal; signed in → follow

@@ -69,7 +69,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105c" />
+  <link rel="stylesheet" href="./styles.css?v=20261105e" />
 </head>
 <body>
   <a class="skip-link" href="#main">მთავარ შინაარსზე გადასვლა</a>
@@ -121,7 +121,7 @@
       <p>ჩვენ ვართ აქ აღწერილი პერსონალური მონაცემების დამმუშავებელი.</p>
       <h2>2. რას ვაგროვებთ</h2>
       <ul>
-        <li>ანგარიშის მონაცემები: თქვენი ელფოსტა და პაროლი (ინახება ავტორიზაციის პროვაიდერთან დაცული ჰეშის სახით) ან თქვენი Google ანგარიშის ელფოსტა, თუ Google-ით შედიხართ.</li>
+        <li>ანგარიშის მონაცემები: თქვენი ელფოსტა და პაროლი (ინახება ავტორიზაციის პროვაიდერთან დაცული ჰეშის სახით) ან თქვენი Google ანგარიშის ელფოსტა, თუ Google-ით შედიხართ, ან LinkedIn-ის მიერ გაზიარებული სახელი, ელფოსტა და პროფილის ფოტო, თუ LinkedIn-ით შედიხართ.</li>
         <li>პროფილის მონაცემები: სახელი და LinkedIn-ის ბმული, თუ დაამატებთ.</li>
         <li>თქვენი CV, ასევე გამოცდილება და სამუშაოს პრეფერენციები, რომლებსაც გვიზიარებთ.</li>
         <li>ჩანაწერები თქვენი გეგმისა და გადახდების შესახებ (რომელი გეგმა, როდის). ბარათის ნომერს ჩვენ არ ვიღებთ.</li>
@@ -146,6 +146,7 @@
         <li>Flitt და TBC ამუშავებენ გადახდებს.</li>
         <!-- KA: sign-in button clause added 3 Nov 2026; machine wording, unproofread. -->
         <li>Google უზრუნველყოფს შესვლას (თუ აირჩევთ; მისი შესვლის ღილაკი Google-დან იტვირთება, როცა შესვლის ფანჯარას გახსნით) და, თქვენი თანხმობით, რეკლამასა და გაზომვას.</li>
+        <li>LinkedIn უზრუნველყოფს შესვლას, თუ აირჩევთ: შედიხართ LinkedIn-ის საკუთარ გვერდზე და ის გვიზიარებს თქვენს სახელს, ელფოსტას და პროფილის ფოტოს.</li>
         <li>Google Calendar (შეხვედრების დაჯავშნა) ამუშავებს ზარის დაჯავშნას.</li>
       </ul>
       <p>მონაცემებს არ ვყიდით.</p>
@@ -204,8 +205,9 @@
       <button class="auth-modal__close" type="button" data-close aria-label="დახურვა">✕</button>
       <h2 class="auth-modal__title" id="auth-title"
           data-title-login="შესვლა" data-title-signup="ანგარიშის შექმნა" data-title-forgot="პაროლის აღდგენა">შესვლა</h2>
-      <p class="auth-modal__sub">Google ანგარიშით, ან ელფოსტით და პაროლით.</p>
+      <p class="auth-modal__sub">Google ან LinkedIn ანგარიშით, ან ელფოსტით და პაროლით.</p>
       <button class="btn auth-modal__google" type="button" id="auth-google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Google-ით გაგრძელება</button>
+      <button class="btn auth-modal__google auth-modal__linkedin" type="button" id="auth-linkedin"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#0A66C2" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>LinkedIn-ით გაგრძელება</button>
       <p class="auth-modal__or" aria-hidden="true">ან</p>
       <form class="auth-modal__form" id="auth-form" novalidate data-mode="login"
             data-msg-sending="ერთი წამით…"
@@ -245,6 +247,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261105c" defer></script>
+  <script src="./script.js?v=20261105e" defer></script>
 </body>
 </html>

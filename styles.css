@@ -3332,6 +3332,16 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 /* Google's own sign-in button (an iframe drawn by Google), centred where
    #auth-google was; bootAuthModal swaps them once the GIS script has loaded. */
 .auth-modal__gis { display: flex; justify-content: center; min-height: 44px; }
+/* LinkedIn sign-in (5 Nov 2026): same outline look as the Google fallback, sized
+   like Google's 40px button (max 400px wide, centred) with a small gap above it. */
+.auth-modal__linkedin {
+  display: flex;
+  width: min(100%, 400px);
+  min-height: 40px;
+  margin: var(--space-2) auto 0;
+  padding: 8px 16px;
+  border-radius: 4px;
+}
 .auth-modal__or {
   display: flex;
   align-items: center;
