@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f7f5f2" />
+  <title>Admin — Phantasma</title>
+  <meta name="description" content="Admin panel of the Phantasma career service: clients, messages and admins." />
+
+  <!-- Private page: keep out of the index (also disallowed in robots.txt) -->
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://solvephantasma.com/admin.html" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://solvephantasma.com/admin.html" />
+  <meta property="og:title" content="Admin — Phantasma" />
+  <meta property="og:description" content="Admin panel of the Phantasma career service." />
+  <meta property="og:image" content="https://solvephantasma.com/images/social-share-1200.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Admin — Phantasma" />
+  <meta name="twitter:description" content="Admin panel of the Phantasma career service." />
+  <meta name="twitter:image" content="https://solvephantasma.com/images/social-share-1200.jpg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&display=swap" />
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap" />
+
+  <!-- Consent mode: deny by default until user accepts (GDPR) -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('consent', 'default', {
+      analytics_storage: 'denied',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied'
+    });
+    if (localStorage.getItem('phantasma_cookie_consent') === 'accepted') {
+      gtag('consent', 'update', {
+        analytics_storage: 'granted',
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted'
+      });
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18182297582"></script>
+  <script>
+    gtag('js', new Date());
+    gtag('config', 'AW-18182297582');
+    gtag('config', 'G-Q423P065C1'); /* GA4 — sends only after cookie consent (consent mode above) */
+  </script>
+
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <link rel="stylesheet" href="./styles.css?v=20261105g" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="grain" aria-hidden="true"></div>
+  <div id="top" aria-hidden="true" class="scroll-anchor"></div>
+
+  <!-- Header -->
+  <header class="site-header" id="site-header">
+    <div class="page-grid site-header__row">
+      <a href="./index.html" class="wordmark" aria-label="Phantasma — home">Phantasma</a>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <a href="./index.html">Home</a>
+        <a href="./blog.html">Blog</a>
+        <a href="./services.html">Services</a>
+        <a href="./index.html#contact">Contact</a>
+      </nav>
+      <a href="./account.html" class="btn btn-primary btn-sm js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu" data-label-open="Open menu" data-label-close="Close menu">
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+
+    <!-- Career-service admin panel (5 Nov 2026). Behaviour in career.js
+         (bootAdminPanel); data from the career_admin_* and chat_* functions in
+         supabase/0024-career-admin-chat.sql. Each of them checks on the server
+         that the caller is an admin, so nobody else gets any data here. -->
+    <section class="account page-grid" id="admin" aria-labelledby="admin-h">
+      <div class="account__head">
+        <div>
+          <p class="eyebrow">Career service</p>
+          <h1 class="project-hero__title" id="admin-h">Admin panel</h1>
+          <!-- Client | Admin switch (same as on account.html); shown to admins only. -->
+          <nav class="role-switch" id="role-switch" aria-label="Switch view" hidden>
+            <a href="./account.html">Client</a>
+            <a href="./admin.html" aria-current="page">Admin</a>
+          </nav>
+        </div>
+        <div class="account__identity" id="admin-who" hidden>
+          <p class="account__email" id="admin-email"></p>
+        </div>
+      </div>
+
+      <!-- Signed out -->
+      <div class="account__panel" id="admin-signed-out">
+        <p class="project-hero__sub">
+          Log in with your admin account to see the career-service clients and their messages.
+        </p>
+        <p>
+          <a href="./account.html" class="btn btn-primary js-auth" data-label-login="Log in" data-label-account="Manage profile">Log in</a>
+        </p>
+      </div>
+
+      <p class="account__hint" id="admin-checking" role="status" hidden>Checking your access…</p>
+
+      <!-- Signed in, but not on the admin list -->
+      <div class="account__panel" id="admin-denied" hidden>
+        <p class="project-hero__sub" id="admin-denied-text">No access. This page is only for the career-service admins.</p>
+        <p><a class="btn btn-sm account__quiet" href="./account.html">Go to my account</a></p>
+      </div>
+
+      <!-- Admins only -->
+      <div class="admin-panel" id="admin-panel" hidden>
+        <div class="admin-tabs" role="tablist" aria-label="Admin panel">
+          <button class="admin-tab" type="button" role="tab" id="admin-tab-clients" data-tab="clients"
+                  aria-controls="admin-clients" aria-selected="true">Clients</button>
+          <button class="admin-tab" type="button" role="tab" id="admin-tab-messages" data-tab="messages"
+                  aria-controls="admin-messages" aria-selected="false" tabindex="-1">Messages <span class="chat-badge" id="admin-unread" hidden></span></button>
+          <button class="admin-tab" type="button" role="tab" id="admin-tab-admins" data-tab="admins"
+                  aria-controls="admin-admins" aria-selected="false" tabindex="-1">Admins</button>
+        </div>
+
+        <!-- Clients: every account with plan, searches, LinkedIn, CV, preferences filled, unread, dates -->
+        <section class="admin-tabpanel" id="admin-clients" role="tabpanel" aria-labelledby="admin-tab-clients">
+          <div class="admin-toolbar">
+            <label class="visually-hidden" for="client-search">Search accounts</label>
+            <input class="auth-modal__input admin-search" id="client-search" type="search" autocomplete="off"
+                   placeholder="Search name, email or plan" />
+            <span class="admin-count" id="client-count" aria-live="polite"></span>
+          </div>
+          <div class="account-table-wrap" id="clients-table"></div>
+        </section>
+
+        <!-- Messages: conversation list + chat pane (stacked on phones) -->
+        <section class="admin-tabpanel" id="admin-messages" role="tabpanel" aria-labelledby="admin-tab-messages" hidden>
+          <div class="admin-chat">
+            <div class="admin-chat__list">
+              <h2 class="visually-hidden" id="conv-h">Conversations</h2>
+              <ul class="conv-list" id="conv-list" aria-labelledby="conv-h"></ul>
+              <p class="admin-chat__none" id="conv-empty" hidden>No messages yet. To write first, open Chat for a client on the Clients tab.</p>
+            </div>
+            <div class="admin-chat__pane" id="admin-chat-pane">
+              <div class="admin-chat__head">
+                <h2 class="admin-chat__title" id="admin-chat-title">Choose a conversation</h2>
+                <p class="admin-chat__sub" id="admin-chat-sub" hidden></p>
+              </div>
+              <div class="admin-chat__body" id="admin-chat-body"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Admins: who can open this page -->
+        <section class="admin-tabpanel" id="admin-admins" role="tabpanel" aria-labelledby="admin-tab-admins" hidden>
+          <h2 class="project-section__h admin-h" id="admins-h" tabindex="-1">Admins</h2>
+          <div class="account-table-wrap" id="admins-table"></div>
+          <p class="account-form__status" id="admins-status" role="status" aria-live="polite" hidden></p>
+          <form class="admin-add" id="admin-add" novalidate>
+            <label class="auth-modal__label" for="admin-add-email">Add an admin</label>
+            <p class="account__hint" id="admin-add-hint">We email them the link to this page. They log in with that email address.</p>
+            <div class="admin-add__row">
+              <input class="auth-modal__input" id="admin-add-email" type="email" name="email" autocomplete="off"
+                     inputmode="email" placeholder="name@example.com" aria-describedby="admin-add-hint" required />
+              <button class="btn btn-primary btn-sm" type="submit" id="admin-add-btn">Add admin</button>
+            </div>
+            <p class="account-form__status" id="admin-add-status" role="status" aria-live="polite" hidden></p>
+          </form>
+        </section>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="page-grid site-footer__inner">
+      <hr class="rule rule--footer" />
+      <div class="site-footer__row">
+        <a href="./index.html" class="wordmark wordmark--footer">Phantasma</a>
+        <a href="./index.html#contact" class="link-quiet">Book a discovery call →</a>
+      </div>
+      <address class="site-footer__contact" aria-label="Contact">
+        <span>Georgia, Tbilisi, Jiuli Shartava 5</span>
+        <a class="link-quiet" href="tel:+995599372600">+995 599 372 600</a>
+        <a class="link-quiet" href="mailto:consult@solvephantasma.com">consult@solvephantasma.com</a>
+      </address>
+      <div class="site-footer__row site-footer__row--meta">
+        <p class="site-footer__tagline">Tangible solutions for abstract problems.</p>
+        <a class="link-quiet" href="./terms.html">Terms</a>
+        <a class="link-quiet" href="./privacy.html">Privacy</a>
+        <a class="link-quiet" href="./index.html">Full site</a>
+        <p class="site-footer__copy">© Phantasma 2026</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Login modal — opened by the header "Log in" link and the Log in button
+       above. Three modes (login / signup / forgot) switched by data-mode on
+       the form; behaviour in bootAuthModal (script.js). -->
+  <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <h2 class="auth-modal__title" id="auth-title"
+          data-title-login="Log in" data-title-signup="Create your account" data-title-forgot="Reset your password">Log in</h2>
+      <p class="auth-modal__sub">With Google, LinkedIn, or email and password.</p>
+      <button class="btn auth-modal__google" type="button" id="auth-google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Continue with Google</button>
+      <button class="btn auth-modal__google auth-modal__linkedin" type="button" id="auth-linkedin"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#0A66C2" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>Continue with LinkedIn</button>
+      <p class="auth-modal__or" aria-hidden="true">or</p>
+      <form class="auth-modal__form" id="auth-form" novalidate data-mode="login"
+            data-msg-sending="One moment…"
+            data-msg-signup-sent="Almost done — check {email} and click the confirmation link."
+            data-msg-forgot-sent="Check {email} for a link to set a new password."
+            data-msg-bad-login="Email or password is wrong."
+            data-msg-exists="That email already has an account — log in instead."
+            data-msg-weak="Password must be at least 8 characters."
+            data-msg-unconfirmed="Please confirm your email first — check your inbox for the link."
+            data-msg-rate-limit="Too many emails sent in the last hour — please try again a little later."
+            data-msg-error="That didn't work — please try again.">
+        <label class="auth-modal__label" for="auth-email">Email address</label>
+        <input class="auth-modal__input" id="auth-email" type="email" name="email" autocomplete="email" required inputmode="email" />
+        <div class="auth-modal__pw" id="auth-pw-row">
+          <label class="auth-modal__label" for="auth-password">Password <small id="auth-pw-hint" hidden>(At least 8 characters)</small></label>
+          <input class="auth-modal__input" id="auth-password" type="password" name="password" autocomplete="current-password" minlength="8" required />
+          <button class="auth-modal__link" type="button" id="auth-forgot" data-mode-to="forgot">Forgot password?</button>
+        </div>
+        <button class="btn btn-primary" type="submit" id="auth-submit"
+                data-label-login="Log in" data-label-signup="Create account" data-label-forgot="Send reset link">Log in</button>
+        <button class="auth-modal__link auth-modal__switch" type="button" id="auth-switch"
+                data-label-login="New here? Create an account" data-label-signup="Already have an account? Log in" data-label-forgot="Already have an account? Log in">New here? Create an account</button>
+      </form>
+      <p class="auth-modal__status" id="auth-status" role="status" aria-live="polite" hidden></p>
+    </div>
+  </div>
+
+  <div class="cookie-banner" id="cookie-banner" hidden>
+    <p class="cookie-banner__text">
+      We use cookies for advertising and analytics to understand how our site is used and to show relevant ads to potential clients.
+    </p>
+    <div class="cookie-banner__actions">
+      <button type="button" class="cookie-banner__decline" id="cookie-decline">Decline</button>
+      <button type="button" class="cookie-banner__accept" id="cookie-accept">Accept</button>
+    </div>
+  </div>
+
+  <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+  <script src="./script.js?v=20261105g"></script>
+  <!-- Career service: admin panel + chat (after script.js) -->
+  <script src="./career.js?v=20261105g"></script>
+</body>
+</html>

@@ -1906,11 +1906,11 @@
     // After an actual sign-in (modal login, or arriving back from Google /
     // a confirmation link with tokens in the URL) go straight to the profile.
     // Not on plain page loads with an existing session, and not when already
-    // on a profile page.
+    // on a profile page (admin.html counts: an invited admin logs in there).
     const arrivedWithTokens = /access_token=|[?&]code=/.test(location.hash + location.search);
     document.addEventListener('phantasma:auth', (e) => {
       if (!e.detail.session) return;
-      const onProfile = /\/(account|preferences|payment-result)\.html$/.test(location.pathname);
+      const onProfile = /\/(account|preferences|payment-result|admin)\.html$/.test(location.pathname);
       const fresh = e.detail.event === 'SIGNED_IN' && (!modal.hidden || arrivedWithTokens);
       if (!modal.hidden) close();
       if (fresh && resumePayment()) return;      // came here to pay → Flitt, not the profile
@@ -3443,6 +3443,15 @@
     bootEventTracking();
     bootImageZoom();
   }
+
+  // Read-only hook for career.js (admin panel + client chat; loaded after
+  // this file on account, preferences and admin pages): the one Supabase
+  // client Auth already holds (null without supabase-js) and the current
+  // session. Nothing else from this IIFE is exposed.
+  window.PhantasmaAuth = {
+    db: () => Auth.db(),
+    session: () => Auth.getSession(),
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
