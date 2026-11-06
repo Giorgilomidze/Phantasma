@@ -5,7 +5,7 @@
    Every class here starts with `ads-` so nothing collides with the site.
    Sections: 1 Base / 2 Gate / 3 Shell / 4 Buttons and fields / 5 Cards, KPIs,
    tables / 6 Chips and filters / 7 Wizard / 8 Posts / 9 Dialogs, drawers,
-   toasts / 10 Skeleton / 11 Reduced motion
+   toasts / 10 Image Library, Products, Settings / 11 Skeleton / 12 Reduced motion
    ========================================================================= */
 
 /* -------------------------------------------------------------------------
@@ -140,6 +140,9 @@
 .ads-btn--danger { background: var(--act); color: #fff; }
 .ads-btn--danger-ghost { background: var(--surface-raised); border-color: var(--act); color: var(--act); }
 .ads-btn[disabled] { opacity: .5; cursor: not-allowed; }
+/* Placeholder buttons for later rounds: normal look (still focusable) plus a small "Coming soon" chip */
+.ads-soon__chip { font-size: var(--type-eyebrow); font-weight: 500; line-height: 1.4; color: var(--ink-soft); border: 1px solid var(--rule); border-radius: 999px; padding: 0 var(--space-2); white-space: nowrap; }
+.ads-btn--danger-ghost .ads-soon__chip { color: var(--act); border-color: var(--act); }
 .ads-iconbtn { min-height: 44px; min-width: 44px; display: inline-grid; place-items: center; border-radius: var(--radius-sm); font-size: 1.25rem; }
 .ads-iconbtn:hover { background: var(--surface); }
 
@@ -147,6 +150,7 @@
   width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); font: inherit; font-size: 1rem;
   color: var(--ink); background: var(--surface-raised); border: 1px solid var(--field-border); border-radius: var(--radius-sm);
 }
+.ads-input:disabled { background: var(--surface); color: var(--ink-soft); cursor: not-allowed; }
 .ads-textarea { min-height: 120px; resize: vertical; line-height: 1.45; }
 .ads-field { margin-bottom: var(--space-4); }
 .ads-label { display: block; font-size: var(--type-body-sm); font-weight: 500; margin-bottom: var(--space-1); padding: 0; }
@@ -160,6 +164,7 @@
 .ads-option input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--accent-deep); }
 .ads-option:has(input:checked) { border-color: var(--accent-deep); box-shadow: 0 0 0 1px var(--accent-deep); }
 .ads-option--inline { display: inline-flex; align-items: center; margin-right: var(--space-2); }
+.ads-option--off { cursor: not-allowed; color: var(--ink-soft); }
 .ads-btnrow { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
 
 /* -------------------------------------------------------------------------
@@ -231,7 +236,13 @@
 .ads-chip--in_review, .ads-chip--approved, .ads-chip--scheduled { --c: var(--partner); }
 .ads-chip--active, .ads-chip--published { --c: var(--ok); }
 .ads-chip--rejected { --c: var(--act); }
-.ads-chip--draft .ads-chip__dot, .ads-chip--ended .ads-chip__dot { background: transparent; border: 2px solid var(--c); }
+/* Chips that are not a workflow status: connection, stock, image kind, sample */
+.ads-chip--on { --c: var(--ok); }
+.ads-chip--out { --c: var(--act); }
+.ads-chip--picture { --c: var(--partner); }
+.ads-chip--element { --c: var(--accent-deep); }
+.ads-chip--draft .ads-chip__dot, .ads-chip--ended .ads-chip__dot,
+.ads-chip--off .ads-chip__dot, .ads-chip--sample .ads-chip__dot { background: transparent; border: 2px solid var(--c); }
 
 /* -------------------------------------------------------------------------
    7. Wizard
@@ -271,6 +282,9 @@
 .ads-imgrow { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .ads-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: var(--radius-sm); flex: none; background: var(--surface); }
 .ads-img-empty { display: grid; place-items: center; background: var(--surface); color: var(--ink-soft); font-size: var(--type-caption); aspect-ratio: 4 / 3; }
+/* Elements (logos, stickers, frames) are often transparent: shown whole, on a light checkerboard.
+   img.* so it wins over the cover rules of the picker, thumbnail and preview classes. */
+img.ads-img--element { object-fit: contain; background: repeating-conic-gradient(var(--surface) 0% 25%, var(--surface-raised) 0% 50%) 50% / 16px 16px; }
 
 /* -------------------------------------------------------------------------
    8. Posts: list, calendar, composer, Facebook-style preview
@@ -339,16 +353,80 @@
 .ads-toasts { position: fixed; z-index: 100; left: var(--space-4); right: var(--space-4); bottom: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); pointer-events: none; }
 .ads-toast { pointer-events: auto; max-width: 480px; background: var(--ink); color: var(--bg); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); font-size: var(--type-body-sm); box-shadow: var(--shadow-lightbox); border-left: 6px solid var(--ok); }
 .ads-toast--act { background: var(--act); border-left-color: #fff; }
+.ads-toast--info { border-left-color: var(--accent); }
 
 /* -------------------------------------------------------------------------
-   10. Skeleton loading
+   10. Image Library, Products and stock, Settings
+   ------------------------------------------------------------------------- */
+.ads-status:empty { margin: 0; } /* live region: stays in the page (so updates are announced), takes no room */
+.ads-wrap { overflow-wrap: anywhere; }
+.ads-samples { margin-top: var(--space-5); }
+/* Library: drop zone, upload dialog list, grid of cards */
+.ads-drop { border: 2px dashed var(--field-border); border-radius: var(--radius-md); background: var(--surface-raised); padding: var(--space-5) var(--space-4); margin-bottom: var(--space-4); text-align: center; }
+.ads-drop p { margin: 0; }
+.ads-drop__title { font-weight: 500; }
+.ads-drop.is-over { border-color: var(--accent-deep); background: var(--surface); }
+.ads-filelist { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); }
+.ads-filelist__item { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--surface-raised); font-size: var(--type-body-sm); }
+.ads-filelist__name { flex: 1 1 12ch; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.ads-filelist__size { color: var(--ink-soft); font-size: var(--type-caption); }
+.ads-filelist__state { flex: 1 1 100%; font-size: var(--type-caption); }
+.ads-filelist__state--ok { color: var(--ok); }
+.ads-filelist__state--bad { color: var(--act); }
+.ads-libfilter { margin-bottom: var(--space-4); }
+.ads-libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.ads-libitem { display: flex; flex-direction: column; min-width: 0; background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); overflow: hidden; }
+.ads-libitem__img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--surface); }
+.ads-libitem__body { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); padding: var(--space-3); min-width: 0; font-size: var(--type-body-sm); }
+.ads-libitem__title { font-weight: 500; overflow-wrap: anywhere; }
+.ads-libitem__body .ads-btn { margin-top: var(--space-2); }
+/* AI picture window: library pictures to start from (tick up to 3), and the finished picture */
+.ads-aipicks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 96px), 1fr)); gap: var(--space-2); }
+.ads-aipick { position: relative; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--rule); border-radius: var(--radius-md); cursor: pointer; font-size: var(--type-body-sm); min-width: 0; }
+.ads-aipick:has(input:checked) { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.ads-aipick:has(input:disabled) { opacity: .5; cursor: not-allowed; }
+.ads-aipick input { position: absolute; top: var(--space-2); left: var(--space-2); }
+.ads-aipick img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-sm, 4px); background: var(--surface); }
+.ads-aipick__name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ads-airesult__img { display: block; width: auto; max-width: 100%; height: auto; max-height: 60vh; margin: 0 auto var(--space-3); border-radius: var(--radius-md); background: var(--surface); }
+/* Products: format box, search, number cells, problems / notes in the preview */
+.ads-format { background: var(--surface); border-left: 4px solid var(--partner); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); font-size: var(--type-body-sm); }
+.ads-format .ads-h3 { margin: 0 0 var(--space-1); }
+.ads-format p { margin: 0; max-width: 80ch; }
+.ads-search { max-width: 360px; margin-bottom: var(--space-3); }
+.ads-num { text-align: right; white-space: nowrap; }
+.ads-issues { --c: var(--act); display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) var(--space-4); background: var(--surface); border-left: 4px solid var(--c); font-size: var(--type-body-sm); overflow-wrap: anywhere; }
+.ads-issues--watch { --c: var(--watch); }
+.ads-issues__more { color: var(--ink-soft); }
+.ads-table--compact th, .ads-table--compact td { padding: var(--space-2); }
+/* Settings: single column of cards, collapsible service rows, danger zone */
+.ads-settings { max-width: 960px; }
+.ads-card--danger { border-color: var(--act); }
+.ads-card--danger > .ads-h2 { color: var(--act); }
+.ads-svcgroup { font-size: var(--type-body-sm); color: var(--ink-soft); margin: var(--space-5) 0 var(--space-2); }
+.ads-svclist { display: flex; flex-direction: column; gap: var(--space-2); }
+.ads-svc { border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface-raised); min-width: 0; }
+.ads-svc__sum { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); min-height: 44px; padding: var(--space-2) var(--space-3); cursor: pointer; }
+.ads-svc__sum::-webkit-details-marker { display: none; }
+.ads-svc__name { display: inline-flex; align-items: center; gap: var(--space-3); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+/* Own open / closed marker (a flex summary hides the browser's triangle) */
+.ads-svc__name::before { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+.ads-svc[open] .ads-svc__name::before { transform: rotate(45deg); }
+.ads-svc__body { padding: var(--space-3); border-top: 1px solid var(--rule); }
+.ads-svc__body .ads-input { max-width: 520px; }
+.ads-svc__body .ads-btnrow { margin-top: 0; }
+.ads-dz { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); padding: var(--space-3) 0; border-top: 1px solid var(--rule); }
+.ads-dz__text { margin: 0; flex: 1 1 260px; font-size: var(--type-body-sm); color: var(--ink-soft); }
+
+/* -------------------------------------------------------------------------
+   11. Skeleton loading
    ------------------------------------------------------------------------- */
 .ads-skel { display: flex; flex-direction: column; gap: var(--space-3); }
 .ads-skel__bar { height: 56px; border-radius: var(--radius-md); background: linear-gradient(90deg, var(--surface) 25%, var(--surface-soft) 50%, var(--surface) 75%); background-size: 200% 100%; animation: ads-shimmer 1.4s linear infinite; }
 @keyframes ads-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* -------------------------------------------------------------------------
-   11. Reduced motion
+   12. Reduced motion
    ------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   .ads-sidebar, .ads-drawer, .ads-shell { transition: none !important; }

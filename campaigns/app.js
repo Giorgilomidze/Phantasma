@@ -77,6 +77,24 @@
     return new Intl.NumberFormat(locale(), { style: 'currency', currency: curCode() }).format(n);
   }
   function num(n) { return new Intl.NumberFormat(locale(), { maximumFractionDigits: 0 }).format(n); }
+  // Shop (product) prices are always lari, whatever currency the ad account uses.
+  function gel(n) {
+    if (n == null) return '-';
+    return new Intl.NumberFormat(locale(), { style: 'currency', currency: 'GEL' }).format(n);
+  }
+  function qty(n) { return n == null ? '-' : new Intl.NumberFormat(locale(), { maximumFractionDigits: 3 }).format(n); }
+  function fmtBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return num(n / 1024) + ' KB';
+    return new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 }).format(n / 1048576) + ' MB';
+  }
+  // Price inside the Georgian template text, which already says "lari": 19.9 -> "19.90";
+  // no price -> "___" so the user fills it in.
+  function priceText(n) { return n == null ? '___' : (n % 1 ? n.toFixed(2) : String(n)); }
+  // Product names compare with spaces collapsed and case ignored (as stock-import.js and api.js).
+  function normName(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase(); }
+  // "Text with *bold* parts" -> text nodes and <strong>, so translations keep whole sentences.
+  function rich(s) { return String(s).split('*').map(function (part, i) { return i % 2 ? h('strong', {}, part) : part; }); }
   function fmtDate(iso, long) {
     var d = iso.length === 10 ? new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) : new Date(iso);
     return d.toLocaleDateString(locale(), long ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short' });
@@ -99,8 +117,11 @@
   function locName(id) { var l = settings.locations.filter(function (x) { return x.id === id; })[0]; return l ? l[AdsI18n.lang()] : id; }
   function stale(tok) { return tok !== viewTok; }
 
-  /* Placeholder images: inline SVG, generated here (no image files). */
+  /* Images: uploads carry their own address (url). The sample images are inline SVG
+     placeholders, generated here (no image files). */
   function imageUri(img) {
+    if (img.url) return img.url;
+    if (!img.shape) return '';
     var shapes = {
       mountain: '<path d="M0 300L120 130L200 220L280 100L400 300Z" fill="' + img.c2 + '" opacity=".85"/>',
       circle: '<circle cx="200" cy="140" r="80" fill="' + img.c2 + '" opacity=".85"/>',
@@ -113,10 +134,13 @@
   }
   var imageCache = {};
   function imageById(id) { return imageCache[id] || null; }
+  // Every image list app.js receives goes in here, so imageEl() knows the uploads too.
+  function cacheImages(list) { (list || []).forEach(function (im) { imageCache[im.id] = im; }); return list; }
   function imageEl(id, cls) {
-    var im = imageById(id);
-    if (!im) return h('div', { class: (cls || '') + ' ads-img-empty' }, t('common.noImage'));
-    return h('img', { class: cls || 'ads-img', src: imageUri(im), alt: lname(im, 'title'), width: '400', height: '300', loading: 'lazy' });
+    var im = imageById(id), src = im ? imageUri(im) : '';
+    if (!src) return h('div', { class: (cls || '') + ' ads-img-empty' }, t('common.noImage'));
+    return h('img', { class: (cls || 'ads-img') + (im.kind === 'element' ? ' ads-img--element' : ''), src: src, alt: lname(im, 'title'),
+      width: String(im.width || 400), height: String(im.height || 300), loading: 'lazy' });
   }
 
   /* ---------------------------------------------------------------------
@@ -283,9 +307,26 @@
     for (var i = 0; i < (rows || 3); i++) w.appendChild(h('div', { class: 'ads-skel__bar' }));
     return w;
   }
-  function emptyState(titleKey, textKey, action) {
-    return h('div', { class: 'ads-empty' }, [h('h2', { class: 'ads-h2' }, t(titleKey)), h('p', {}, t(textKey)), action || null]);
+  function emptyState(titleKey, textKey, action, vars) {
+    return h('div', { class: 'ads-empty' }, [h('h2', { class: 'ads-h2' }, t(titleKey)), h('p', {}, t(textKey, vars)), action || null]);
   }
+  // Chip for things that are not a workflow status: image kind, sample, stock, connection.
+  function pill(text, mod) {
+    return h('span', { class: 'ads-chip ads-chip--' + mod }, [h('span', { class: 'ads-chip__dot', 'aria-hidden': 'true' }), text]);
+  }
+  // Placeholder for a later round: looks like a normal button (ghost, or danger outline for
+  // deletes), stays focusable (aria-disabled) and carries a "Coming soon" chip. A click only
+  // says so; nothing else happens. opts: { danger, small, describedBy }.
+  function soonBtn(labelKey, opts) {
+    opts = opts || {};
+    return h('button', {
+      type: 'button', 'aria-disabled': 'true', 'aria-describedby': opts.describedBy || null,
+      class: 'ads-btn ads-soon ' + (opts.danger ? 'ads-btn--danger-ghost' : 'ads-btn--ghost') + (opts.small ? ' ads-btn--small' : ''),
+      onclick: function () { toast(t('soon.toast'), 'info'); }
+    }, [t(labelKey), h('span', { class: 'ads-soon__chip' }, t('soon.chip'))]);
+  }
+  // Plain-language reason of a failed call: api.js errors may carry an i18n key.
+  function errText(e) { return e && e.key ? t(e.key, e.vars) : (e && e.message) || ''; }
   function errorState(retry) {
     return h('div', { class: 'ads-empty', role: 'alert' }, [
       h('h2', { class: 'ads-h2' }, t('common.errorTitle')), h('p', {}, t('common.errorText')),
@@ -389,8 +430,8 @@
      --------------------------------------------------------------------- */
   var NAV = [
     ['dashboard', 'nav.dashboard', false], ['campaigns', 'nav.campaigns', false], ['posts', 'nav.posts', false],
-    ['images', 'nav.images', true], ['products', 'nav.products', true], ['rotation', 'nav.rotation', true],
-    ['settings', 'nav.settings', true], ['audit', 'nav.audit', true]
+    ['images', 'nav.images', false], ['products', 'nav.products', false], ['rotation', 'nav.rotation', true],
+    ['settings', 'nav.settings', false], ['audit', 'nav.audit', true]
   ];
   function buildNav() {
     var ul = $('#ads-nav-list');
@@ -420,6 +461,9 @@
     if (name === 'campaigns') return viewCampaigns(tok);
     if (name === 'posts' && parts[1]) return viewComposer(tok, parts[1]);
     if (name === 'posts') return viewPosts(tok);
+    if (name === 'images') return viewImages(tok);
+    if (name === 'products') return viewProducts(tok);
+    if (name === 'settings') return viewSettings();
     var soon = NAV.filter(function (n) { return n[0] === name && n[2]; })[0];
     if (soon) {
       return render(h('div', {}, [pageHead(soon[1]), emptyState('soon.title', 'soon.text', h('a', { class: 'ads-btn ads-btn--primary', href: '#/dashboard' }, t('nav.dashboard')))]), soon[1]);
@@ -589,7 +633,7 @@
     var body = h('div', {}, skeleton(4));
     Promise.all([api.listPosts({ business: ctx.business }), api.listImages(ctx.business)]).then(function (res) {
       if (stale(tok)) return;
-      draw(res[0], res[1]);
+      draw(res[0], cacheImages(res[1]));
     }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(refresh)); } });
     render(h('div', {}, [pageHead('wiz.title', [h('a', { class: 'ads-btn ads-btn--ghost', href: '#/campaigns', onclick: function () { wizard = null; } }, t('common.cancel'))]), h('p', { class: 'ads-note' }, currencyNote()), body]), 'wiz.title');
 
@@ -891,7 +935,7 @@
       h('div', { class: 'ads-fb__head' }, [h('span', { class: 'ads-fb__avatar', 'aria-hidden': 'true' }, biz.charAt(0)), h('span', {}, [h('strong', {}, biz), h('span', { class: 'ads-sub' }, t('prev.meta'))])]),
       h('p', { class: 'ads-fb__text' }, p.caption || t('prev.empty')),
       imageEl(p.imageId, 'ads-fb__img'),
-      prod ? h('div', { class: 'ads-fb__prod' }, [h('span', {}, lname(prod, 'name')), h('strong', {}, money(prod.price))]) : null,
+      prod ? h('div', { class: 'ads-fb__prod' }, [h('span', {}, lname(prod, 'name')), prod.price == null ? null : h('strong', {}, gel(prod.price))]) : null,
       h('div', { class: 'ads-fb__actions', 'aria-hidden': 'true' }, ['\u{1F44D} ' + t('prev.like'), t('prev.comment'), t('prev.share')])
     ]);
   }
@@ -902,7 +946,7 @@
     render(h('div', {}, [pageHead('comp.title', [h('a', { class: 'ads-btn ads-btn--ghost', href: '#/posts' }, t('comp.back'))]), body]), 'comp.title');
     Promise.all([isNew ? Promise.resolve(null) : api.getPost(id), api.listProducts(ctx.business), api.listImages(ctx.business)]).then(function (res) {
       if (stale(tok)) return;
-      draw(res[0] || Object.assign({ id: null, business: ctx.business, status: 'draft', productId: '', caption: '', imageId: '' }, composerPrefill || {}), res[1], res[2]);
+      draw(res[0] || Object.assign({ id: null, business: ctx.business, status: 'draft', productId: '', caption: '', imageId: '' }, composerPrefill || {}), res[1], cacheImages(res[2]));
       composerPrefill = null;
     }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(refresh)); } });
 
@@ -910,14 +954,16 @@
       body.innerHTML = '';
       var editable = post.status === 'draft', soft = settings.limits.captionSoftLimit;
       var risk = riskBox(), prevBox = h('div', {}), count = h('p', { class: 'ads-hint', id: 'ads-p-count' });
-      var prodSel = select('ads-p-prod', [['', t('comp.noProduct')]].concat(products.map(function (x) { return [x.id, lname(x, 'name') + ' - ' + money(x.price)]; })), post.productId || '', function (v) { post.productId = v; upd(); });
+      // Stock products may have no price: then the option shows the name only. Prices are lari.
+      var prodSel = select('ads-p-prod', [['', t('comp.noProduct')]].concat(products.map(function (x) { return [x.id, lname(x, 'name') + (x.price == null ? '' : ' - ' + gel(x.price))]; })), post.productId || '', function (v) { post.productId = v; upd(); });
       var cap = h('textarea', { id: 'ads-p-caption', class: 'ads-input ads-textarea', rows: '6', 'aria-describedby': 'ads-p-count' }, post.caption);
       if (!editable) { prodSel.disabled = true; cap.disabled = true; }
       cap.addEventListener('input', function () { post.caption = cap.value; upd(); });
       var tplBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', disabled: !editable, onclick: function () {
         var prod = products.filter(function (x) { return x.id === post.productId; })[0] || products[0];
+        if (!prod) { toast(t('comp.noProducts'), 'act'); return; }
         var tpl = settings.georgianTemplates[Math.floor(Math.random() * settings.georgianTemplates.length)];
-        var txt = tpl.replace('{product}', prod.name_ka).replace('{price}', String(prod.price));
+        var txt = tpl.replace('{product}', prod.name_ka).replace('{price}', priceText(prod.price));
         post.caption = (cap.value ? cap.value + '\n' : '') + txt; cap.value = post.caption; upd(); cap.focus();
       } }, t('comp.template'));
       var pickers = h('fieldset', { class: 'ads-fieldset', disabled: !editable }, [h('legend', { class: 'ads-label' }, t('wiz.images')), h('div', { class: 'ads-imggrid' }, images.map(function (im) {
@@ -990,7 +1036,536 @@
   }
 
   /* ---------------------------------------------------------------------
-     9. AI Assistant (mock replies; never acts by itself)
+     9. Image Library: upload from the computer, grid, sample images
+     --------------------------------------------------------------------- */
+  var libFilter = 'all';
+  var libJob = null;  // upload in progress: { n, total }. It keeps going when the user leaves the page.
+  var libView = null; // the Library view on screen: { tok, status, load }
+  var aiJob = null;   // an AI picture being made: { business }. It also keeps going when the user leaves.
+
+  // Shows the running upload or AI picture (if any) in the Library view that is on screen now.
+  function libSync() {
+    if (!libView || stale(libView.tok)) return;
+    libView.status.textContent = libJob ? t('lib.progress', { n: libJob.n, total: libJob.total }) : aiJob ? t('ai.working') : '';
+  }
+  function hasFiles(e) { var ty = e.dataTransfer && e.dataTransfer.types; return !!ty && [].indexOf.call(ty, 'Files') !== -1; }
+
+  function viewImages(tok) {
+    var rules = api.imageRules;
+    var body = h('div', {}, skeleton(3));
+    var status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
+    // The native file picker, opened by the Upload button (keyboard users) ...
+    var picker = h('input', { type: 'file', multiple: true, accept: rules.accept, hidden: true });
+    picker.addEventListener('change', function () { var f = [].slice.call(picker.files || []); picker.value = ''; if (f.length) choose(f); });
+    var upBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { if (libJob) toast(t('lib.busy'), 'act'); else picker.click(); } }, t('lib.upload'));
+    // ... and a drop zone for files dragged from the computer.
+    var drop = h('div', { class: 'ads-drop' }, [h('p', { class: 'ads-drop__title' }, t('lib.drop')), h('p', { class: 'ads-hint' }, t('lib.rules', { mb: rules.maxMb, max: rules.maxFiles }))]);
+    var depth = 0; // dragenter / dragleave also fire for the zone's children
+    drop.addEventListener('dragenter', function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth++; drop.classList.add('is-over'); });
+    drop.addEventListener('dragover', function (e) { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+    drop.addEventListener('dragleave', function () { depth = Math.max(0, depth - 1); if (!depth) drop.classList.remove('is-over'); });
+    drop.addEventListener('drop', function (e) {
+      e.preventDefault(); depth = 0; drop.classList.remove('is-over');
+      var f = [].slice.call((e.dataTransfer && e.dataTransfer.files) || []);
+      if (!f.length) return;
+      if (libJob) toast(t('lib.busy'), 'act'); else choose(f);
+    });
+    render(h('div', {}, [
+      pageHead('nav.images', [upBtn, h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { openAiDialog(); } }, t('lib.ai')), soonBtn('lib.drive')]),
+      liveMode() ? null : h('p', { class: 'ads-warn' }, t('lib.mockNote')),
+      picker, drop, status, body
+    ]), 'nav.images');
+    libView = { tok: tok, status: status, load: load };
+    libSync();
+    load();
+
+    function load(focusHead) {
+      api.listImages(ctx.business, { strict: true }).then(function (list) {
+        if (stale(tok)) return;
+        cacheImages(list);
+        draw(list.filter(function (x) { return !x.sample; }), list.filter(function (x) { return x.sample; }));
+        if (focusHead === true) { var hd = $('.ads-h1', main); if (hd) hd.focus(); }
+      }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(function () { load(); })); } });
+    }
+    function draw(mine, samples) {
+      body.innerHTML = '';
+      if (mine.length) {
+        var grid = h('ul', { class: 'ads-libgrid' }), none = h('p', { class: 'ads-note' }, t('lib.noneInFilter'));
+        var fill = function () {
+          grid.innerHTML = '';
+          var shown = mine.filter(function (x) { return libFilter === 'all' || x.kind === libFilter; });
+          shown.forEach(function (im) { grid.appendChild(item(im)); });
+          none.hidden = !!shown.length;
+        };
+        // The filter buttons stay in place (and keep focus); only the grid is redrawn.
+        body.appendChild(h('div', { class: 'ads-chips ads-libfilter', role: 'group', 'aria-label': t('lib.filter') }, ['all', 'picture', 'element'].map(function (k) {
+          return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === libFilter), onclick: function (e) {
+            var me = e.currentTarget;
+            libFilter = k;
+            [].forEach.call(me.parentNode.children, function (b) { b.setAttribute('aria-pressed', String(b === me)); });
+            fill();
+          } }, k === 'all' ? t('common.all') : t('lib.f.' + k));
+        })));
+        body.appendChild(grid); body.appendChild(none);
+        fill();
+      } else {
+        body.appendChild(emptyState('lib.emptyTitle', 'lib.emptyText', null, { mb: rules.maxMb, max: rules.maxFiles }));
+      }
+      if (samples.length) {
+        body.appendChild(h('details', { class: 'ads-details ads-samples' }, [
+          h('summary', {}, t('lib.samples', { n: samples.length })),
+          h('p', { class: 'ads-note' }, t('lib.samplesNote')),
+          h('ul', { class: 'ads-libgrid' }, samples.map(function (im) { return item(im); }))
+        ]));
+      }
+    }
+    function item(im) {
+      var title = lname(im, 'title'), facts = [];
+      if (im.bytes) facts.push(fmtBytes(im.bytes));
+      if (im.width && im.height) facts.push(t('lib.dims', { w: im.width, h: im.height }));
+      return h('li', { class: 'ads-libitem' }, [
+        imageEl(im.id, 'ads-libitem__img'),
+        h('div', { class: 'ads-libitem__body' }, [
+          h('span', { class: 'ads-libitem__title' }, title),
+          im.sample ? pill(t('common.sample'), 'sample') : pill(t('lib.kind.' + im.kind), im.kind),
+          facts.length ? h('span', { class: 'ads-sub' }, facts.join(' · ')) : null,
+          im.createdAt ? h('span', { class: 'ads-sub' }, fmtDateTime(im.createdAt)) : null,
+          im.sample ? null : h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--danger-ghost', 'aria-label': t('lib.deleteAria', { name: title }), onclick: function () { remove(im, title); } }, t('common.delete'))
+        ])
+      ]);
+    }
+    function remove(im, title) {
+      confirmDialog({ title: t('lib.del.title'), message: t('lib.del.text', { name: title }), confirmLabel: t('common.delete'), danger: true }).then(function (ok) {
+        if (!ok) return;
+        api.deleteImage(im.id).then(function () {
+          delete imageCache[im.id]; // posts that used it now show "No image"
+          toast(t('lib.deleted', { name: title }));
+          if (!stale(tok)) load(true); // the deleted card had focus: move it to the page heading
+        }).catch(function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+      });
+    }
+    // Lists the chosen files with "ready" or the reason, asks Pictures or Elements, then uploads.
+    function choose(files) {
+      var list = files.map(function (f, i) {
+        return { file: f, problem: i >= rules.maxFiles ? { key: 'lib.err.tooMany', vars: { max: rules.maxFiles } } : api.checkImageFile(f) };
+      });
+      var ok = list.filter(function (x) { return !x.problem; }).map(function (x) { return x.file; });
+      var kind = 'picture';
+      var kinds = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('lib.dlg.as'))].concat(['picture', 'element'].map(function (k) {
+        var r = h('input', { type: 'radio', name: 'ads-up-kind', id: 'ads-up-' + k, value: k, checked: k === kind });
+        r.addEventListener('change', function () { kind = k; });
+        return h('label', { class: 'ads-option', for: 'ads-up-' + k }, [r, h('span', {}, [h('strong', {}, t('lib.as.' + k)), h('span', { class: 'ads-sub' }, t('lib.as.' + k + '.d'))])]);
+      })));
+      var fileList = h('ul', { class: 'ads-filelist' }, list.map(function (x) {
+        return h('li', { class: 'ads-filelist__item' }, [
+          h('span', { class: 'ads-filelist__name' }, x.file.name),
+          h('span', { class: 'ads-filelist__size' }, fmtBytes(x.file.size)),
+          h('span', { class: 'ads-filelist__state ads-filelist__state--' + (x.problem ? 'bad' : 'ok') }, x.problem ? t(x.problem.key, x.problem.vars) : t('lib.dlg.ok'))
+        ]);
+      }));
+      var skipped = list.length - ok.length;
+      openDialog({
+        title: t('lib.dlg.title'), wide: true,
+        body: h('div', {}, [fileList, skipped && ok.length ? h('p', { class: 'ads-note' }, t('lib.dlg.skip', { n: skipped })) : null,
+          ok.length ? kinds : h('p', { class: 'ads-warn' }, t('lib.dlg.none'))]),
+        actions: [{ label: t(ok.length === 1 ? 'lib.uploadOne' : 'lib.uploadN', { n: ok.length }), value: true, disabled: !ok.length }]
+      }).then(function (yes) { if (yes) upload(ok, kind); });
+    }
+    // One file after the other. The progress shows in whichever Library view is on screen.
+    function upload(files, kind) {
+      var biz = ctx.business, done = 0, failed = [];
+      libJob = { n: 1, total: files.length };
+      function step(i) {
+        if (i >= files.length) return finish();
+        libJob.n = i + 1; libSync();
+        return api.uploadImage(biz, files[i], kind).then(function (im) { cacheImages([im]); done++; }, function () { failed.push(files[i].name); })
+          .then(function () { return step(i + 1); });
+      }
+      function finish() {
+        libJob = null; libSync();
+        if (!failed.length) toast(t('lib.done', { n: done }));
+        else toast(t('lib.doneFailed', { n: done, f: failed.length, names: failed.slice(0, 3).join(', ') + (failed.length > 3 ? ', …' : '') }), 'act');
+        if (libView && !stale(libView.tok)) libView.load();
+      }
+      step(0);
+    }
+  }
+
+  /* AI pictures (Gemini "Nano Banana", live backend only). The Edge Function ads-generate-image
+     keeps the key, counts the daily limit and saves each picture straight into the library. */
+  var AI_ASPECTS = ['1:1', '4:5', '9:16', '16:9'];
+  var AI_MAX_REFS = 3;
+  var aiLast = { prompt: '', aspect: '1:1', quality: 'standard', refs: [] }; // the form opens with the last choices
+
+  // Plain words for a failed AI call: known codes translated, otherwise the server's own English sentence.
+  function aiErrText(e) {
+    var c = e && e.code;
+    if (e && e.key) return t(e.key, e.vars);
+    if (c === 'network') return t('srv.network');
+    if (c === 'not_member' || c === 'no_token' || c === 'bad_token') return t('srv.access');
+    if (c === 'not_deployed') return t('ai.err.notDeployed');
+    if (c === 'daily_limit') return t('ai.err.limit');
+    if (c === 'no_gemini_key' || c === 'gemini_key') return t('ai.err.key');
+    return (e && e.message) || t('common.errorText');
+  }
+  // The form: description, format, quality, optional library pictures to start from.
+  function openAiDialog() {
+    if (!liveMode()) { toast(t('ai.err.mock'), 'act'); return; }
+    if (aiJob) { toast(t('ai.busy'), 'act'); return; }
+    var biz = ctx.business, remaining = null, go = null;
+    var o = { prompt: aiLast.prompt, aspect: aiLast.aspect, quality: aiLast.quality, refs: aiLast.refs.slice() };
+    var quota = h('p', { class: 'ads-note', 'aria-live': 'polite' }, t('ai.quota.loading'));
+    var ta = h('textarea', { id: 'ads-ai-prompt', class: 'ads-input ads-textarea', rows: '5', maxlength: '2000', placeholder: t('ai.prompt.ph'), 'aria-describedby': 'ads-ai-prompt-hint' });
+    ta.value = o.prompt;
+    ta.addEventListener('input', function () { o.prompt = ta.value; upd(); });
+    var aspect = select('ads-ai-aspect', AI_ASPECTS.map(function (a) { return [a, t('ai.aspect.' + a.replace(':', 'x'))]; }), o.aspect, function (v) { o.aspect = v; });
+    var quality = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('ai.quality'))].concat(['standard', 'high'].map(function (q) {
+      var r = h('input', { type: 'radio', name: 'ads-ai-q', id: 'ads-ai-q-' + q, value: q, checked: q === o.quality });
+      r.addEventListener('change', function () { o.quality = q; });
+      return h('label', { class: 'ads-option', for: 'ads-ai-q-' + q }, [r, h('span', {}, [h('strong', {}, t('ai.q.' + q)), h('span', { class: 'ads-sub' }, t('ai.q.' + q + '.d'))])]);
+    })));
+    var refsBox = h('div', {}, h('p', { class: 'ads-note' }, t('ai.loading')));
+    function upd() { if (go) go.disabled = !(remaining > 0 && o.prompt.replace(/\s+/g, ' ').trim().length >= 3); }
+
+    // The business's own uploads can be a starting point (a product photo, the logo).
+    api.listImages(biz).then(function (list) {
+      var mine = list.filter(function (x) { return !x.sample && x.url; }), boxes = [];
+      o.refs = o.refs.filter(function (id) { return mine.some(function (x) { return x.id === id; }); });
+      refsBox.innerHTML = '';
+      if (!mine.length) { refsBox.appendChild(h('p', { class: 'ads-note' }, t('ai.refs.none'))); return; }
+      function limit() { boxes.forEach(function (cb) { cb.disabled = !cb.checked && o.refs.length >= AI_MAX_REFS; }); }
+      refsBox.appendChild(h('p', { class: 'ads-hint' }, t('ai.refs.hint')));
+      refsBox.appendChild(h('ul', { class: 'ads-aipicks' }, mine.map(function (im) {
+        var id = 'ads-ai-ref-' + im.id;
+        var cb = h('input', { type: 'checkbox', id: id, value: im.id, checked: o.refs.indexOf(im.id) !== -1 });
+        cb.addEventListener('change', function () {
+          o.refs = cb.checked ? o.refs.concat(im.id) : o.refs.filter(function (x) { return x !== im.id; });
+          limit();
+        });
+        boxes.push(cb);
+        return h('li', {}, h('label', { class: 'ads-aipick', for: id }, [cb, h('img', { src: im.url, alt: '', loading: 'lazy' }), h('span', { class: 'ads-aipick__name' }, im.title)]));
+      })));
+      limit();
+    }).catch(function () { refsBox.innerHTML = ''; refsBox.appendChild(h('p', { class: 'ads-note' }, t('ai.refs.none'))); });
+
+    api.aiImageStatus(biz).then(function (r) {
+      remaining = r.remaining;
+      quota.textContent = r.remaining > 0 ? t('ai.quota', { n: r.remaining, limit: r.limit }) : t('ai.err.limit');
+      if (r.remaining <= 0) quota.className = 'ads-warn';
+      upd();
+    }).catch(function (e) { quota.textContent = aiErrText(e); quota.className = 'ads-warn'; });
+
+    openDialog({
+      title: t('ai.title'), wide: true,
+      body: h('div', {}, [quota, field('ai.prompt', ta, t('ai.prompt.hint'), 'ads-ai-prompt'), field('ai.aspect', aspect, null, 'ads-ai-aspect'), quality,
+        h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('ai.refs', { max: AI_MAX_REFS })), refsBox])]),
+      actions: [{ label: t('ai.go'), value: 'go', disabled: true }],
+      onOpen: function (dlg, btns) { go = btns.go; upd(); ta.focus(); }
+    }).then(function (v) { if (v === 'go') runAi(biz, o); });
+  }
+  // Makes the picture in the background (10-30 s); the result opens wherever the user is by then.
+  function runAi(biz, o) {
+    aiLast = { prompt: o.prompt, aspect: o.aspect, quality: o.quality, refs: o.refs.slice() };
+    aiJob = { business: biz }; libSync();
+    toast(t('ai.started'));
+    api.generateImage(biz, o).then(function (r) {
+      aiJob = null; libSync();
+      cacheImages([r.image]);
+      if (libView && !stale(libView.tok)) libView.load();
+      showAiResult(r);
+    }, function (e) {
+      aiJob = null; libSync();
+      openDialog({ title: t('ai.err.title'), body: h('p', {}, aiErrText(e)), cancelLabel: 'common.close', actions: [{ label: t('ai.edit'), value: 'edit' }] })
+        .then(function (v) { if (v === 'edit') openAiDialog(); });
+    });
+  }
+  // The picture is already saved; the user can keep it, delete it or make another.
+  function showAiResult(r) {
+    var im = r.image;
+    openDialog({
+      title: t('ai.done.title'), wide: true,
+      body: h('div', { class: 'ads-airesult' }, [
+        h('img', { class: 'ads-airesult__img', src: im.url, alt: im.title, width: String(im.width || 1024), height: String(im.height || 1024) }),
+        h('p', {}, t('ai.done.saved')),
+        h('p', { class: 'ads-note' }, t('ai.quota', { n: r.remaining, limit: r.limit }))
+      ]),
+      cancelLabel: 'ai.close',
+      actions: [{ label: t('common.delete'), value: 'delete', kind: 'danger' }, { label: t('ai.again'), value: 'again' }]
+    }).then(function (v) {
+      if (v === 'again') openAiDialog();
+      if (v !== 'delete') return;
+      api.deleteImage(im.id).then(function () {
+        delete imageCache[im.id];
+        toast(t('ai.deleted'));
+        if (libView && !stale(libView.tok)) libView.load();
+      }).catch(function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+    });
+  }
+  // Settings: asks the server whether Gemini accepts the key (nothing is made, nothing is paid).
+  function testGemini(btn) {
+    btn.disabled = true;
+    api.aiTest(ctx.business).then(function (r) { btn.disabled = false; toast(t('ai.test.ok', { model: r.model })); },
+      function (e) { btn.disabled = false; toast(aiErrText(e), 'act'); });
+  }
+
+  /* ---------------------------------------------------------------------
+     10. Products and stock: upload a stock file, check it, then save
+     --------------------------------------------------------------------- */
+  var stockQuery = '';
+  var STOCK_SHOW = 200; // rows in the table; the search finds the others
+
+  function viewProducts(tok) {
+    var SI = window.AdsStockImport, busy = false, tplBusy = false;
+    var current = []; // this business's stock products (no samples): "new" and "updated" are counted against it
+    var body = h('div', {}, skeleton(4));
+    var status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
+    var picker = h('input', { type: 'file', hidden: true,
+      accept: '.xlsx,.xls,.ods,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet,text/csv' });
+    picker.addEventListener('change', function () { var f = picker.files && picker.files[0]; picker.value = ''; if (f) readFile(f); });
+    render(h('div', {}, [
+      pageHead('nav.products', [
+        h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { if (busy) toast(t('lib.busy'), 'act'); else picker.click(); } }, t('stock.upload')),
+        h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: getTemplate }, t('stock.template')),
+        soonBtn('stock.connect')
+      ]),
+      h('section', { class: 'ads-format', 'aria-labelledby': 'ads-s-fmt' }, [h('h2', { class: 'ads-h3', id: 'ads-s-fmt' }, t('stock.fmt.title')), h('p', {}, rich(t('stock.fmt')))]),
+      picker, status, body
+    ]), 'nav.products');
+    load();
+
+    function load() {
+      api.listProducts(ctx.business, { strict: true }).then(function (list) {
+        if (stale(tok)) return;
+        current = list.filter(function (p) { return !p.sample; });
+        draw(list.filter(function (p) { return p.sample; }));
+      }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(load)); } });
+    }
+    function draw(samples) {
+      body.innerHTML = '';
+      if (current.length) {
+        var last = current.reduce(function (a, p) { return p.updatedAt && p.updatedAt > a ? p.updatedAt : a; }, '');
+        var search = h('input', { type: 'search', id: 'ads-s-q', class: 'ads-input', value: stockQuery, placeholder: t('stock.search'), 'aria-label': t('stock.search'), autocomplete: 'off' });
+        var count = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' }), table = h('div', {});
+        var fill = function () {
+          var q = normName(stockQuery);
+          var hits = current.filter(function (p) { return !q || normName(p.name).indexOf(q) !== -1; });
+          count.textContent = !hits.length ? t('stock.noMatch', { q: stockQuery.trim() })
+            : hits.length > STOCK_SHOW ? t('stock.showing', { shown: num(STOCK_SHOW), n: num(hits.length) }) : '';
+          table.innerHTML = '';
+          if (hits.length) table.appendChild(stockTable(hits.slice(0, STOCK_SHOW)));
+        };
+        search.addEventListener('input', function () { stockQuery = search.value; fill(); });
+        body.appendChild(h('p', { class: 'ads-note' }, t('stock.last', { date: last ? fmtDateTime(last) : '-', n: num(current.length) })));
+        body.appendChild(h('div', { class: 'ads-search' }, search));
+        body.appendChild(count); body.appendChild(table);
+        fill();
+      } else {
+        body.appendChild(emptyState('stock.emptyTitle', 'stock.emptyText'));
+      }
+      if (samples.length) {
+        body.appendChild(h('details', { class: 'ads-details ads-samples' }, [
+          h('summary', {}, t('stock.samples', { n: samples.length })),
+          h('div', { class: 'ads-tablewrap', tabindex: '0', role: 'region', 'aria-label': t('stock.samples', { n: samples.length }) }, h('table', { class: 'ads-table ads-table--stack' }, [
+            h('thead', {}, h('tr', {}, [h('th', { scope: 'col' }, t('stock.col.name')), h('th', { scope: 'col' }, t('stock.col.price'))])),
+            h('tbody', {}, samples.map(function (p) {
+              return h('tr', {}, [h('td', { 'data-label': t('stock.col.name'), class: 'ads-wrap' }, lname(p, 'name')), h('td', { 'data-label': t('stock.col.price'), class: 'ads-num' }, gel(p.price))]);
+            }))
+          ]))
+        ]));
+      }
+    }
+    function stockTable(rows) {
+      var cols = ['stock.col.name', 'stock.col.qty', 'stock.col.price', 'stock.col.updated'];
+      return h('div', { class: 'ads-tablewrap', tabindex: '0', role: 'region', 'aria-label': t('nav.products') }, h('table', { class: 'ads-table ads-table--stack' }, [
+        h('thead', {}, h('tr', {}, cols.map(function (c) { return h('th', { scope: 'col' }, t(c)); }))),
+        h('tbody', {}, rows.map(function (p) {
+          return h('tr', {}, [
+            h('td', { 'data-label': t(cols[0]), class: 'ads-wrap' }, p.name),
+            h('td', { 'data-label': t(cols[1]), class: 'ads-num' }, h('span', {}, p.quantity === 0 ? [qty(0), ' ', pill(t('stock.out'), 'out')] : qty(p.quantity))),
+            h('td', { 'data-label': t(cols[2]), class: 'ads-num' }, gel(p.price)),
+            h('td', { 'data-label': t(cols[3]) }, p.updatedAt ? fmtDateTime(p.updatedAt) : '-')
+          ]);
+        }))
+      ]));
+    }
+    function getTemplate() {
+      if (!SI) { toast(t('stock.err.load'), 'act'); return; }
+      if (tplBusy) return;
+      tplBusy = true;
+      SI.template().then(function () { toast(t('stock.tplDone')); }, function (e) { toast(t(e && e.key ? e.key : 'stock.err.load'), 'act'); })
+        .then(function () { tplBusy = false; });
+    }
+    function readFile(file) {
+      if (!SI) { toast(t('stock.err.load'), 'act'); return; }
+      busy = true; status.textContent = t('stock.reading');
+      SI.read(file).then(function (res) {
+        busy = false; status.textContent = '';
+        if (stale(tok)) return;
+        if (res.error) showFileError(file, res.error); else preview(file, res);
+      }).catch(function (e) {
+        busy = false; status.textContent = '';
+        toast(e && e.key ? t(e.key, e.vars) : t('stock.err.read'), 'act');
+      });
+    }
+    function showFileError(file, err) {
+      openDialog({
+        title: t('stock.err.title'), noCancel: true, actions: [{ label: t('common.close'), value: true }],
+        body: h('div', {}, [h('p', {}, h('strong', {}, file.name)), h('p', {}, t(err.key, err.vars)), h('p', { class: 'ads-note' }, rich(t('stock.fmt')))])
+      });
+    }
+    // What will happen, before anything is saved: the counts, every skipped row, the notes, the first rows.
+    function preview(file, res) {
+      var have = {}, inFile = {}, added = 0, changed = 0, ready = res.rows.length;
+      current.forEach(function (p) { have[normName(p.name)] = true; });
+      res.rows.forEach(function (r) { var k = normName(r.name); inFile[k] = true; if (have[k]) changed++; else added++; });
+      var untouched = current.filter(function (p) { return !inFile[normName(p.name)]; }).length;
+      function colName(c) { return c ? t('stock.pv.col', { title: c.title, letter: c.letter }) : t('stock.pv.noPriceCol'); }
+      var box = h('div', {}, [
+        kv([[t('stock.pv.file'), file.name], [t('stock.pv.sheet'), res.sheet], [t('stock.pv.header'), String(res.headerRow)],
+          [t('stock.pv.columns'), [res.columns.name, res.columns.quantity, res.columns.price].map(colName).join(' · ')]]),
+        h('p', { class: 'ads-total' }, t('stock.pv.summary', { n: num(res.totalRows), r: num(ready), a: num(added), b: num(changed), s: num(res.problems.length) })),
+        untouched ? h('p', { class: 'ads-note' }, t('stock.pv.untouched', { m: num(untouched) })) : null,
+        issues('stock.pv.problems', res.problems, 'act'),
+        issues('stock.pv.notes', res.notes, 'watch'),
+        ready ? firstRows(res.rows.slice(0, 10)) : h('p', { class: 'ads-warn' }, t('stock.pv.nothing'))
+      ]);
+      openDialog({
+        title: t('stock.pv.title'), body: box, wide: true,
+        actions: [{ label: t(ready === 1 ? 'stock.pv.importOne' : 'stock.pv.import', { n: num(ready) }), value: true, disabled: !ready }]
+      }).then(function (yes) { if (yes) save(res.rows); });
+    }
+    // Row-numbered reasons (first 50, then "and N more").
+    function issues(titleKey, list, mod) {
+      if (!list.length) return null;
+      var MAX = 50;
+      var ul = h('ul', { class: 'ads-issues ads-issues--' + mod }, list.slice(0, MAX).map(function (p) {
+        return h('li', {}, [h('strong', {}, t('stock.pv.row', { n: p.row })), ' ', t(p.key, p.vars)]);
+      }));
+      if (list.length > MAX) ul.appendChild(h('li', { class: 'ads-issues__more' }, t('stock.pv.more', { n: num(list.length - MAX) })));
+      return h('div', {}, [h('h3', { class: 'ads-h3' }, t(titleKey, { n: num(list.length) })), ul]);
+    }
+    function firstRows(rows) {
+      var cols = ['stock.pv.rowCol', 'stock.col.name', 'stock.col.qty', 'stock.col.price'];
+      return h('div', {}, [
+        h('h3', { class: 'ads-h3' }, t('stock.pv.first', { n: rows.length })),
+        h('div', { class: 'ads-tablewrap', tabindex: '0', role: 'region', 'aria-label': t('stock.pv.first', { n: rows.length }) }, h('table', { class: 'ads-table ads-table--compact' }, [
+          h('thead', {}, h('tr', {}, cols.map(function (c) { return h('th', { scope: 'col' }, t(c)); }))),
+          h('tbody', {}, rows.map(function (r) {
+            return h('tr', {}, [h('td', {}, String(r.row)), h('td', { class: 'ads-wrap' }, r.name), h('td', { class: 'ads-num' }, qty(r.quantity)), h('td', { class: 'ads-num' }, gel(r.sell_price))]);
+          }))
+        ]))
+      ]);
+    }
+    function save(rows) {
+      busy = true; status.textContent = t('stock.savingStart');
+      api.importStock(ctx.business, rows.map(function (r) { return { name: r.name, quantity: r.quantity, sell_price: r.sell_price }; }), function (done, total) {
+        status.textContent = t('stock.saving', { n: num(done), total: num(total) });
+      }).then(function (r) {
+        toast(t('stock.done', { a: num(r['new']), b: num(r.updated) }));
+      }, function (e) {
+        toast(e && e.saved ? t('stock.partial', { n: num(e.saved), total: num(e.total) }) : t('toast.failed') + ' ' + errText(e), 'act');
+      }).then(function () {
+        busy = false; status.textContent = '';
+        if (!stale(tok)) load();
+      });
+    }
+  }
+
+  /* ---------------------------------------------------------------------
+     11. Settings: what is real today, plus placeholders for later rounds
+     --------------------------------------------------------------------- */
+  // Connections and API keys, grouped (owner's list V-19). Nothing is saved yet: every key field
+  // is disabled, so nobody pastes a real key into a box that does not keep it.
+  // fields: [label key, input type]. connect: joined by signing in later, not by a key.
+  var SERVICES = [
+    ['social', [
+      { id: 'meta', fields: [['set.f.metaToken', 'password'], ['set.f.appId', 'text'], ['set.f.appSecret', 'password']] },
+      { id: 'whatsapp', fields: [['set.f.phoneId', 'text'], ['set.f.wabaId', 'text'], ['set.f.accessToken', 'password']] },
+      { id: 'tiktok', fields: [['set.f.advertiserId', 'text'], ['set.f.accessToken', 'password']] },
+      { id: 'youtube', connect: 'set.connectYoutube' },
+      { id: 'linkedin', fields: [['set.f.orgId', 'text'], ['set.f.accessToken', 'password']] }
+    ]],
+    ['analytics', [{ id: 'ga', fields: [['set.f.measurementId', 'text'], ['set.f.apiSecret', 'password']] }]],
+    ['ai', [
+      { id: 'openai', fields: [['set.f.apiKey', 'password']] },
+      { id: 'gemini', fields: [['set.f.apiKey', 'password']] },
+      { id: 'claude', fields: [['set.f.apiKey', 'password']] }
+    ]],
+    ['files', [
+      { id: 'drive', connect: 'set.connectDrive' },
+      { id: 'pos', fields: [['set.f.apiUrl', 'url'], ['set.f.apiKey', 'password']] }
+    ]]
+  ];
+
+  function viewSettings() {
+    var live = liveMode(), L = settings.limits;
+    var biz = settings.businesses.filter(function (b) { return b.id === ctx.business; })[0] || settings.businesses[0];
+    function card(id, titleKey, kids, mod) {
+      return h('section', { class: 'ads-card' + (mod ? ' ads-card--' + mod : ''), 'aria-labelledby': 'ads-set-' + id },
+        [h('h2', { class: 'ads-h2', id: 'ads-set-' + id }, t(titleKey))].concat(kids));
+    }
+    function btns(list) { return h('div', { class: 'ads-btnrow' }, list); }
+    // One service: a closed row (name + status chip); opened, it shows what it is for, the key fields and the buttons.
+    function service(s) {
+      var onServer = live && (s.id === 'meta' || s.id === 'gemini'); // live mode: these keys already sit in the server's secrets
+      var kids = [h('p', { class: 'ads-note' }, t('set.use.' + s.id))];
+      (s.fields || []).forEach(function (f, i) {
+        var id = 'ads-key-' + s.id + '-' + i;
+        kids.push(field(f[0], h('input', { type: f[1], id: id, class: 'ads-input', disabled: true, autocomplete: 'off', spellcheck: 'false',
+          placeholder: t(onServer ? 'set.keyServer' : 'set.keyPh') }), null, id));
+      });
+      var b = s.connect ? [soonBtn(s.connect)] : [soonBtn('set.save'), soonBtn('set.remove', { danger: true })];
+      if (s.id === 'meta') {
+        b.push(live ? h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testMetaConnection(e.currentTarget); } }, t('health.btn')) : soonBtn('health.btn'));
+      }
+      if (s.id === 'gemini') {
+        b.push(live ? h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testGemini(e.currentTarget); } }, t('health.btn')) : soonBtn('health.btn'));
+      }
+      kids.push(btns(b));
+      return h('details', { class: 'ads-svc' }, [
+        h('summary', { class: 'ads-svc__sum' }, [h('span', { class: 'ads-svc__name' }, t('set.svc.' + s.id)),
+          pill(t(onServer ? 'set.st.server' : 'set.st.none'), onServer ? 'on' : 'off')]),
+        h('div', { class: 'ads-svc__body' }, kids)
+      ]);
+    }
+    var conn = [h('p', {}, t('set.conn.intro')), h('p', { class: 'ads-warn' }, t('set.conn.security'))];
+    SERVICES.forEach(function (g) {
+      conn.push(h('h3', { class: 'ads-h3 ads-svcgroup' }, t('set.grp.' + g[0])));
+      conn.push(h('div', { class: 'ads-svclist' }, g[1].map(function (s) { return service(s); })));
+    });
+    var notify = h('fieldset', { class: 'ads-fieldset', disabled: true }, [h('legend', { class: 'visually-hidden' }, t('set.notify'))].concat(['rejected', 'daily', 'lowStock', 'weekly'].map(function (k) {
+      var id = 'ads-set-n-' + k;
+      return h('label', { class: 'ads-option ads-option--off', for: id }, [h('input', { type: 'checkbox', id: id, disabled: true }), h('span', {}, t('set.n.' + k))]);
+    })));
+    var danger = [['export', false], ['delHistory', true], ['delLibrary', true], ['delProducts', true], ['delAccount', true]].map(function (d) {
+      var id = 'ads-set-d-' + d[0];
+      return h('div', { class: 'ads-dz' }, [h('p', { class: 'ads-dz__text', id: id }, t('set.' + d[0] + '.d')), soonBtn('set.' + d[0], { danger: d[1], describedBy: id })]);
+    });
+    render(h('div', { class: 'ads-settings' }, [
+      pageHead('nav.settings'),
+      h('p', { class: 'ads-note' }, t('set.intro')),
+      card('account', 'set.account', [h('p', {}, t('set.signedIn', { email: user ? user.email : '' })), btns([soonBtn('set.changePassword'), soonBtn('set.signOutAll')])]),
+      card('business', 'set.business', [
+        kv([[t('set.biz.name'), biz.name], [t('set.biz.accounts'), biz.accounts.map(function (a) { return a.name; }).join(', ')], [t('set.biz.currency'), curCode()]]),
+        h('p', { class: 'ads-note' }, t('set.biz.note')),
+        btns([soonBtn('set.biz.edit'), soonBtn('set.biz.add')])
+      ]),
+      card('conn', 'set.conn', conn),
+      card('limits', 'set.limits', [
+        h('p', { class: 'ads-note' }, t(live ? 'set.lim.live' : 'set.lim.mock')),
+        kv([[t('set.lim.daily'), money(L.maxDailyBudget)],
+          [t('set.lim.total'), L.maxTotalBudget != null ? money(L.maxTotalBudget) : t('set.lim.derived', { total: money(L.maxDailyBudget * L.maxDays) })],
+          [t('set.lim.days'), t('set.lim.daysN', { n: L.maxDays })]]),
+        btns([soonBtn('set.lim.change')])
+      ]),
+      card('team', 'set.team', [h('p', {}, t('set.team.members')), h('p', { class: 'ads-note' }, t('set.team.roles')), btns([soonBtn('set.team.invite')])]),
+      card('notify', 'set.notify', [h('p', { class: 'ads-note' }, t('set.notify.note')), notify]),
+      card('data', 'set.data', [h('p', { class: 'ads-note' }, t('set.data.note'))].concat(danger), 'danger')
+    ]), 'nav.settings');
+  }
+
+  /* ---------------------------------------------------------------------
+     12. AI Assistant (mock replies; never acts by itself)
      --------------------------------------------------------------------- */
   function chatLog() { return $('#ads-chat-log'); }
   function addMsg(m) { chat.push(m); drawChat(); }
@@ -1050,13 +1625,17 @@
     }
     if (has(/post|caption|write|draft|პოსტ|ტექსტ/)) {
       return Promise.all([api.listProducts(biz), api.listImages(biz)]).then(function (r) {
-        var prod = r[0][0], caption = AdsI18n.lang() === 'ka'
-          ? settings.georgianTemplates[0].replace('{product}', prod.name_ka).replace('{price}', String(prod.price)) : t('ai.postCaption', { product: prod.name_en });
-        return { role: 'bot', text: t('ai.post'), tool: { kind: 'create_post', params: { business: biz, productId: prod.id, caption: caption, imageId: r[1][0] ? r[1][0].id : '' } } };
+        cacheImages(r[1]);
+        // Prefer a product with a price (stock rows may have none); no product at all -> a plain caption.
+        var prod = r[0].filter(function (x) { return x.price != null; })[0] || r[0][0] || null;
+        var caption = !prod ? t('ai.campaignCaption') : AdsI18n.lang() === 'ka'
+          ? settings.georgianTemplates[0].replace('{product}', prod.name_ka).replace('{price}', priceText(prod.price)) : t('ai.postCaption', { product: prod.name_en });
+        return { role: 'bot', text: t('ai.post'), tool: { kind: 'create_post', params: { business: biz, productId: prod ? prod.id : '', caption: caption, imageId: r[1][0] ? r[1][0].id : '' } } };
       });
     }
     if (has(/campaign|ad\b|ads\b|advert|კამპან|რეკლამ/)) {
       return api.listImages(biz).then(function (imgs) {
+        cacheImages(imgs);
         var accs = accounts(biz);
         return { role: 'bot', text: t('ai.campaign'), tool: { kind: 'create_campaign', params: {
           business: biz, accountId: ctx.account !== 'all' ? ctx.account : accs[0].id, name: t('ai.campaignName', { biz: bizName(biz) }), goal: 'messages', dailyBudget: 2, days: 5,
@@ -1093,7 +1672,7 @@
   }
 
   /* ---------------------------------------------------------------------
-     10. Top bar, language, user menu
+     13. Top bar, language, user menu
      --------------------------------------------------------------------- */
   function syncSideToggle() {
     var b = $('#ads-side-toggle'); if (!b) return;
@@ -1170,14 +1749,27 @@
     $('#ads-reset').addEventListener('click', function () {
       menu(false);
       confirmDialog({ title: t('reset.title'), message: t('reset.text'), confirmLabel: t('reset.confirm'), danger: true }).then(function (ok) {
-        if (ok) api.resetDemo().then(function () { toast(t('reset.done')); refresh(); });
+        if (!ok) return;
+        // The demo uploads are gone too: rebuild the image cache from scratch.
+        api.resetDemo().then(function () { return api.listImages(); }).then(function (list) {
+          imageCache = {}; cacheImages(list); toast(t('reset.done')); refresh();
+        });
+      });
+    });
+    // A file dropped outside a drop zone must not open in this tab (the tool would be left).
+    ['dragover', 'drop'].forEach(function (type) {
+      document.addEventListener(type, function (e) {
+        var dt = e.dataTransfer;
+        if (!dt || [].indexOf.call(dt.types || [], 'Files') === -1 || (e.target.closest && e.target.closest('.ads-drop'))) return;
+        e.preventDefault();
+        if (type === 'dragover') dt.dropEffect = 'none';
       });
     });
     window.addEventListener('hashchange', function () { firstRender = 'focus'; route(); });
   }
 
   /* ---------------------------------------------------------------------
-     11. Gate and boot
+     14. Gate and boot
      --------------------------------------------------------------------- */
   function showGate(kind) {
     $('#ads-app').hidden = true;
@@ -1193,7 +1785,7 @@
     if (started) return;
     started = true;
     user = session.user;
-    api.setActor(user.email);
+    api.setActor(user.email, user.id);
     var liveFailed = false;
     // If the live read fails (not a member, offline) fall back to mock instead of locking the tool.
     var settingsP = api.getSettings().catch(function (e) {
@@ -1203,7 +1795,7 @@
     });
     Promise.all([settingsP, api.listImages()]).then(function (r) {
       settings = r[0];
-      r[1].forEach(function (im) { imageCache[im.id] = im; });
+      cacheImages(r[1]);
       main = $('#ads-main'); shell = $('#ads-shell'); scrim = $('#ads-scrim'); toastBox = $('#ads-toasts'); sidebar = $('#ads-sidebar'); assistant = $('#ads-assistant');
       loadCtx(); buildNav(); buildTopbar(); buildAssistant(); wireShell();
       $('#ads-gate').hidden = true; $('#ads-app').hidden = false;

@@ -11,7 +11,12 @@
    the signed-in user's session token (the supabase client from ads.js):
    ads-meta-health and ads-create-campaign. The Meta token never reaches the
    browser. While the server secret ADS_LIVE is off, create-campaign is a DRY RUN.
+   Since 6 Nov 2026 the live backend also keeps the image library (private
+   bucket ads-library + table ads_images) and the product stock (table
+   ads_products, written only through the RPC ads_import_stock).
    Everything else (campaign lists, posts, numbers) is still mock data.
+   In mock mode, library uploads live in memory only (gone on reload) and the
+   stock sits in the demo state in localStorage.
    No secrets belong in this file.
    ========================================================================= */
 (function () {
@@ -20,6 +25,13 @@
   var STORE_KEY = 'ads_mock_state_v2';   // v2: more sample data, 5 Nov 2026
   var MODE_KEY = 'ads_backend_mode'; // 'mock' (default) | 'live'
   var REVIEW_DELAY_MS = 15000; // mock "Meta review" takes 15 seconds
+
+  /* ---- Image library and stock rules (the bucket and the RPC enforce them again) ---- */
+  var IMG_BUCKET = 'ads-library';
+  var IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }; // mime -> file extension
+  var IMG_EXTS = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+  var IMG_MAX_MB = 10, IMG_MAX_FILES = 20, IMG_MAX_TITLE = 200;
+  var STOCK_BATCH = 1000; // rows per ads_import_stock call (server limit)
 
   /* ---- State machines (one definition, used by the UI and by this file) ---- */
   var FLOW = {
@@ -40,10 +52,12 @@
     }
   };
 
-  var state = null;     // { campaigns, posts, audit }
+  var state = null;     // { campaigns, posts, audit, stock }
   var fixed = null;     // { settings, products, images, insights }
   var actor = 'unknown';
+  var actorId = null;   // auth user id: live audit rows must carry it
   var client = null;    // supabase client, handed over by ads.js (same session as the gate)
+  var uploads = [];     // mock-mode library uploads, newest first: in memory only (object URLs)
 
   /* ---- small helpers ---- */
   function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -150,8 +164,9 @@
       var stored = lsGet();
       if (stored && stored.campaigns && stored.posts && stored.audit) {
         state = stored;
+        if (!state.stock) state.stock = []; // demo states saved before 6 Nov 2026
       } else {
-        state = { campaigns: seedCampaigns(d[4]), posts: seedPosts(d[5]), audit: seedAudit(d[6]) };
+        state = { campaigns: seedCampaigns(d[4]), posts: seedPosts(d[5]), audit: seedAudit(d[6]), stock: [] };
         save();
       }
     });
@@ -437,18 +452,290 @@
       });
     });
   }
-  function listProducts(b) { return init().then(function () { return wait(fixed.products.filter(function (p) { return !b || p.business === b; })); }); }
-  function listImages(b) { return init().then(function () { return wait(fixed.images.filter(function (p) { return !b || p.business === b; })); }); }
   function listAudit() { return init().then(function () { return wait(state.audit); }); }
   function resetDemo() {
     try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
+    uploads.forEach(function (u) { try { URL.revokeObjectURL(u.url); } catch (e) { /* ignore */ } });
+    uploads = [];
     ready = null;
     return init();
   }
 
+  /* ---- live helpers for the library and the stock ---- */
+  // supabase-js answers { data, error }; an error becomes a rejection.
+  function must(r) { if (r.error) throw new Error(r.error.message || 'request failed'); return r.data; }
+  // Every row of a query, 1000 per call (the API returns at most 1000 rows at a time).
+  // build() makes a fresh query each time: a query runs only once.
+  function selectAll(build) {
+    var out = [], size = 1000;
+    function page(from) {
+      return build().range(from, from + size - 1).then(function (r) {
+        var rows = must(r) || [];
+        out = out.concat(rows);
+        return rows.length === size && out.length < 100000 ? page(from + size) : out;
+      });
+    }
+    return page(0);
+  }
+  // Best-effort audit row for library actions (insert-only table). A failure is ignored.
+  function auditLive(action, entity, entityId, payload) {
+    if (!client || !actorId) return;
+    try {
+      client.from('ads_audit').insert({ actor: actorId, actor_email: actor, action: action, entity: entity, entity_id: entityId, ok: true, payload: payload || null })
+        .then(function () { /* ignore */ }, function () { /* ignore */ });
+    } catch (e) { /* ignore */ }
+  }
+  // Error with an i18n key (e.key, e.vars) the UI can translate.
+  function codeError(key, vars) { var e = new Error(key); e.key = key; e.vars = vars || {}; return e; }
+
+  /* ---- image library ---- */
+  // Item: { id, business, kind ('picture' | 'element'), title, title_en, title_ka, url, mime, bytes,
+  //   width, height, createdAt, sample }. Sample images have no url: app.js draws them.
+  function sampleImages(b) {
+    return fixed.images.filter(function (p) { return !b || p.business === b; })
+      .map(function (p) { return Object.assign({}, p, { kind: 'picture', sample: true }); });
+  }
+  function liveImage(r, url) {
+    return { id: r.id, business: r.business_id, kind: r.kind, title: r.title, title_en: r.title, title_ka: r.title, url: url,
+      mime: r.mime, bytes: r.bytes, width: r.width, height: r.height, createdAt: r.created_at, sample: false };
+  }
+  function liveImages(b) {
+    if (!client) return Promise.reject(new Error('no client'));
+    return selectAll(function () {
+      var q = client.from('ads_images').select('id,business_id,kind,title,path,mime,bytes,width,height,created_at');
+      if (b) q = q.eq('business_id', b);
+      return q.order('created_at', { ascending: false }).order('id', { ascending: true });
+    }).then(function (rows) {
+      if (!rows.length) return [];
+      // The bucket is private: one call signs every address, valid for an hour.
+      return client.storage.from(IMG_BUCKET).createSignedUrls(rows.map(function (r) { return r.path; }), 3600).then(function (s) {
+        var urls = {};
+        (must(s) || []).forEach(function (x) { if (x && x.signedUrl && !x.error) urls[x.path] = x.signedUrl; });
+        return rows.map(function (r) { return liveImage(r, urls[r.path] || ''); });
+      });
+    });
+  }
+  // The business's uploads (newest first), then the sample images.
+  // opts.strict: a failed live read rejects (the Library page shows it). Without it the
+  // pickers still get the samples, so a missing table never blocks the rest of the tool.
+  function listImages(b, opts) {
+    return init().then(function () {
+      if (!isLive()) return wait(uploads.filter(function (u) { return !b || u.business === b; }).concat(sampleImages(b)));
+      return liveImages(b).catch(function (e) { if (opts && opts.strict) throw e; return []; })
+        .then(function (mine) { return mine.concat(sampleImages(b)); });
+    });
+  }
+  function mimeOf(file) {
+    var type = String(file.type || '').toLowerCase(), m = /\.([a-z0-9]+)$/i.exec(file.name || '');
+    return type || (m && IMG_EXTS[m[1].toLowerCase()]) || '';
+  }
+  // Checks one picked file against the library rules: null = fine, else { key, vars } (i18n key
+  // of the reason). Used by the upload dialog, and again by uploadImage.
+  function checkImageFile(file) {
+    var type = mimeOf(file);
+    if (/\.(heic|heif)$/i.test(file.name || '') || /^image\/hei[cf]/.test(type)) return { key: 'lib.err.heic' };
+    if (!IMG_TYPES[type]) return { key: 'lib.err.type' };
+    if (file.size > IMG_MAX_MB * 1048576) return { key: 'lib.err.size', vars: { mb: IMG_MAX_MB } };
+    if (!file.size) return { key: 'lib.err.empty' };
+    return null;
+  }
+  // Pixel size, read in the browser before upload (this also proves the file is a readable picture).
+  function imageSize(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), im = new Image();
+      im.onload = function () { URL.revokeObjectURL(url); resolve({ width: im.naturalWidth, height: im.naturalHeight }); };
+      im.onerror = function () { URL.revokeObjectURL(url); reject(codeError('lib.err.decode')); };
+      im.src = url;
+    });
+  }
+  // Title = file name without its extension, max 200 characters.
+  function titleOf(name) { return String(name || '').replace(/\.[^.]*$/, '').replace(/\s+/g, ' ').trim().slice(0, IMG_MAX_TITLE) || 'image'; }
+  // Uploads one picture. kind: 'picture' | 'element'. Resolves with the new library item.
+  function uploadImage(b, file, kind) {
+    return init().then(function () {
+      var bad = checkImageFile(file);
+      if (bad) throw codeError(bad.key, bad.vars);
+      if (kind !== 'picture' && kind !== 'element') throw new Error('bad kind');
+      var mime = mimeOf(file), title = titleOf(file.name);
+      return imageSize(file).then(function (dim) {
+        if (isLive()) return uploadLive(b, file, kind, mime, title, dim);
+        var im = { id: newId('img'), business: b, kind: kind, title: title, title_en: title, title_ka: title, url: URL.createObjectURL(file),
+          mime: mime, bytes: file.size, width: dim.width, height: dim.height, createdAt: new Date().toISOString(), sample: false };
+        uploads.unshift(im);
+        audit('image.upload', 'image', im.id, title + ' | ' + kind + ' | ' + file.size + ' bytes | ' + dim.width + 'x' + dim.height + ' (MOCK: kept in this browser tab only)');
+        save();
+        return wait(im);
+      });
+    });
+  }
+  // LIVE: the file goes to the private bucket first (never overwriting), then the row. If the
+  // row cannot be saved the file is taken out again, so no orphan file stays behind.
+  function uploadLive(b, file, kind, mime, title, dim) {
+    if (!client) return Promise.reject(new Error('no client'));
+    var path = b + '/' + newRequestId() + '.' + IMG_TYPES[mime];
+    var bucket = client.storage.from(IMG_BUCKET);
+    return bucket.upload(path, file, { contentType: mime, upsert: false, cacheControl: '3600' }).then(function (u) {
+      must(u);
+      return client.from('ads_images').insert({ business_id: b, kind: kind, title: title, path: path, mime: mime, bytes: file.size, width: dim.width, height: dim.height })
+        .select('id,business_id,kind,title,path,mime,bytes,width,height,created_at').single()
+        .then(must)
+        .catch(function (err) {
+          return bucket.remove([path]).then(function () { throw err; }, function () { throw err; });
+        });
+    }).then(function (row) {
+      auditLive('image.upload', 'image', row.id, { business_id: b, title: title, kind: kind, bytes: file.size });
+      return bucket.createSignedUrl(path, 3600).then(function (s) { return liveImage(row, (s.data && s.data.signedUrl) || ''); },
+        function () { return liveImage(row, ''); }); // saved; the address comes with the next list
+    });
+  }
+  // Deletes one upload. Sample images are refused.
+  function deleteImage(id) {
+    return init().then(function () {
+      if (fixed.images.some(function (x) { return x.id === id; })) throw codeError('lib.err.sample');
+      if (!isLive()) {
+        var i = uploads.findIndex(function (x) { return x.id === id; });
+        if (i === -1) throw new Error('not found');
+        var im = uploads.splice(i, 1)[0];
+        try { URL.revokeObjectURL(im.url); } catch (e) { /* ignore */ }
+        audit('image.delete', 'image', id, im.title + ' (MOCK)');
+        save();
+        return wait({ ok: true });
+      }
+      if (!client) throw new Error('no client');
+      // The row first (that is what the tool shows), then the file, best effort.
+      return client.from('ads_images').delete().eq('id', id).select('id,business_id,title,path').then(function (r) {
+        var row = (must(r) || [])[0];
+        if (!row) throw new Error('not found');
+        auditLive('image.delete', 'image', id, { business_id: row.business_id, title: row.title });
+        return client.storage.from(IMG_BUCKET).remove([row.path]).then(function () { return { ok: true }; }, function () { return { ok: true }; });
+      });
+    });
+  }
+
+  /* ---- AI pictures: Gemini through the Edge Function ads-generate-image (live only) ---- */
+  // The function keeps the key, checks the daily limit and saves the picture in the library.
+  // Edge Function reply -> the reply, or an Error with the server's code and plain-English message.
+  function fnResult(r) {
+    if (r && r.ok) return r;
+    var err = (r && r.error) || {};
+    var e = new Error(err.message || (r && (r.message || r.msg)) || '');
+    // A function that is not deployed yet answers with the gateway's { code: 'NOT_FOUND' }.
+    e.code = err.code || (r && r.code === 'NOT_FOUND' ? 'not_deployed' : 'server');
+    throw e;
+  }
+  // Today's limit: { remaining, limit, qualities }.
+  function aiImageStatus(b) {
+    if (!isLive()) return Promise.reject(codeError('ai.err.mock'));
+    return callFn('ads-generate-image', { business_id: b, check: true }).then(fnResult);
+  }
+  // Is the Gemini key accepted? { model } (a free call to Google, nothing is made).
+  function aiTest(b) {
+    if (!isLive()) return Promise.reject(codeError('ai.err.mock'));
+    return callFn('ads-generate-image', { business_id: b, test: true }).then(fnResult);
+  }
+  // Makes one picture and saves it in the library. o: { prompt, aspect, quality, refs: [library image ids] }.
+  // Resolves { image (library item), remaining, limit }.
+  function generateImage(b, o) {
+    if (!isLive()) return Promise.reject(codeError('ai.err.mock'));
+    return callFn('ads-generate-image', { business_id: b, prompt: o.prompt, aspect_ratio: o.aspect, quality: o.quality, reference_ids: o.refs || [] })
+      .then(fnResult).then(function (r) {
+        return { image: liveImage(r.image, r.image.url || ''), remaining: r.remaining, limit: r.limit };
+      });
+  }
+
+  /* ---- products and stock ---- */
+  // Item: { id, business, name, name_en, name_ka (= name), quantity, price (sell price in GEL,
+  //   or null), updatedAt, sample }. Sample products have no quantity.
+  function sampleProducts(b) {
+    return fixed.products.filter(function (p) { return !b || p.business === b; })
+      .map(function (p) { return Object.assign({}, p, { name: p.name_en, quantity: null, updatedAt: null, sample: true }); });
+  }
+  function stockItem(id, b, name, quantity, price, at) {
+    return { id: id, business: b, name: name, name_en: name, name_ka: name, quantity: quantity, price: price, updatedAt: at, sample: false };
+  }
+  // Same product = same name with spaces collapsed and case ignored (as in stock-import.js).
+  function stockKey(name) { return String(name).replace(/\s+/g, ' ').trim().toLowerCase(); }
+  function liveProducts(b) {
+    if (!client) return Promise.reject(new Error('no client'));
+    return selectAll(function () {
+      var q = client.from('ads_products').select('id,business_id,name,quantity,sell_price,updated_at');
+      if (b) q = q.eq('business_id', b);
+      return q.order('name', { ascending: true }).order('id', { ascending: true });
+    }).then(function (rows) {
+      return rows.map(function (r) {
+        return stockItem(r.id, r.business_id, r.name, r.quantity == null ? null : Number(r.quantity), r.sell_price == null ? null : Number(r.sell_price), r.updated_at);
+      });
+    });
+  }
+  // The business's stock products (name order), then the sample products. opts.strict as in listImages.
+  function listProducts(b, opts) {
+    return init().then(function () {
+      if (!isLive()) {
+        var mine = state.stock.filter(function (s) { return !b || s.business === b; })
+          .sort(function (x, y) { return x.name.localeCompare(y.name); })
+          .map(function (s) { return stockItem(s.id, s.business, s.name, s.quantity, s.price, s.updatedAt); });
+        return wait(mine.concat(sampleProducts(b)));
+      }
+      return liveProducts(b).catch(function (e) { if (opts && opts.strict) throw e; return []; })
+        .then(function (mine) { return mine.concat(sampleProducts(b)); });
+    });
+  }
+  // rows: [{ name, quantity, sell_price|null }], already checked by stock-import.js.
+  // New names are added; known names get the new quantity, and the new price when the row has
+  // one (null keeps the old price). Products not in the file stay as they are.
+  // Resolves { new, updated }. onProgress(done, total) is optional.
+  function importStock(b, rows, onProgress) {
+    return init().then(function () {
+      var clean = rows.map(function (r) {
+        var name = String(r.name == null ? '' : r.name).replace(/\s+/g, ' ').trim();
+        var q = Number(r.quantity), p = r.sell_price == null ? null : Number(r.sell_price);
+        if (!name || name.length > 300 || !isFinite(q) || q < 0 || (p !== null && (!isFinite(p) || p < 0))) throw new Error('bad stock row: ' + name);
+        return { name: name, quantity: q, sell_price: p };
+      });
+      if (isLive()) return importLive(b, clean, onProgress);
+      var now = new Date().toISOString(), known = {}, added = 0, changed = 0;
+      state.stock.forEach(function (s) { if (s.business === b) known[stockKey(s.name)] = s; });
+      clean.forEach(function (r) {
+        var s = known[stockKey(r.name)];
+        if (s) {
+          s.quantity = r.quantity; if (r.sell_price !== null) s.price = r.sell_price; s.updatedAt = now; changed++;
+        } else {
+          s = { id: newId('sp'), business: b, name: r.name, quantity: r.quantity, price: r.sell_price, updatedAt: now };
+          state.stock.push(s); known[stockKey(r.name)] = s; added++;
+        }
+      });
+      audit('stock.import', 'product', b, added + ' new, ' + changed + ' updated, ' + clean.length + ' rows (MOCK)');
+      save();
+      if (onProgress) onProgress(clean.length, clean.length);
+      return wait({ 'new': added, updated: changed });
+    });
+  }
+  // LIVE: the RPC in batches of 1000 (it writes the audit row itself). When a batch fails the
+  // error tells how many rows were saved before it (error.saved, error.total).
+  function importLive(b, rows, onProgress) {
+    if (!client) return Promise.reject(new Error('no client'));
+    var sum = { 'new': 0, updated: 0 }, done = 0;
+    function next() {
+      if (done >= rows.length) return sum;
+      var batch = rows.slice(done, done + STOCK_BATCH);
+      return client.rpc('ads_import_stock', { p_business: b, p_rows: batch }).then(function (r) {
+        if (r.error) throw new Error(r.error.message || 'import failed');
+        var d = (Array.isArray(r.data) ? r.data[0] : r.data) || {};
+        sum['new'] += Number(d['new']) || 0; sum.updated += Number(d.updated) || 0;
+        done += batch.length;
+        if (onProgress) onProgress(done, rows.length);
+        return next();
+      }).catch(function (err) {
+        if (err.saved == null) { err.saved = done; err.total = rows.length; }
+        throw err;
+      });
+    }
+    return Promise.resolve().then(next);
+  }
+
   window.AdsApi = {
     FLOW: FLOW,
-    setActor: function (e) { actor = e || 'unknown'; },
+    setActor: function (email, id) { actor = email || 'unknown'; actorId = id || null; },
     setClient: function (c) { client = c; },
     mode: mode, setMode: setMode, isLive: isLive,
     metaHealth: metaHealth, listPagePosts: listPagePosts, newRequestId: newRequestId, createCampaignLive: createCampaignLive,
@@ -458,6 +745,11 @@
     listCampaigns: listCampaigns, getCampaign: getCampaign, createCampaign: createCampaign,
     moveCampaign: moveCampaign, duplicateCampaign: duplicateCampaign, getResults: getResults,
     getDashboard: getDashboard, listPosts: listPosts, getPost: getPost, savePost: savePost,
-    movePost: movePost, deletePost: deletePost, listAudit: listAudit, resetDemo: resetDemo
+    movePost: movePost, deletePost: deletePost, listAudit: listAudit, resetDemo: resetDemo,
+    // Image library + stock (6 Nov 2026)
+    imageRules: { accept: 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp', maxMb: IMG_MAX_MB, maxFiles: IMG_MAX_FILES },
+    checkImageFile: checkImageFile, uploadImage: uploadImage, deleteImage: deleteImage, importStock: importStock,
+    // AI pictures with Gemini (6 Nov 2026, live only)
+    aiImageStatus: aiImageStatus, aiTest: aiTest, generateImage: generateImage
   };
 })();
