@@ -199,6 +199,19 @@
 .ads-chart svg { min-width: 520px; width: 100%; max-width: 760px; height: auto; display: block; }
 .ads-chart__tick { font-size: 13px; fill: var(--ink-soft); font-family: var(--font-body); }
 .ads-chart__legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--type-caption); margin: 0 0 var(--space-2); }
+/* Dashboard: the daily chart and "Spend by campaign" side by side from 1400px (the line chart needs ~520px) */
+.ads-dashrow { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); margin-bottom: var(--space-4); align-items: stretch; }
+.ads-dashrow > .ads-card { margin-bottom: 0; }
+@media (min-width: 1400px) { .ads-dashrow { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
+.ads-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.ads-bars__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name value" "track track" "facts facts"; column-gap: var(--space-3); row-gap: var(--space-1); }
+.ads-bars__name { grid-area: name; font-size: var(--type-body-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ads-bars__value { grid-area: value; font-size: var(--type-body-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
+.ads-bars__track { grid-area: track; display: block; height: 10px; }
+.ads-bars__bar { display: block; height: 100%; min-width: 2px; background: var(--accent-deep); border-radius: 0 4px 4px 0; }
+.ads-bars__facts { grid-area: facts; font-size: var(--type-caption); color: var(--ink-soft); }
+.ads-bars__row--other .ads-bars__name { color: var(--ink-soft); }
+.ads-bars__row--other .ads-bars__bar { background: var(--ink-soft); }
 .ads-key::before { content: ""; display: inline-block; width: 24px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: var(--space-2); }
 .ads-key--spend::before { border-color: var(--accent-deep); }
 .ads-key--msg::before { border-color: var(--partner); border-top-style: dashed; }

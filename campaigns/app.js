@@ -457,6 +457,29 @@
     ]);
     return h('div', {}, [legend, wrap, h('details', { class: 'ads-details' }, [h('summary', {}, t('dash.viewTable')), h('div', { class: 'ads-tablewrap', tabindex: '0', role: 'region', 'aria-label': t('dash.viewTable') }, table)])]);
   }
+  // Spend per campaign in the chosen period: thin horizontal bars, biggest first, the values as text
+  // beside them (the bars only show the size). More than BARS_MAX campaigns: the rest is one "Other" row.
+  // Same colour as the spend line of the daily chart. The campaigns table below is the table view.
+  var BARS_MAX = 6;
+  function spendBars(rows) {
+    var list = rows.filter(function (c) { return c.spend > 0; }).sort(function (a, b) { return b.spend - a.spend; });
+    if (!list.length) return h('p', { class: 'ads-note' }, t('dash.noSpend'));
+    if (list.length > BARS_MAX) {
+      var rest = list.slice(BARS_MAX - 1), add = function (k) { return rest.reduce(function (n, c) { return n + (c[k] || 0); }, 0); };
+      list = list.slice(0, BARS_MAX - 1).concat([{ name: t('dash.otherCampaigns', { n: rest.length }), spend: add('spend'), messages: add('messages'), other: true }]);
+    }
+    var max = Math.max.apply(null, list.map(function (c) { return c.spend; }));
+    return h('ul', { class: 'ads-bars' }, list.map(function (c) {
+      var cpm = c.messages ? c.spend / c.messages : null;
+      var facts = t('dash.barFacts', { messages: num(c.messages || 0), cpm: cpm == null ? '-' : money(cpm) });
+      return h('li', { class: 'ads-bars__row' + (c.other ? ' ads-bars__row--other' : ''), title: c.name + ' - ' + money(c.spend) + ' - ' + facts }, [
+        h('span', { class: 'ads-bars__name' }, c.name),
+        h('span', { class: 'ads-bars__value' }, money(c.spend)),
+        h('span', { class: 'ads-bars__track', 'aria-hidden': 'true' }, h('span', { class: 'ads-bars__bar', style: 'width:' + Math.max(0.5, c.spend / max * 100).toFixed(1) + '%' })),
+        h('span', { class: 'ads-bars__facts' }, facts)
+      ]);
+    }));
+  }
 
   /* ---------------------------------------------------------------------
      4. Router and shell
@@ -529,7 +552,12 @@
         return h('li', { class: 'ads-kpi' }, [h('span', { class: 'ads-kpi__label' }, t(c[0])), h('span', { class: 'ads-kpi__value' }, c[1])]);
       })));
       body.appendChild(h('p', { class: 'ads-note' }, t('dash.updated', { time: new Date(d.updatedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }), n: dashRange })));
-      body.appendChild(h('section', { class: 'ads-card', 'aria-labelledby': 'ads-d-chart' }, [h('h2', { class: 'ads-h2', id: 'ads-d-chart' }, t('dash.chartTitle')), lineChart(d.series)]));
+      // The daily chart and, beside it, where the money went (one row on wide screens, stacked below 1400px).
+      body.appendChild(h('div', { class: 'ads-dashrow' }, [
+        h('section', { class: 'ads-card', 'aria-labelledby': 'ads-d-chart' }, [h('h2', { class: 'ads-h2', id: 'ads-d-chart' }, t('dash.chartTitle')), lineChart(d.series)]),
+        h('section', { class: 'ads-card', 'aria-labelledby': 'ads-d-bars' }, [h('h2', { class: 'ads-h2', id: 'ads-d-bars' }, t('dash.byCampaign')),
+          h('p', { class: 'ads-chart__legend' }, t('dash.byCampaignNote', { n: dashRange })), spendBars(d.campaigns)])
+      ]));
       var tbody = h('tbody', {}, d.campaigns.map(function (c) {
         var cpm = c.messages ? c.spend / c.messages : null;
         return h('tr', {}, [
