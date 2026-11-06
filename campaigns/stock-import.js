@@ -44,6 +44,7 @@
       'დასახელება', 'სახელი', 'наименование', 'товар', 'название'],
     quantity: ['quantity', 'qty', 'stock', 'in stock', 'amount', 'count', 'რაოდენობა', 'ნაშთი', 'მარაგი', 'количество', 'остаток', 'кол-во'],
     price: ['product sell price', 'sell price', 'selling price', 'sale price', 'retail price', 'price', 'გასაყიდი ფასი',
+      'გასაყ. ფასი', 'გასაყ ფასი', // the pharmacy's own stock report (6 Nov 2026)
       'საცალო ფასი', 'ფასი', 'цена', 'цена продажи', 'розничная цена']
   };
   // "Sell price (GEL):" -> "sell price": lower-case, anything in brackets, * and : dropped, spaces collapsed.
@@ -160,7 +161,6 @@
       if (isNaN(q)) return bad('stock.p.qtyNaN', { value: shown(rawQty) });
       if (q < 0) return bad('stock.p.qtyNeg', { value: shown(rawQty) });
       var key = nameKey(name);
-      if (seen[key]) return bad('stock.p.dup', { n: seen[key] });
       // A bad price never blocks the row: it is imported without one, with a note.
       var price = null;
       if (cols.price && !isBlank(rawPrice)) {
@@ -169,8 +169,18 @@
         else if (p < 0) notes.push({ row: row, key: 'stock.n.priceNeg', vars: { value: shown(rawPrice) } });
         else price = Math.round(p * 100) / 100;
       }
-      seen[key] = row;
-      ready.push({ row: row, name: name, quantity: Math.round(q * 1000) / 1000, sell_price: price });
+      // The same product again: stock reports list every batch on its own row, so the
+      // quantities are added up. The first price stays; a different one gets a note.
+      var first = seen[key];
+      if (first) {
+        first.quantity = Math.round((first.quantity + q) * 1000) / 1000;
+        if (price !== null && first.sell_price === null) first.sell_price = price;
+        else if (price !== null && price !== first.sell_price) notes.push({ row: row, key: 'stock.n.priceDiff', vars: { n: first.row, value: price } });
+        notes.push({ row: row, key: 'stock.n.merged', vars: { n: first.row } });
+        return;
+      }
+      seen[key] = { row: row, name: name, quantity: Math.round(q * 1000) / 1000, sell_price: price };
+      ready.push(seen[key]);
     });
     function col(x) { return x ? { letter: X.utils.encode_col(x.c), title: x.title } : null; }
     return {

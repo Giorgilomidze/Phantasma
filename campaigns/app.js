@@ -1046,7 +1046,7 @@
   // Shows the running upload or AI picture (if any) in the Library view that is on screen now.
   function libSync() {
     if (!libView || stale(libView.tok)) return;
-    libView.status.textContent = libJob ? t('lib.progress', { n: libJob.n, total: libJob.total }) : aiJob ? t('ai.working') : '';
+    libView.status.textContent = libJob ? t('lib.progress', { n: libJob.n, total: libJob.total }) : aiJob ? t('aimg.working') : '';
   }
   function hasFiles(e) { var ty = e.dataTransfer && e.dataTransfer.types; return !!ty && [].indexOf.call(ty, 'Files') !== -1; }
 
@@ -1203,28 +1203,28 @@
     if (e && e.key) return t(e.key, e.vars);
     if (c === 'network') return t('srv.network');
     if (c === 'not_member' || c === 'no_token' || c === 'bad_token') return t('srv.access');
-    if (c === 'not_deployed') return t('ai.err.notDeployed');
-    if (c === 'daily_limit') return t('ai.err.limit');
-    if (c === 'no_gemini_key' || c === 'gemini_key') return t('ai.err.key');
+    if (c === 'not_deployed') return t('aimg.err.notDeployed');
+    if (c === 'daily_limit') return t('aimg.err.limit');
+    if (c === 'no_gemini_key' || c === 'gemini_key') return t('aimg.err.key');
     return (e && e.message) || t('common.errorText');
   }
   // The form: description, format, quality, optional library pictures to start from.
   function openAiDialog() {
-    if (!liveMode()) { toast(t('ai.err.mock'), 'act'); return; }
-    if (aiJob) { toast(t('ai.busy'), 'act'); return; }
+    if (!liveMode()) { toast(t('aimg.err.mock'), 'act'); return; }
+    if (aiJob) { toast(t('aimg.busy'), 'act'); return; }
     var biz = ctx.business, remaining = null, go = null;
     var o = { prompt: aiLast.prompt, aspect: aiLast.aspect, quality: aiLast.quality, refs: aiLast.refs.slice() };
-    var quota = h('p', { class: 'ads-note', 'aria-live': 'polite' }, t('ai.quota.loading'));
-    var ta = h('textarea', { id: 'ads-ai-prompt', class: 'ads-input ads-textarea', rows: '5', maxlength: '2000', placeholder: t('ai.prompt.ph'), 'aria-describedby': 'ads-ai-prompt-hint' });
+    var quota = h('p', { class: 'ads-note', 'aria-live': 'polite' }, t('aimg.quota.loading'));
+    var ta = h('textarea', { id: 'ads-ai-prompt', class: 'ads-input ads-textarea', rows: '5', maxlength: '2000', placeholder: t('aimg.prompt.ph'), 'aria-describedby': 'ads-ai-prompt-hint' });
     ta.value = o.prompt;
     ta.addEventListener('input', function () { o.prompt = ta.value; upd(); });
-    var aspect = select('ads-ai-aspect', AI_ASPECTS.map(function (a) { return [a, t('ai.aspect.' + a.replace(':', 'x'))]; }), o.aspect, function (v) { o.aspect = v; });
-    var quality = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('ai.quality'))].concat(['standard', 'high'].map(function (q) {
+    var aspect = select('ads-ai-aspect', AI_ASPECTS.map(function (a) { return [a, t('aimg.aspect.' + a.replace(':', 'x'))]; }), o.aspect, function (v) { o.aspect = v; });
+    var quality = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('aimg.quality'))].concat(['standard', 'high'].map(function (q) {
       var r = h('input', { type: 'radio', name: 'ads-ai-q', id: 'ads-ai-q-' + q, value: q, checked: q === o.quality });
       r.addEventListener('change', function () { o.quality = q; });
-      return h('label', { class: 'ads-option', for: 'ads-ai-q-' + q }, [r, h('span', {}, [h('strong', {}, t('ai.q.' + q)), h('span', { class: 'ads-sub' }, t('ai.q.' + q + '.d'))])]);
+      return h('label', { class: 'ads-option', for: 'ads-ai-q-' + q }, [r, h('span', {}, [h('strong', {}, t('aimg.q.' + q)), h('span', { class: 'ads-sub' }, t('aimg.q.' + q + '.d'))])]);
     })));
-    var refsBox = h('div', {}, h('p', { class: 'ads-note' }, t('ai.loading')));
+    var refsBox = h('div', {}, h('p', { class: 'ads-note' }, t('aimg.loading')));
     function upd() { if (go) go.disabled = !(remaining > 0 && o.prompt.replace(/\s+/g, ' ').trim().length >= 3); }
 
     // The business's own uploads can be a starting point (a product photo, the logo).
@@ -1232,9 +1232,9 @@
       var mine = list.filter(function (x) { return !x.sample && x.url; }), boxes = [];
       o.refs = o.refs.filter(function (id) { return mine.some(function (x) { return x.id === id; }); });
       refsBox.innerHTML = '';
-      if (!mine.length) { refsBox.appendChild(h('p', { class: 'ads-note' }, t('ai.refs.none'))); return; }
+      if (!mine.length) { refsBox.appendChild(h('p', { class: 'ads-note' }, t('aimg.refs.none'))); return; }
       function limit() { boxes.forEach(function (cb) { cb.disabled = !cb.checked && o.refs.length >= AI_MAX_REFS; }); }
-      refsBox.appendChild(h('p', { class: 'ads-hint' }, t('ai.refs.hint')));
+      refsBox.appendChild(h('p', { class: 'ads-hint' }, t('aimg.refs.hint')));
       refsBox.appendChild(h('ul', { class: 'ads-aipicks' }, mine.map(function (im) {
         var id = 'ads-ai-ref-' + im.id;
         var cb = h('input', { type: 'checkbox', id: id, value: im.id, checked: o.refs.indexOf(im.id) !== -1 });
@@ -1246,20 +1246,20 @@
         return h('li', {}, h('label', { class: 'ads-aipick', for: id }, [cb, h('img', { src: im.url, alt: '', loading: 'lazy' }), h('span', { class: 'ads-aipick__name' }, im.title)]));
       })));
       limit();
-    }).catch(function () { refsBox.innerHTML = ''; refsBox.appendChild(h('p', { class: 'ads-note' }, t('ai.refs.none'))); });
+    }).catch(function () { refsBox.innerHTML = ''; refsBox.appendChild(h('p', { class: 'ads-note' }, t('aimg.refs.none'))); });
 
     api.aiImageStatus(biz).then(function (r) {
       remaining = r.remaining;
-      quota.textContent = r.remaining > 0 ? t('ai.quota', { n: r.remaining, limit: r.limit }) : t('ai.err.limit');
+      quota.textContent = r.remaining > 0 ? t('aimg.quota', { n: r.remaining, limit: r.limit }) : t('aimg.err.limit');
       if (r.remaining <= 0) quota.className = 'ads-warn';
       upd();
     }).catch(function (e) { quota.textContent = aiErrText(e); quota.className = 'ads-warn'; });
 
     openDialog({
-      title: t('ai.title'), wide: true,
-      body: h('div', {}, [quota, field('ai.prompt', ta, t('ai.prompt.hint'), 'ads-ai-prompt'), field('ai.aspect', aspect, null, 'ads-ai-aspect'), quality,
-        h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('ai.refs', { max: AI_MAX_REFS })), refsBox])]),
-      actions: [{ label: t('ai.go'), value: 'go', disabled: true }],
+      title: t('aimg.title'), wide: true,
+      body: h('div', {}, [quota, field('aimg.prompt', ta, t('aimg.prompt.hint'), 'ads-ai-prompt'), field('aimg.aspect', aspect, null, 'ads-ai-aspect'), quality,
+        h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('aimg.refs', { max: AI_MAX_REFS })), refsBox])]),
+      actions: [{ label: t('aimg.go'), value: 'go', disabled: true }],
       onOpen: function (dlg, btns) { go = btns.go; upd(); ta.focus(); }
     }).then(function (v) { if (v === 'go') runAi(biz, o); });
   }
@@ -1267,7 +1267,7 @@
   function runAi(biz, o) {
     aiLast = { prompt: o.prompt, aspect: o.aspect, quality: o.quality, refs: o.refs.slice() };
     aiJob = { business: biz }; libSync();
-    toast(t('ai.started'));
+    toast(t('aimg.started'));
     api.generateImage(biz, o).then(function (r) {
       aiJob = null; libSync();
       cacheImages([r.image]);
@@ -1275,7 +1275,7 @@
       showAiResult(r);
     }, function (e) {
       aiJob = null; libSync();
-      openDialog({ title: t('ai.err.title'), body: h('p', {}, aiErrText(e)), cancelLabel: 'common.close', actions: [{ label: t('ai.edit'), value: 'edit' }] })
+      openDialog({ title: t('aimg.err.title'), body: h('p', {}, aiErrText(e)), cancelLabel: 'common.close', actions: [{ label: t('aimg.edit'), value: 'edit' }] })
         .then(function (v) { if (v === 'edit') openAiDialog(); });
     });
   }
@@ -1283,20 +1283,20 @@
   function showAiResult(r) {
     var im = r.image;
     openDialog({
-      title: t('ai.done.title'), wide: true,
+      title: t('aimg.done.title'), wide: true,
       body: h('div', { class: 'ads-airesult' }, [
         h('img', { class: 'ads-airesult__img', src: im.url, alt: im.title, width: String(im.width || 1024), height: String(im.height || 1024) }),
-        h('p', {}, t('ai.done.saved')),
-        h('p', { class: 'ads-note' }, t('ai.quota', { n: r.remaining, limit: r.limit }))
+        h('p', {}, t('aimg.done.saved')),
+        h('p', { class: 'ads-note' }, t('aimg.quota', { n: r.remaining, limit: r.limit }))
       ]),
-      cancelLabel: 'ai.close',
-      actions: [{ label: t('common.delete'), value: 'delete', kind: 'danger' }, { label: t('ai.again'), value: 'again' }]
+      cancelLabel: 'aimg.close',
+      actions: [{ label: t('common.delete'), value: 'delete', kind: 'danger' }, { label: t('aimg.again'), value: 'again' }]
     }).then(function (v) {
       if (v === 'again') openAiDialog();
       if (v !== 'delete') return;
       api.deleteImage(im.id).then(function () {
         delete imageCache[im.id];
-        toast(t('ai.deleted'));
+        toast(t('aimg.deleted'));
         if (libView && !stale(libView.tok)) libView.load();
       }).catch(function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
     });
@@ -1304,7 +1304,7 @@
   // Settings: asks the server whether Gemini accepts the key (nothing is made, nothing is paid).
   function testGemini(btn) {
     btn.disabled = true;
-    api.aiTest(ctx.business).then(function (r) { btn.disabled = false; toast(t('ai.test.ok', { model: r.model })); },
+    api.aiTest(ctx.business).then(function (r) { btn.disabled = false; toast(t('aimg.test.ok', { model: r.model })); },
       function (e) { btn.disabled = false; toast(aiErrText(e), 'act'); });
   }
 

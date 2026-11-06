@@ -625,18 +625,18 @@
   }
   // Today's limit: { remaining, limit, qualities }.
   function aiImageStatus(b) {
-    if (!isLive()) return Promise.reject(codeError('ai.err.mock'));
+    if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
     return callFn('ads-generate-image', { business_id: b, check: true }).then(fnResult);
   }
   // Is the Gemini key accepted? { model } (a free call to Google, nothing is made).
   function aiTest(b) {
-    if (!isLive()) return Promise.reject(codeError('ai.err.mock'));
+    if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
     return callFn('ads-generate-image', { business_id: b, test: true }).then(fnResult);
   }
   // Makes one picture and saves it in the library. o: { prompt, aspect, quality, refs: [library image ids] }.
   // Resolves { image (library item), remaining, limit }.
   function generateImage(b, o) {
-    if (!isLive()) return Promise.reject(codeError('ai.err.mock'));
+    if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
     return callFn('ads-generate-image', { business_id: b, prompt: o.prompt, aspect_ratio: o.aspect, quality: o.quality, reference_ids: o.refs || [] })
       .then(fnResult).then(function (r) {
         return { image: liveImage(r.image, r.image.url || ''), remaining: r.remaining, limit: r.limit };
