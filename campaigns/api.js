@@ -14,7 +14,15 @@
    Since 6 Nov 2026 the live backend also keeps the image library (private
    bucket ads-library + table ads_images) and the product stock (table
    ads_products, written only through the RPC ads_import_stock).
-   Everything else (campaign lists, posts, numbers) is still mock data.
+   Also 6 Nov 2026 (supabase/0029, run by the owner): product details (photo,
+   display name, English name, note for the picture AI; RPC
+   ads_set_product_details), picture style groups (table ads_style_groups:
+   FRAME, TAG, BG ... are data, managed in the tool), their options (table
+   ads_styles) and the prompt template (table ads_picture_settings). 0029 holds
+   no content: everything is typed in or imported in the tool. Until 0029 is
+   run those calls fail with the i18n key sty.err.db; nothing else breaks.
+   Everything else (campaign lists, posts, numbers) is still mock data. A post
+   holds up to 6 products (productIds) and up to 10 pictures (imageIds).
    In mock mode, library uploads live in memory only (gone on reload) and the
    stock sits in the demo state in localStorage.
    No secrets belong in this file.
@@ -32,6 +40,10 @@
   var IMG_EXTS = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
   var IMG_MAX_MB = 10, IMG_MAX_FILES = 20, IMG_MAX_TITLE = 200;
   var STOCK_BATCH = 1000; // rows per ads_import_stock call (server limit)
+  var POST_MAX_PRODUCTS = 6, POST_MAX_IMAGES = 10; // per post (the composer enforces them too)
+  var PIC_ASPECTS = ['3:4', '4:5', '1:1', '9:16', '16:9', '4:3']; // the Edge Function's formats; 3:4 is the default
+  var GROUP_KINDS = ['element', 'picture'];                         // how a group's reference pictures are stored
+  var RESERVED_TOKENS = ['NAME', 'KA', 'TYPE', 'PRICE', 'TEXT', 'RULES']; // filled in by the platform
 
   /* ---- State machines (one definition, used by the UI and by this file) ---- */
   var FLOW = {
@@ -165,12 +177,21 @@
       if (stored && stored.campaigns && stored.posts && stored.audit) {
         state = stored;
         if (!state.stock) state.stock = []; // demo states saved before 6 Nov 2026
+        state.posts.forEach(normPost);      // ... and posts saved with one product / one picture
       } else {
         state = { campaigns: seedCampaigns(d[4]), posts: seedPosts(d[5]), audit: seedAudit(d[6]), stock: [] };
         save();
       }
     });
     return ready;
+  }
+  // Posts hold lists since 6 Nov 2026: productId / imageId (old demo state, mock/posts.json)
+  // become productIds / imageIds ([x] or []).
+  function normPost(p) {
+    if (!Array.isArray(p.productIds)) p.productIds = p.productId ? [p.productId] : [];
+    if (!Array.isArray(p.imageIds)) p.imageIds = p.imageId ? [p.imageId] : [];
+    delete p.productId; delete p.imageId;
+    return p;
   }
   function seedCampaigns(list) {
     var t = today();
@@ -190,7 +211,7 @@
         if (p.status === 'published') p.publishedAt = iso; else p.scheduledAt = iso;
       }
       delete p.dateOffset;
-      return p;
+      return normPost(p);
     });
   }
   function seedAudit(list) {
@@ -393,16 +414,26 @@
       return wait(p);
     });
   }
+  // Ids without blanks and repeats, in the given order.
+  function idList(v) {
+    var out = [];
+    (Array.isArray(v) ? v : []).forEach(function (x) { x = x == null ? '' : String(x); if (x && out.indexOf(x) === -1) out.push(x); });
+    return out;
+  }
   // Create or update a post. Only drafts can be edited.
+  // d: { id?, business, caption, productIds: [] (max 6), imageIds: [] (max 10, order = order in the post) }
   function savePost(d, via) {
     return init().then(function () {
+      var prods = idList(d.productIds), imgs = idList(d.imageIds);
+      if (prods.length > POST_MAX_PRODUCTS) throw codeError('pp.max', { max: POST_MAX_PRODUCTS });
+      if (imgs.length > POST_MAX_IMAGES) throw codeError('pp.img.max', { max: POST_MAX_IMAGES });
       var p = d.id ? state.posts.filter(function (x) { return x.id === d.id; })[0] : null;
       if (p) {
         if (p.status !== 'draft') throw new Error('only drafts can be edited');
-        p.productId = d.productId || null; p.caption = d.caption; p.imageId = d.imageId || null;
-        audit('post.saved', 'post', p.id, 'draft updated');
+        p.productIds = prods; p.caption = d.caption; p.imageIds = imgs;
+        audit('post.saved', 'post', p.id, 'draft updated | ' + prods.length + ' product(s), ' + imgs.length + ' picture(s)');
       } else {
-        p = { id: newId('post'), business: d.business, status: 'draft', productId: d.productId || null, caption: d.caption, imageId: d.imageId || null };
+        p = { id: newId('post'), business: d.business, status: 'draft', productIds: prods, caption: d.caption, imageIds: imgs };
         state.posts.unshift(p);
         audit('post.created', 'post', p.id, 'draft created' + (via ? ' | via ' + via : ''));
       }
@@ -550,13 +581,15 @@
   }
   // Title = file name without its extension, max 200 characters.
   function titleOf(name) { return String(name || '').replace(/\.[^.]*$/, '').replace(/\s+/g, ' ').trim().slice(0, IMG_MAX_TITLE) || 'image'; }
-  // Uploads one picture. kind: 'picture' | 'element'. Resolves with the new library item.
-  function uploadImage(b, file, kind) {
+  // Uploads one picture. kind: 'picture' | 'element'. opts.title (optional) replaces the
+  // file-name title (product photos carry the product name). Resolves with the new library item.
+  function uploadImage(b, file, kind, opts) {
     return init().then(function () {
       var bad = checkImageFile(file);
       if (bad) throw codeError(bad.key, bad.vars);
       if (kind !== 'picture' && kind !== 'element') throw new Error('bad kind');
-      var mime = mimeOf(file), title = titleOf(file.name);
+      var own = opts && opts.title ? String(opts.title).replace(/\s+/g, ' ').trim().slice(0, IMG_MAX_TITLE) : '';
+      var mime = mimeOf(file), title = own || titleOf(file.name);
       return imageSize(file).then(function (dim) {
         if (isLive()) return uploadLive(b, file, kind, mime, title, dim);
         var im = { id: newId('img'), business: b, kind: kind, title: title, title_en: title, title_ka: title, url: URL.createObjectURL(file),
@@ -633,11 +666,12 @@
     if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
     return callFn('ads-generate-image', { business_id: b, test: true }).then(fnResult);
   }
-  // Makes one picture and saves it in the library. o: { prompt, aspect, quality, refs: [library image ids] }.
+  // Makes one picture and saves it in the library. o: { prompt, aspect, quality, refs: [library image ids],
+  // title (optional library title; a function without title support ignores it) }.
   // Resolves { image (library item), remaining, limit }.
   function generateImage(b, o) {
     if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
-    return callFn('ads-generate-image', { business_id: b, prompt: o.prompt, aspect_ratio: o.aspect, quality: o.quality, reference_ids: o.refs || [] })
+    return callFn('ads-generate-image', { business_id: b, prompt: o.prompt, aspect_ratio: o.aspect, quality: o.quality, reference_ids: o.refs || [], title: o.title || undefined })
       .then(fnResult).then(function (r) {
         return { image: liveImage(r.image, r.image.url || ''), remaining: r.remaining, limit: r.limit };
       });
@@ -645,25 +679,35 @@
 
   /* ---- products and stock ---- */
   // Item: { id, business, name, name_en, name_ka (= name), quantity, price (sell price in GEL,
-  //   or null), updatedAt, sample }. Sample products have no quantity.
+  //   or null), updatedAt, sample, and the details (0029): imageId (library picture or null),
+  //   displayName (Georgian name on pictures and in posts; '' = the stock name), nameEn (English
+  //   name for the picture AI), aiNote (short English description for the picture AI) }.
+  // Sample products have no quantity and no details.
   function sampleProducts(b) {
     return fixed.products.filter(function (p) { return !b || p.business === b; })
-      .map(function (p) { return Object.assign({}, p, { name: p.name_en, quantity: null, updatedAt: null, sample: true }); });
+      .map(function (p) {
+        return Object.assign({}, p, { name: p.name_en, quantity: null, updatedAt: null, sample: true, imageId: null, displayName: '', nameEn: '', aiNote: '' });
+      });
   }
-  function stockItem(id, b, name, quantity, price, at) {
-    return { id: id, business: b, name: name, name_en: name, name_ka: name, quantity: quantity, price: price, updatedAt: at, sample: false };
+  // s: { id, business, name, quantity, price, updatedAt, imageId, displayName, nameEn, aiNote }
+  function stockItem(s) {
+    return { id: s.id, business: s.business, name: s.name, name_en: s.name, name_ka: s.name, quantity: s.quantity, price: s.price, updatedAt: s.updatedAt,
+      sample: false, imageId: s.imageId || null, displayName: s.displayName || '', nameEn: s.nameEn || '', aiNote: s.aiNote || '' };
   }
   // Same product = same name with spaces collapsed and case ignored (as in stock-import.js).
   function stockKey(name) { return String(name).replace(/\s+/g, ' ').trim().toLowerCase(); }
   function liveProducts(b) {
     if (!client) return Promise.reject(new Error('no client'));
     return selectAll(function () {
-      var q = client.from('ads_products').select('id,business_id,name,quantity,sell_price,updated_at');
+      // '*': the detail columns of 0029 simply appear once it is run; before that they are missing.
+      var q = client.from('ads_products').select('*');
       if (b) q = q.eq('business_id', b);
       return q.order('name', { ascending: true }).order('id', { ascending: true });
     }).then(function (rows) {
       return rows.map(function (r) {
-        return stockItem(r.id, r.business_id, r.name, r.quantity == null ? null : Number(r.quantity), r.sell_price == null ? null : Number(r.sell_price), r.updated_at);
+        return stockItem({ id: r.id, business: r.business_id, name: r.name, quantity: r.quantity == null ? null : Number(r.quantity),
+          price: r.sell_price == null ? null : Number(r.sell_price), updatedAt: r.updated_at,
+          imageId: r.image_id, displayName: r.display_name, nameEn: r.name_en, aiNote: r.ai_note });
       });
     });
   }
@@ -673,11 +717,193 @@
       if (!isLive()) {
         var mine = state.stock.filter(function (s) { return !b || s.business === b; })
           .sort(function (x, y) { return x.name.localeCompare(y.name); })
-          .map(function (s) { return stockItem(s.id, s.business, s.name, s.quantity, s.price, s.updatedAt); });
+          .map(stockItem);
         return wait(mine.concat(sampleProducts(b)));
       }
       return liveProducts(b).catch(function (e) { if (opts && opts.strict) throw e; return []; })
         .then(function (mine) { return mine.concat(sampleProducts(b)); });
+    });
+  }
+  // One-line text, max length; empty -> null (the server clears the field).
+  function cleanText(v, max) { var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); return s ? s.slice(0, max) : null; }
+  // Photo and names of one stock product. d: { imageId, displayName, nameEn, aiNote }; null / empty clears.
+  // Resolves with the saved values { imageId, displayName, nameEn, aiNote } ('' for an empty text).
+  function setProductDetails(productId, d) {
+    d = d || {};
+    return init().then(function () {
+      if (fixed.products.some(function (p) { return p.id === productId; })) throw codeError('pd.err.sample');
+      var v = { imageId: d.imageId ? String(d.imageId) : null, displayName: cleanText(d.displayName, 200), nameEn: cleanText(d.nameEn, 200), aiNote: cleanText(d.aiNote, 500) };
+      var out = { imageId: v.imageId, displayName: v.displayName || '', nameEn: v.nameEn || '', aiNote: v.aiNote || '' };
+      if (!isLive()) {
+        var s = state.stock.filter(function (x) { return x.id === productId; })[0];
+        if (!s) throw new Error('not found');
+        s.imageId = out.imageId; s.displayName = out.displayName; s.nameEn = out.nameEn; s.aiNote = out.aiNote;
+        audit('product.details', 'product', s.id, s.name + ' | photo ' + (out.imageId ? 'set' : 'none') + (out.displayName ? ' | shown as ' + out.displayName : '') + ' (MOCK)');
+        save();
+        return wait(out);
+      }
+      if (!client) throw new Error('no client');
+      return client.rpc('ads_set_product_details', { p_product: productId, p_image: v.imageId, p_display_name: v.displayName, p_name_en: v.nameEn, p_ai_note: v.aiNote })
+        .then(function (r) { mustDb(r); return out; });
+    });
+  }
+
+  /* ---- picture styles and the prompt template (live only; tables of supabase/0029) ---- */
+  // Before 0029 is run the table / column / function is missing: Postgres 42P01 / 42703,
+  // PostgREST PGRST202 / PGRST204 / PGRST205, or a message naming the missing object.
+  var MISSING_DB = ['42P01', '42703', 'PGRST202', 'PGRST204', 'PGRST205'];
+  function missingDb(err) {
+    if (!err) return false;
+    var m = String(err.message || '');
+    return MISSING_DB.indexOf(String(err.code || '')) !== -1 ||
+      /\b(relation|table|column|function)\b[^\n]*does not exist/i.test(m) || /could not find the [^\n]*schema cache/i.test(m);
+  }
+  // supabase-js error -> an Error; a missing 0029 object -> the key sty.err.db (translated by the UI).
+  function dbError(err) { return missingDb(err) ? codeError('sty.err.db') : new Error((err && err.message) || 'request failed'); }
+  function mustDb(r) { if (r.error) throw dbError(r.error); return r.data; }
+  function liveOnly() {
+    if (!isLive()) return Promise.reject(codeError('sty.mock'));
+    if (!client) return Promise.reject(new Error('no client'));
+    return null;
+  }
+  // Group item: { id, business, token ('FRAME', used as {FRAME} in the template), name, prefix (one capital
+  //   letter of the option codes), nameColor (its options carry the colour of the name written on the
+  //   picture; at most one group), pictureKind ('element' | 'picture': how its reference pictures are stored), sort }
+  function groupItem(r) {
+    return { id: r.id, business: r.business_id, token: r.token || '', name: r.name || '', prefix: r.prefix || '', nameColor: r.name_color === true,
+      pictureKind: r.picture_kind === 'picture' ? 'picture' : 'element', sort: r.sort == null ? 0 : Number(r.sort) };
+  }
+  function listStyleGroups(b) {
+    return liveOnly() || client.from('ads_style_groups').select('*').eq('business_id', b).then(mustDb).then(function (rows) {
+      return (rows || []).map(groupItem).sort(function (x, y) { return (x.sort - y.sort) || x.token.localeCompare(y.token); });
+    });
+  }
+  // Insert (no id: needs business, token, name, prefix) or update (id: only the fields given).
+  // Resolves with the saved group item.
+  function saveStyleGroup(g) {
+    var stop = liveOnly(); if (stop) return stop;
+    g = g || {};
+    var row = {};
+    if (g.token !== undefined) {
+      row.token = String(g.token || '').trim().toUpperCase();
+      if (!/^[A-Z][A-Z0-9_]{0,19}$/.test(row.token)) return Promise.reject(codeError('sty.grp.err.token'));
+      if (RESERVED_TOKENS.indexOf(row.token) !== -1) return Promise.reject(codeError('sty.grp.err.reserved', { token: row.token }));
+    }
+    if (g.name !== undefined) {
+      row.name = String(g.name || '').replace(/\s+/g, ' ').trim().slice(0, 60); // 0029: max 60
+      if (!row.name) return Promise.reject(codeError('sty.grp.err.name'));
+    }
+    if (g.prefix !== undefined) {
+      row.prefix = String(g.prefix || '').trim().toUpperCase();
+      if (!/^[A-Z]$/.test(row.prefix)) return Promise.reject(codeError('sty.grp.err.prefix'));
+    }
+    if (g.nameColor !== undefined) row.name_color = !!g.nameColor;
+    if (g.pictureKind !== undefined) {
+      if (GROUP_KINDS.indexOf(g.pictureKind) === -1) return Promise.reject(new Error('bad picture kind'));
+      row.picture_kind = g.pictureKind;
+    }
+    if (g.sort !== undefined) row.sort = Math.round(Number(g.sort)) || 0;
+    var q = g.id ? client.from('ads_style_groups').update(row).eq('id', g.id)
+      : client.from('ads_style_groups').insert(Object.assign({ business_id: g.business }, row));
+    return q.select('*').single().then(function (r) {
+      if (r.error && r.error.code === '23505') throw codeError('sty.grp.err.taken');
+      var saved = mustDb(r);
+      auditLive(g.id ? 'style_group.update' : 'style_group.create', 'style_group', saved.id, { business_id: saved.business_id, token: saved.token, fields: Object.keys(row) });
+      return groupItem(saved);
+    });
+  }
+  // Deletes a group; the database deletes its options with it (their library pictures stay).
+  function deleteStyleGroup(id) {
+    return liveOnly() || client.from('ads_style_groups').delete().eq('id', id).select('id,business_id,token').then(mustDb).then(function (rows) {
+      var r = (rows || [])[0];
+      if (!r) throw new Error('not found');
+      auditLive('style_group.delete', 'style_group', id, { business_id: r.business_id, token: r.token });
+      return { ok: true };
+    });
+  }
+  // Option item: { id, business, groupId, code ('F2'), name, prompt, imageId, textColor ('#rrggbb' or null;
+  //   used in the name-colour group), active, sort }
+  function styleItem(r) {
+    return { id: r.id, business: r.business_id, groupId: r.group_id || null, code: r.code || '', name: r.name || '', prompt: r.prompt || '',
+      imageId: r.image_id || null, textColor: r.text_color || null, active: r.active !== false, sort: r.sort == null ? 0 : Number(r.sort) };
+  }
+  function codeNo(code) { var m = /^[A-Za-z](\d{1,2})$/.exec(code || ''); return m ? parseInt(m[1], 10) : 0; }
+  // Library items (with a signed address) for these ids, by id. A failed read gives {} (pictures are optional).
+  function imagesById(ids) {
+    if (!ids.length) return Promise.resolve({});
+    return client.from('ads_images').select('id,business_id,kind,title,path,mime,bytes,width,height,created_at').in('id', ids).then(must).then(function (rows) {
+      rows = rows || [];
+      if (!rows.length) return {};
+      return client.storage.from(IMG_BUCKET).createSignedUrls(rows.map(function (r) { return r.path; }), 3600).then(function (s) {
+        var urls = {}, out = {};
+        (must(s) || []).forEach(function (x) { if (x && x.signedUrl && !x.error) urls[x.path] = x.signedUrl; });
+        rows.forEach(function (r) { out[r.id] = liveImage(r, urls[r.path] || ''); });
+        return out;
+      });
+    }).catch(function () { return {}; });
+  }
+  // The business's options of all groups in their order (sort, then code); each also carries image: its
+  // library item with a signed address (or null), for the UI's image cache.
+  function listStyles(b) {
+    return liveOnly() || client.from('ads_styles').select('*').eq('business_id', b).then(mustDb).then(function (rows) {
+      var list = (rows || []).map(styleItem).sort(function (x, y) {
+        return (x.sort - y.sort) || (codeNo(x.code) - codeNo(y.code)) || x.code.localeCompare(y.code);
+      });
+      var ids = idList(list.map(function (s) { return s.imageId; }));
+      return imagesById(ids).then(function (imgs) {
+        list.forEach(function (s) { s.image = (s.imageId && imgs[s.imageId]) || null; });
+        return list;
+      });
+    });
+  }
+  // Insert (no id: needs business, groupId, code, name) or update (id: only the fields given).
+  // Resolves with the saved option item.
+  function saveStyle(s) {
+    var stop = liveOnly(); if (stop) return stop;
+    s = s || {};
+    var row = {};
+    if (s.groupId !== undefined) { if (!s.groupId) return Promise.reject(new Error('no group')); row.group_id = s.groupId; }
+    if (s.code !== undefined) {
+      row.code = String(s.code || '').trim().toUpperCase();
+      if (!/^[A-Z]\d{1,2}$/.test(row.code)) return Promise.reject(codeError('sty.err.code'));
+    }
+    if (s.name !== undefined) row.name = String(s.name || '').replace(/\s+/g, ' ').trim().slice(0, 80); // 0029: max 80
+    if (s.prompt !== undefined) row.prompt = String(s.prompt || '').trim();
+    if (s.imageId !== undefined) row.image_id = s.imageId || null;
+    if (s.textColor !== undefined) row.text_color = /^#[0-9a-f]{6}$/i.test(s.textColor || '') ? s.textColor : null;
+    if (s.active !== undefined) row.active = !!s.active;
+    if (s.sort !== undefined) row.sort = Math.round(Number(s.sort)) || 0;
+    var q = s.id ? client.from('ads_styles').update(row).eq('id', s.id)
+      : client.from('ads_styles').insert(Object.assign({ business_id: s.business }, row));
+    return q.select('*').single().then(function (r) {
+      if (r.error && r.error.code === '23505') throw codeError('sty.err.codeTaken', { code: row.code || s.code || '' });
+      var saved = mustDb(r);
+      auditLive(s.id ? 'style.update' : 'style.create', 'style', saved.id, { business_id: saved.business_id, code: saved.code, fields: Object.keys(row) });
+      return styleItem(saved);
+    });
+  }
+  function deleteStyle(id) {
+    return liveOnly() || client.from('ads_styles').delete().eq('id', id).select('id,business_id,code').then(mustDb).then(function (rows) {
+      var r = (rows || [])[0];
+      if (!r) throw new Error('not found');
+      auditLive('style.delete', 'style', id, { business_id: r.business_id, code: r.code });
+      return { ok: true };
+    });
+  }
+  // The business's prompt template: { template, rules, textAi, textOverlay, aspect } or null (none saved yet).
+  function getPictureSettings(b) {
+    return liveOnly() || client.from('ads_picture_settings').select('*').eq('business_id', b).maybeSingle().then(mustDb).then(function (r) {
+      return r ? { template: r.template || '', rules: r.rules || '', textAi: r.text_ai || '', textOverlay: r.text_overlay || '', aspect: r.aspect || null } : null;
+    });
+  }
+  function savePictureSettings(b, s) {
+    var stop = liveOnly(); if (stop) return stop;
+    s = s || {};
+    var row = { business_id: b, template: String(s.template || ''), rules: String(s.rules || ''), text_ai: String(s.textAi || ''),
+      text_overlay: String(s.textOverlay || ''), aspect: PIC_ASPECTS.indexOf(s.aspect) !== -1 ? s.aspect : '3:4' };
+    return client.from('ads_picture_settings').upsert(row, { onConflict: 'business_id' }).select('*').single().then(mustDb).then(function (r) {
+      auditLive('picture_settings.save', 'business', b, { aspect: r.aspect });
+      return { template: r.template || '', rules: r.rules || '', textAi: r.text_ai || '', textOverlay: r.text_overlay || '', aspect: r.aspect || null };
     });
   }
   // rows: [{ name, quantity, sell_price|null }], already checked by stock-import.js.
@@ -750,6 +976,12 @@
     imageRules: { accept: 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp', maxMb: IMG_MAX_MB, maxFiles: IMG_MAX_FILES },
     checkImageFile: checkImageFile, uploadImage: uploadImage, deleteImage: deleteImage, importStock: importStock,
     // AI pictures with Gemini (6 Nov 2026, live only)
-    aiImageStatus: aiImageStatus, aiTest: aiTest, generateImage: generateImage
+    aiImageStatus: aiImageStatus, aiTest: aiTest, generateImage: generateImage,
+    // Posts with several products / pictures, product details, picture styles (6 Nov 2026, 0029)
+    postRules: { maxProducts: POST_MAX_PRODUCTS, maxImages: POST_MAX_IMAGES }, pictureAspects: PIC_ASPECTS.slice(), reservedTokens: RESERVED_TOKENS.slice(),
+    setProductDetails: setProductDetails,
+    listStyleGroups: listStyleGroups, saveStyleGroup: saveStyleGroup, deleteStyleGroup: deleteStyleGroup,
+    listStyles: listStyles, saveStyle: saveStyle, deleteStyle: deleteStyle,
+    getPictureSettings: getPictureSettings, savePictureSettings: savePictureSettings
   };
 })();

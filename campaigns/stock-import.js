@@ -238,5 +238,6 @@
     });
   }
 
-  window.AdsStockImport = { read: read, template: template, toNumber: toNumber, limits: { rows: LIMITS.rows, mb: LIMITS.mb } };
+  // loadXlsx: the same lazy SheetJS loader, also used by the Prompt Library import (Picture styles, 6 Nov 2026).
+  window.AdsStockImport = { read: read, template: template, toNumber: toNumber, loadXlsx: loadLib, limits: { rows: LIMITS.rows, mb: LIMITS.mb } };
 })();

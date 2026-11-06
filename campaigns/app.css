@@ -4,8 +4,9 @@
    --space-*, --type-*, fonts) and the reset. Light theme only, no dark mode.
    Every class here starts with `ads-` so nothing collides with the site.
    Sections: 1 Base / 2 Gate / 3 Shell / 4 Buttons and fields / 5 Cards, KPIs,
-   tables / 6 Chips and filters / 7 Wizard / 8 Posts / 9 Dialogs, drawers,
-   toasts / 10 Image Library, Products, Settings / 11 Skeleton / 12 Reduced motion
+   tables / 6 Chips and filters / 7 Wizard / 8 Posts (pickers, post pictures with AI) /
+   9 Dialogs, drawers, toasts / 10 Image Library, Products, Picture styles, Settings /
+   11 Skeleton / 12 Reduced motion
    ========================================================================= */
 
 /* -------------------------------------------------------------------------
@@ -152,6 +153,8 @@
 }
 .ads-input:disabled { background: var(--surface); color: var(--ink-soft); cursor: not-allowed; }
 .ads-textarea { min-height: 120px; resize: vertical; line-height: 1.45; }
+.ads-textarea--short { min-height: 80px; }
+.ads-color { width: 64px; min-height: 44px; padding: 2px; border: 1px solid var(--field-border); border-radius: var(--radius-sm); background: var(--surface-raised); cursor: pointer; }
 .ads-field { margin-bottom: var(--space-4); }
 .ads-label { display: block; font-size: var(--type-body-sm); font-weight: 500; margin-bottom: var(--space-1); padding: 0; }
 .ads-fieldset { border: 0; padding: 0; margin: 0 0 var(--space-4); min-width: 0; }
@@ -266,6 +269,10 @@
 .ads-imgpick:has(input:focus-visible) { outline: 3px solid var(--ink); outline-offset: 2px; }
 .ads-imgpick__img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .ads-imgpick__cap { display: block; padding: var(--space-1) var(--space-2); font-size: var(--type-caption); }
+/* Composer: the place of a ticked picture in the post (1 = shown first); the rest dim at the limit */
+.ads-imgpick__n { position: absolute; top: var(--space-1); left: var(--space-1); min-width: 24px; height: 24px; padding: 0 var(--space-1); border-radius: 999px; background: var(--ink); color: var(--bg); font-size: var(--type-caption); font-weight: 500; display: grid; place-items: center; pointer-events: none; }
+.ads-imgpick__n:empty { display: none; }
+fieldset:not([disabled]) .ads-imgpick:has(input:disabled) { opacity: .5; cursor: not-allowed; }
 
 /* Live Creative step: choose a published Facebook post */
 .ads-postlist { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -314,8 +321,40 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-fb__avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--partner); color: #fff; display: grid; place-items: center; font-weight: 500; flex: none; }
 .ads-fb__text { margin: 0; padding: 0 var(--space-3) var(--space-3); white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--type-body-sm); }
 .ads-fb__img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.ads-fb__media { position: relative; }
+.ads-fb__more { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: var(--space-1) var(--space-3); border-radius: 999px; background: rgb(20 33 61 / 0.8); color: #fff; font-size: var(--type-body-sm); font-weight: 500; }
 .ads-fb__prod { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); background: var(--surface); font-size: var(--type-body-sm); }
 .ads-fb__actions { display: flex; justify-content: space-around; padding: var(--space-3); border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: var(--type-caption); }
+/* Composer product picker: chosen products as chips, a search box, at most 50 results as checkboxes */
+.ads-pp__none { margin: 0 0 var(--space-2); }
+.ads-pp__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.ads-pp__chip { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; min-width: 0; padding-left: var(--space-3); border: 1px solid var(--accent-deep); border-radius: 999px; background: var(--surface-raised); font-size: var(--type-body-sm); }
+.ads-pp__chipname { min-width: 0; overflow-wrap: anywhere; padding: var(--space-1) 0; }
+.ads-pp__x { flex: none; width: 40px; height: 40px; border-radius: 50%; display: inline-grid; place-items: center; }
+.ads-pp__x:hover { background: var(--surface); }
+.ads-pp .ads-search { margin: var(--space-2) 0; }
+.ads-pp__list { max-height: 360px; overflow-y: auto; border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface-raised); }
+.ads-pp__opt { display: flex; align-items: center; gap: var(--space-3); min-height: 44px; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--rule); cursor: pointer; }
+.ads-pp__list li:last-child .ads-pp__opt { border-bottom: 0; }
+.ads-pp__opt input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--accent-deep); }
+.ads-pp__opt:has(input:checked) { background: var(--surface); }
+.ads-pp__opt:has(input:disabled) { cursor: not-allowed; color: var(--ink-soft); }
+.ads-pp__img { width: 40px; height: 40px; flex: none; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface); }
+.ads-pp__text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.ads-pp__name { overflow-wrap: anywhere; }
+.ads-pp__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-1); color: var(--ink-soft); font-size: var(--type-caption); }
+/* Composer: post pictures with AI (frame / price tag / background, the products, progress, prompt) */
+.ads-gen { margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); background: var(--surface); border-radius: var(--radius-md); min-width: 0; }
+.ads-gen .ads-gen__title { margin-top: 0; }
+.ads-row--3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+.ads-gen .ads-option { background: var(--bg); }
+.ads-gen__prods { display: flex; flex-direction: column; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.ads-gen__prod { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.ads-gen__img { width: 48px; height: 48px; flex: none; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-raised); border: 1px solid var(--rule); }
+.ads-gen__text { display: flex; flex-direction: column; min-width: 0; }
+.ads-gen__name { overflow-wrap: anywhere; font-size: var(--type-body-sm); }
+.ads-gen .ads-btnrow { margin-top: var(--space-2); }
+.ads-prompt { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--type-caption); }
 
 /* -------------------------------------------------------------------------
    9. Dialogs, drawers, toasts
@@ -399,6 +438,36 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-issues--watch { --c: var(--watch); }
 .ads-issues__more { color: var(--ink-soft); }
 .ads-table--compact th, .ads-table--compact td { padding: var(--space-2); }
+/* Products: photo column, names under the stock name, the details dialog */
+.ads-pthumb { display: block; width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface); }
+.ads-pname { display: block; }
+.ads-pname .ads-sub { overflow-wrap: anywhere; }
+.ads-pd__h { margin-top: 0; }
+.ads-pd__row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-2); }
+.ads-pd__photo { flex: 0 0 auto; width: 160px; max-width: 100%; }
+.ads-pd__img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface); }
+.ads-pd__btns, .ads-style__picbtns { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); min-width: 0; }
+/* Picture styles: template card, name-colour card, then one card per group with its option cards */
+.ads-styles { max-width: 1200px; }
+.ads-tokens { margin: 0 0 var(--space-3); overflow-wrap: anywhere; }
+.ads-input.ads-input--caps { text-transform: uppercase; } /* tokens, letters, codes: Latin capitals (wins over the site's Georgian rule) */
+.ads-grouphead:focus { outline: none; }
+.ads-grouphead__meta { margin: calc(var(--space-2) * -1) 0 var(--space-3); overflow-wrap: anywhere; }
+.ads-grouphead__edit { margin: 0 0 var(--space-3); }
+.ads-grouphead__form { padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--bg); }
+.ads-grouphead__form .ads-btnrow { margin-top: var(--space-2); }
+.ads-addgroup { margin: 0 0 var(--space-4); }
+.ads-stylegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: var(--space-3); }
+.ads-style { display: flex; flex-direction: column; min-width: 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--bg); }
+.ads-style__title { margin: 0 0 var(--space-3); font-size: var(--type-body); font-weight: 500; overflow-wrap: anywhere; }
+.ads-style__picrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-3); }
+.ads-style__pic { flex: 0 0 auto; width: 120px; max-width: 100%; }
+.ads-style__img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: contain; border-radius: var(--radius-sm); background: var(--surface); }
+.ads-row--code { grid-template-columns: minmax(0, 6rem) minmax(0, 1fr); }
+.ads-color__row { display: flex; align-items: center; gap: var(--space-3); }
+.ads-color__hex { font-size: var(--type-body-sm); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ads-style .ads-option--inline { margin: 0; }
+.ads-style .ads-btnrow { margin-top: auto; padding-top: var(--space-3); }
 /* Settings: single column of cards, collapsible service rows, danger zone */
 .ads-settings { max-width: 960px; }
 .ads-card--danger { border-color: var(--act); }

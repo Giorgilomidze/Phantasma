@@ -143,6 +143,21 @@
       width: String(im.width || 400), height: String(im.height || 300), loading: 'lazy' });
   }
 
+  /* Products in posts and pictures (6 Nov 2026): the display name wins over the stock name. */
+  // Name shown in the tool (sample products in the UI language).
+  function prodName(p) { return p.displayName || lname(p, 'name'); }
+  // Georgian name written in posts and on pictures (= displayName || name for stock products).
+  function kaName(p) { return p.displayName || p.name_ka || p.name; }
+  // The product's own photo (a library upload in the image cache), or null.
+  function photoOf(p) { var im = p && p.imageId ? imageById(p.imageId) : null; return im && !im.sample && imageUri(im) ? im : null; }
+  // "First product +N" for lists; '' when the post has no product.
+  function prodSummary(ids, byId) {
+    var first = null;
+    (ids || []).some(function (x) { first = byId[x] || null; return !!first; });
+    if (!first) return '';
+    return prodName(first) + (ids.length > 1 ? ' +' + (ids.length - 1) : '');
+  }
+
   /* ---------------------------------------------------------------------
      2. Toasts, dialogs, drawers
      --------------------------------------------------------------------- */
@@ -155,9 +170,11 @@
   // Native <dialog> + showModal(): browser traps focus and inerts the page.
   // We store and restore focus ourselves. Resolves with the clicked action's
   // value, or null on Cancel / Esc / backdrop click.
+  // o.onAction(value) (optional): runs first when an action is clicked; the dialog stays open
+  // while its promise runs and closes only when it does not answer false (e.g. a failed save).
   function openDialog(o) {
     return new Promise(function (resolve) {
-      var prev = document.activeElement;
+      var prev = document.activeElement, closed = false;
       var titleId = 'ads-dlg-' + Math.floor(Math.random() * 1e6);
       var btns = {};
       var foot = h('div', { class: 'ads-dialog__foot' });
@@ -165,7 +182,12 @@
         foot.appendChild(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { close(null); } }, t(o.cancelLabel || 'common.cancel')));
       }
       (o.actions || []).forEach(function (a) {
-        var b = h('button', { type: 'button', class: 'ads-btn ' + (a.kind === 'danger' ? 'ads-btn--danger' : 'ads-btn--primary'), disabled: !!a.disabled, onclick: function () { close(a.value); } }, a.label);
+        var b = h('button', { type: 'button', class: 'ads-btn ' + (a.kind === 'danger' ? 'ads-btn--danger' : 'ads-btn--primary'), disabled: !!a.disabled, onclick: function () {
+          if (!o.onAction) { close(a.value); return; }
+          b.disabled = true;
+          Promise.resolve(o.onAction(a.value)).then(function (ok) { b.disabled = false; if (ok !== false) close(a.value); },
+            function () { b.disabled = false; });
+        } }, a.label);
         btns[a.value] = b;
         foot.appendChild(b);
       });
@@ -178,6 +200,8 @@
         foot
       ]);
       function close(v) {
+        if (closed) return;
+        closed = true;
         dlg.close(); dlg.remove();
         if (prev && prev.focus && document.contains(prev)) prev.focus();
         resolve(v);
@@ -358,6 +382,15 @@
     rows.forEach(function (r) { dl.appendChild(h('dt', {}, r[0])); dl.appendChild(h('dd', {}, r[1])); });
     return dl;
   }
+  // Radio buttons in a fieldset. options: [[value, label key, description key or null]].
+  function radioGroup(name, legendKey, options, value, onPick) {
+    return h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t(legendKey))].concat(options.map(function (o) {
+      var id = name + '-' + o[0];
+      var r = h('input', { type: 'radio', name: name, id: id, value: o[0], checked: o[0] === value });
+      r.addEventListener('change', function () { onPick(o[0]); });
+      return h('label', { class: 'ads-option', for: id }, [r, h('span', {}, [h('strong', {}, t(o[1])), o[2] ? h('span', { class: 'ads-sub' }, t(o[2])) : null])]);
+    })));
+  }
 
   // Highlights risky words and says why. Returns a node; call update(text).
   function riskBox() {
@@ -430,7 +463,7 @@
      --------------------------------------------------------------------- */
   var NAV = [
     ['dashboard', 'nav.dashboard', false], ['campaigns', 'nav.campaigns', false], ['posts', 'nav.posts', false],
-    ['images', 'nav.images', false], ['products', 'nav.products', false], ['rotation', 'nav.rotation', true],
+    ['images', 'nav.images', false], ['styles', 'sty.nav', false], ['products', 'nav.products', false], ['rotation', 'nav.rotation', true],
     ['settings', 'nav.settings', false], ['audit', 'nav.audit', true]
   ];
   function buildNav() {
@@ -462,6 +495,7 @@
     if (name === 'posts' && parts[1]) return viewComposer(tok, parts[1]);
     if (name === 'posts') return viewPosts(tok);
     if (name === 'images') return viewImages(tok);
+    if (name === 'styles') return viewStyles(tok);
     if (name === 'products') return viewProducts(tok);
     if (name === 'settings') return viewSettings();
     var soon = NAV.filter(function (n) { return n[0] === name && n[2]; })[0];
@@ -807,7 +841,7 @@
         var postSel = select('ads-w-post', [['', t('wiz.noPost')]].concat(eligible.map(function (x) { return [x.id, x.caption.slice(0, 50) + ' (' + t('status.' + x.status) + ')']; })), w.postId, function (v) {
           w.postId = v;
           var chosen = eligible.filter(function (x) { return x.id === v; })[0];
-          if (chosen) { w.caption = chosen.caption; cap.value = chosen.caption; risk.update(chosen.caption); if (chosen.imageId) { w.imageIds = [chosen.imageId]; draw(posts, images); } }
+          if (chosen) { w.caption = chosen.caption; cap.value = chosen.caption; risk.update(chosen.caption); if (chosen.imageIds && chosen.imageIds.length) { w.imageIds = chosen.imageIds.slice(); draw(posts, images); } }
         });
         p.appendChild(field('wiz.post', postSel, t('wiz.postHint'), 'ads-w-post'));
         var fs = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('wiz.images')), h('div', { class: 'ads-imggrid' }, images.map(function (im) {
@@ -880,13 +914,15 @@
       }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(load)); } });
     }
     function list(posts, products) {
+      var byId = {};
+      products.forEach(function (x) { byId[x.id] = x; });
       return h('ul', { class: 'ads-postlist' }, posts.map(function (p) {
-        var prod = products.filter(function (x) { return x.id === p.productId; })[0], d = postDate(p);
+        var prods = prodSummary(p.productIds, byId), d = postDate(p);
         return h('li', { class: 'ads-postrow' }, [
-          imageEl(p.imageId, 'ads-thumb'),
+          imageEl(p.imageIds[0], 'ads-thumb'),
           h('div', { class: 'ads-postrow__main' }, [
             h('a', { class: 'ads-link ads-postrow__cap', href: '#/posts/' + p.id, onclick: function () { composerPrefill = null; } }, p.caption || t('posts.noCaption')),
-            h('span', { class: 'ads-sub' }, (prod ? lname(prod, 'name') + ' - ' : '') + (d ? fmtDateTime(d) : t('posts.noDate')))]),
+            h('span', { class: 'ads-sub' }, (prods ? prods + ' - ' : '') + (d ? fmtDateTime(d) : t('posts.noDate')))]),
           chip(p.status)
         ]);
       }));
@@ -929,15 +965,162 @@
     load();
   }
 
-  function postPreview(p, prod) {
-    var biz = bizName(p.business);
+  // Facebook-style preview: the first picture ("+N" when the post has more) and the first product.
+  function postPreview(p, prods) {
+    var biz = bizName(p.business), ids = p.imageIds || [], first = prods[0] || null;
     return h('div', { class: 'ads-fb' }, [
       h('div', { class: 'ads-fb__head' }, [h('span', { class: 'ads-fb__avatar', 'aria-hidden': 'true' }, biz.charAt(0)), h('span', {}, [h('strong', {}, biz), h('span', { class: 'ads-sub' }, t('prev.meta'))])]),
       h('p', { class: 'ads-fb__text' }, p.caption || t('prev.empty')),
-      imageEl(p.imageId, 'ads-fb__img'),
-      prod ? h('div', { class: 'ads-fb__prod' }, [h('span', {}, lname(prod, 'name')), prod.price == null ? null : h('strong', {}, gel(prod.price))]) : null,
+      h('div', { class: 'ads-fb__media' }, [imageEl(ids[0], 'ads-fb__img'),
+        ids.length > 1 ? h('span', { class: 'ads-fb__more' }, ['+' + (ids.length - 1), h('span', { class: 'visually-hidden' }, ' ' + t('pp.img.more'))]) : null]),
+      first ? h('div', { class: 'ads-fb__prod' }, [h('span', {}, prodName(first) + (prods.length > 1 ? ' +' + (prods.length - 1) : '')),
+        prods.length === 1 && first.price != null ? h('strong', {}, gel(first.price)) : null]) : null,
       h('div', { class: 'ads-fb__actions', 'aria-hidden': 'true' }, ['\u{1F44D} ' + t('prev.like'), t('prev.comment'), t('prev.share')])
     ]);
+  }
+
+  // "Georgian template" with the chosen products. One product: {product} and {price} filled in.
+  // Several: the sentence(s) holding {product} / {price} become a list, one line per product:
+  // "• name — price ₾" ("___" when there is no price).
+  function fillTemplate(tpl, prods) {
+    if (prods.length === 1) return tpl.replace('{product}', kaName(prods[0])).replace('{price}', priceText(prods[0].price));
+    var list = prods.map(function (p) { return '• ' + kaName(p) + ' — ' + priceText(p.price) + ' ₾'; }).join('\n');
+    var a = -1, z = -1;
+    ['{product}', '{price}'].forEach(function (k) {
+      var i = tpl.indexOf(k), j = tpl.lastIndexOf(k);
+      if (i !== -1 && (a === -1 || i < a)) a = i;
+      if (j !== -1 && j + k.length > z) z = j + k.length;
+    });
+    if (a === -1) return tpl + '\n' + list;
+    var ends = '.!?', start = a, end = z;
+    while (start > 0 && ends.indexOf(tpl.charAt(start - 1)) === -1) start--;
+    while (end < tpl.length && ends.indexOf(tpl.charAt(end)) === -1) end++;
+    if (end < tpl.length) end++; // the sentence's own full stop goes with it
+    return [tpl.slice(0, start).trim(), list, tpl.slice(end).trim()].filter(Boolean).join('\n');
+  }
+
+  /* Composer pickers (6 Nov 2026). Products: chips for the chosen ones, a search box and at most
+     PICK_SHOW matching products as checkboxes. The stock can hold thousands of rows, so a key press
+     only filters a prepared list of names and draws at most PICK_SHOW rows. */
+  var PICK_SHOW = 50;
+  function productPicker(post, products, byId, editable, onChange) {
+    var max = api.postRules.maxProducts, boxes = [], timer = null, q = null, status = null, list = null, keys = null;
+    var chipList = h('ul', { class: 'ads-pp__chips', 'aria-label': t('pp.chosen') });
+    var none = h('p', { class: 'ads-note ads-pp__none' }, t('pp.none'));
+    var hint = h('p', { class: 'ads-hint', id: 'ads-pp-hint' });
+    var fs = h('fieldset', { class: 'ads-fieldset ads-pp' }, [h('legend', { class: 'ads-label' }, t('pp.label')), none, chipList]);
+    if (editable) {
+      // One search text per product: stock, Georgian, English and display names.
+      keys = products.map(function (p) { return normName([p.name, p.name_ka, p.name_en, p.displayName, p.nameEn].join('\u0001')); });
+      q = h('input', { type: 'search', id: 'ads-pp-q', class: 'ads-input', placeholder: t('pp.search'), autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'ads-pp-hint', 'aria-controls': 'ads-pp-list' });
+      status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
+      list = h('ul', { class: 'ads-pp__list', id: 'ads-pp-list', 'aria-label': t('pp.results') });
+      q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(fill, 120); });
+      append(fs, [hint, h('label', { class: 'visually-hidden', for: 'ads-pp-q' }, t('pp.search')), h('div', { class: 'ads-search' }, q), status, list]);
+    }
+    drawChips();
+    if (editable) fill();
+    return fs;
+
+    function drawChips() {
+      chipList.innerHTML = '';
+      post.productIds.forEach(function (pid, i) {
+        var p = byId[pid], name = p ? prodName(p) : t('pp.unknown');
+        chipList.appendChild(h('li', { class: 'ads-pp__chip' }, [
+          h('span', { class: 'ads-pp__chipname' }, name + (p && p.price != null ? ' — ' + gel(p.price) : '')),
+          editable ? h('button', { type: 'button', class: 'ads-pp__x', 'aria-label': t('pp.remove', { name: name }), onclick: function () { toggle(pid, false); focusAfter(i); } }, '✕') : null
+        ]));
+      });
+      none.hidden = !!post.productIds.length;
+      chipList.hidden = !post.productIds.length;
+      if (editable) hint.textContent = t('pp.count', { n: post.productIds.length, max: max }) + (post.productIds.length >= max ? ' ' + t('pp.full') : '');
+    }
+    // After a chip is removed: the next chip's button, else the search box.
+    function focusAfter(i) {
+      var b = chipList.querySelectorAll('.ads-pp__x');
+      (b[Math.min(i, b.length - 1)] || q).focus();
+    }
+    function toggle(pid, on) {
+      var i = post.productIds.indexOf(pid);
+      if (on && i === -1) {
+        if (post.productIds.length >= max) { toast(t('pp.max', { max: max }), 'act'); sync(); return; }
+        post.productIds.push(pid);
+      } else if (!on && i !== -1) post.productIds.splice(i, 1);
+      drawChips(); sync(); onChange();
+    }
+    function sync() {
+      var full = post.productIds.length >= max;
+      boxes.forEach(function (cb) { cb.checked = post.productIds.indexOf(cb.value) !== -1; cb.disabled = full && !cb.checked; });
+    }
+    function fill() {
+      var s = normName(q.value), hits = [];
+      for (var i = 0; i < products.length; i++) if (!s || keys[i].indexOf(s) !== -1) hits.push(products[i]);
+      list.innerHTML = ''; boxes = [];
+      hits.slice(0, PICK_SHOW).forEach(function (p) { list.appendChild(option(p)); });
+      list.hidden = !hits.length;
+      status.textContent = !products.length ? t('comp.noProducts') : !hits.length ? t('pp.noMatch', { q: q.value.trim() })
+        : hits.length > PICK_SHOW ? t('pp.showing', { shown: PICK_SHOW, n: num(hits.length) }) : '';
+      sync();
+    }
+    function option(p) {
+      var id = 'ads-pp-' + p.id, ph = photoOf(p), meta = [];
+      var cb = h('input', { type: 'checkbox', id: id, value: p.id });
+      cb.addEventListener('change', function () { toggle(p.id, cb.checked); });
+      boxes.push(cb);
+      if (p.price != null) meta.push(gel(p.price));
+      if (p.quantity === 0) meta.push(pill(t('stock.out'), 'out'));
+      else if (p.quantity != null) meta.push(t('pp.qty', { n: qty(p.quantity) }));
+      return h('li', {}, h('label', { class: 'ads-pp__opt', for: id }, [
+        cb,
+        ph ? h('img', { class: 'ads-pp__img', src: imageUri(ph), alt: '', loading: 'lazy' }) : h('span', { class: 'ads-pp__img', 'aria-hidden': 'true' }),
+        h('span', { class: 'ads-pp__text' }, [
+          h('span', { class: 'ads-pp__name' }, prodName(p)),
+          p.displayName && p.displayName !== p.name ? h('span', { class: 'ads-sub' }, p.name) : null,
+          meta.length ? h('span', { class: 'ads-pp__meta' }, meta.reduce(function (a, m, k) { return a.concat(k ? [' · ', m] : [m]); }, [])) : null
+        ])
+      ]));
+    }
+  }
+  // Pictures: checkboxes, at most maxImages; the order of ticking is the order in the post (shown as a number).
+  function picturePicker(post, images, editable, onChange) {
+    var max = api.postRules.maxImages, boxes = [];
+    var hint = h('p', { class: 'ads-hint', id: 'ads-pi-hint' });
+    var grid = h('div', { class: 'ads-imggrid' });
+    var fs = h('fieldset', { class: 'ads-fieldset', disabled: !editable, 'aria-describedby': 'ads-pi-hint' }, [h('legend', { class: 'ads-label' }, t('wiz.images')), hint, grid]);
+    function draw() {
+      var known = {};
+      grid.innerHTML = ''; boxes = [];
+      images.forEach(function (im) { known[im.id] = true; add(im.id, lname(im, 'title')); });
+      // Chosen pictures that are no longer in the library stay listed, so they can be unticked.
+      post.imageIds.forEach(function (x) { if (!known[x]) add(x, t('pp.img.missing')); });
+      sync();
+    }
+    function add(id, title) {
+      var cb = h('input', { type: 'checkbox', id: 'ads-pimg-' + id, value: id });
+      cb.addEventListener('change', function () { toggle(id, cb.checked); });
+      var n = h('span', { class: 'ads-imgpick__n', 'aria-hidden': 'true' });
+      boxes.push({ cb: cb, n: n });
+      grid.appendChild(h('label', { class: 'ads-imgpick', for: 'ads-pimg-' + id }, [cb, n, imageEl(id, 'ads-imgpick__img'), h('span', { class: 'ads-imgpick__cap' }, title)]));
+    }
+    function toggle(id, on) {
+      var i = post.imageIds.indexOf(id);
+      if (on && i === -1) {
+        if (post.imageIds.length >= max) { toast(t('pp.img.max', { max: max }), 'act'); sync(); return; }
+        post.imageIds.push(id);
+      } else if (!on && i !== -1) post.imageIds.splice(i, 1);
+      sync(); onChange();
+    }
+    function sync() {
+      var full = post.imageIds.length >= max;
+      boxes.forEach(function (b) {
+        var i = post.imageIds.indexOf(b.cb.value);
+        b.cb.checked = i !== -1; b.cb.disabled = !editable || (full && i === -1);
+        b.n.textContent = i === -1 ? '' : String(i + 1);
+      });
+      hint.textContent = t('pp.img.count', { n: post.imageIds.length, max: max });
+    }
+    draw();
+    return { el: fs, redraw: draw };
   }
 
   function viewComposer(tok, id) {
@@ -946,42 +1129,53 @@
     render(h('div', {}, [pageHead('comp.title', [h('a', { class: 'ads-btn ads-btn--ghost', href: '#/posts' }, t('comp.back'))]), body]), 'comp.title');
     Promise.all([isNew ? Promise.resolve(null) : api.getPost(id), api.listProducts(ctx.business), api.listImages(ctx.business)]).then(function (res) {
       if (stale(tok)) return;
-      draw(res[0] || Object.assign({ id: null, business: ctx.business, status: 'draft', productId: '', caption: '', imageId: '' }, composerPrefill || {}), res[1], cacheImages(res[2]));
+      var post = res[0] || Object.assign({ id: null, business: ctx.business, status: 'draft', productIds: [], caption: '', imageIds: [] }, composerPrefill || {});
+      post.productIds = (post.productIds || []).slice(); post.imageIds = (post.imageIds || []).slice();
+      draw(post, res[1], cacheImages(res[2]));
       composerPrefill = null;
     }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(refresh)); } });
 
     function draw(post, products, images) {
       body.innerHTML = '';
       var editable = post.status === 'draft', soft = settings.limits.captionSoftLimit;
+      var byId = {};
+      products.forEach(function (x) { byId[x.id] = x; });
       var risk = riskBox(), prevBox = h('div', {}), count = h('p', { class: 'ads-hint', id: 'ads-p-count' });
-      // Stock products may have no price: then the option shows the name only. Prices are lari.
-      var prodSel = select('ads-p-prod', [['', t('comp.noProduct')]].concat(products.map(function (x) { return [x.id, lname(x, 'name') + (x.price == null ? '' : ' - ' + gel(x.price))]; })), post.productId || '', function (v) { post.productId = v; upd(); });
+      // Stock products may have no price; prices are lari. The generator lists the chosen products too.
+      var prodPick = productPicker(post, products, byId, editable, function () { upd(); if (gen) gen.update(); });
+      var imgPick = picturePicker(post, images, editable, upd);
+      var gen = editable ? postPictureCard(tok, post, byId, addPictures) : null;
       var cap = h('textarea', { id: 'ads-p-caption', class: 'ads-input ads-textarea', rows: '6', 'aria-describedby': 'ads-p-count' }, post.caption);
-      if (!editable) { prodSel.disabled = true; cap.disabled = true; }
+      if (!editable) cap.disabled = true;
       cap.addEventListener('input', function () { post.caption = cap.value; upd(); });
       var tplBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', disabled: !editable, onclick: function () {
-        var prod = products.filter(function (x) { return x.id === post.productId; })[0] || products[0];
-        if (!prod) { toast(t('comp.noProducts'), 'act'); return; }
+        var chosen = curProducts(), list = chosen.length ? chosen : products.slice(0, 1);
+        if (!list.length) { toast(t('comp.noProducts'), 'act'); return; }
         var tpl = settings.georgianTemplates[Math.floor(Math.random() * settings.georgianTemplates.length)];
-        var txt = tpl.replace('{product}', prod.name_ka).replace('{price}', priceText(prod.price));
+        var txt = fillTemplate(tpl, list);
         post.caption = (cap.value ? cap.value + '\n' : '') + txt; cap.value = post.caption; upd(); cap.focus();
       } }, t('comp.template'));
-      var pickers = h('fieldset', { class: 'ads-fieldset', disabled: !editable }, [h('legend', { class: 'ads-label' }, t('wiz.images')), h('div', { class: 'ads-imggrid' }, images.map(function (im) {
-        var r = h('input', { type: 'radio', name: 'ads-p-img', id: 'ads-pimg-' + im.id, checked: post.imageId === im.id });
-        r.addEventListener('change', function () { post.imageId = im.id; upd(); });
-        return h('label', { class: 'ads-imgpick', for: 'ads-pimg-' + im.id }, [r, imageEl(im.id, 'ads-imgpick__img'), h('span', { class: 'ads-imgpick__cap' }, lname(im, 'title'))]);
-      }))]);
-      function curProduct() { return products.filter(function (x) { return x.id === post.productId; })[0] || null; }
+      function curProducts() { return post.productIds.map(function (x) { return byId[x]; }).filter(Boolean); }
+      // Finished post pictures join the post in product order, up to the limit. Returns how many fit.
+      function addPictures(list) {
+        var room = api.postRules.maxImages - post.imageIds.length, added = 0;
+        list.forEach(function (im) {
+          if (!images.some(function (x) { return x.id === im.id; })) images.unshift(im);
+          if (added < room && post.imageIds.indexOf(im.id) === -1) { post.imageIds.push(im.id); added++; }
+        });
+        imgPick.redraw(); upd();
+        return added;
+      }
       function upd() {
         risk.update(post.caption);
         count.textContent = t('comp.count', { n: post.caption.length, max: soft });
         count.className = 'ads-hint' + (post.caption.length > soft ? ' ads-hint--warn' : '');
-        prevBox.innerHTML = ''; prevBox.appendChild(postPreview(post, curProduct()));
+        prevBox.innerHTML = ''; prevBox.appendChild(postPreview(post, curProducts()));
       }
       // Dialog with the EXACT content, for Approve / Publish / Schedule.
       function contentDialog(titleKey, confirmKey, withDate) {
         var risks = api.findRisks(post.caption), dt = null, ack = null;
-        var kids = [h('p', { class: 'ads-warn' }, t(titleKey + '.warn')), postPreview(post, curProduct()), h('p', { class: 'ads-total' }, t('comp.cost'))];
+        var kids = [h('p', { class: 'ads-warn' }, t(titleKey + '.warn')), postPreview(post, curProducts()), h('p', { class: 'ads-total' }, t('comp.cost'))];
         if (withDate) {
           var d = new Date(Date.now() + 86400000); d.setHours(10, 0, 0, 0);
           var pad = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -1000,9 +1194,9 @@
           }
         }).then(function (ok) { return ok ? (dt ? { scheduledAt: new Date(dt.value).toISOString() } : {}) : null; });
       }
-      function saveCurrent() { return api.savePost({ id: post.id, business: post.business, productId: post.productId, caption: post.caption, imageId: post.imageId }); }
+      function saveCurrent() { return api.savePost({ id: post.id, business: post.business, productIds: post.productIds, caption: post.caption, imageIds: post.imageIds }); }
       function guard() { if (!post.caption.trim()) { toast(t('err.caption'), 'act'); cap.focus(); return false; } return true; }
-      function fail(e) { toast(t('toast.failed') + ' ' + e.message, 'act'); }
+      function fail(e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); }
       function moveTo(to, extra, msg) { return api.movePost(post.id, to, extra).then(function () { toast(t(msg)); go('#/posts/' + post.id); }).catch(fail); }
 
       var actions = [];
@@ -1025,7 +1219,7 @@
       var form = h('div', { class: 'ads-card' }, [
         h('p', {}, [t('col.status') + ': ', chip(post.status)]),
         editable ? null : h('p', { class: 'ads-note' }, t('comp.locked')),
-        field('comp.product', prodSel, null, 'ads-p-prod'), pickers,
+        prodPick, imgPick.el, gen ? gen.el : null,
         h('div', { class: 'ads-field' }, [h('label', { class: 'ads-label', for: 'ads-p-caption' }, t('wiz.caption')), cap, count, tplBtn]),
         h('h3', { class: 'ads-h3' }, t('policy.title')), risk,
         h('div', { class: 'ads-btnrow' }, actions)
@@ -1033,6 +1227,302 @@
       body.appendChild(h('div', { class: 'ads-compose' }, [form, h('div', { class: 'ads-card ads-compose__prev', 'aria-label': t('comp.preview') }, [h('h2', { class: 'ads-h2' }, t('comp.preview')), prevBox])]));
       upd();
     }
+  }
+
+  /* ---------------------------------------------------------------------
+     8b. Post pictures with AI (live only, 6 Nov 2026). One picture per chosen product: its photo
+         plus one option of every style group (Picture styles: e.g. a frame, a price tag, a
+         background), made one after the other by ads-generate-image. In overlay mode the browser
+         then writes the exact Georgian name on a copy, because Gemini misspells Georgian.
+     --------------------------------------------------------------------- */
+  var genLast = { picks: {}, mode: 'overlay', quality: 'standard' }; // picks: group id -> option id; the card opens with the last choices
+  var genJob = null;  // a run in progress: { tok, n, total }. One at a time; it keeps going when the post is left.
+  var genView = null; // the generator card on screen: { tok, status, refresh }
+  var GEN_MAX_REFS = 6; // product photo + the chosen options' pictures (the Edge Function's limit)
+  // After these errors the next products would fail the same way, so the run stops.
+  var GEN_STOP = ['daily_limit', 'not_deployed', 'no_gemini_key', 'gemini_key', 'not_member', 'no_token', 'bad_token', 'network'];
+  var NAME_ZONE = 0.15, NAME_PAD = 0.06, NAME_COLOR = '#3E5C3A', NAME_FONT = '"Noto Sans Georgian", "Noto Sans", sans-serif';
+
+  // The prompt for one product, exactly like the owner's Excel formula: the template, then every
+  // group's {TOKEN} (group order) gets the chosen option's prompt, then {TEXT} and {RULES}, then
+  // {NAME} {KA} {TYPE} {PRICE} (also inside those parts). Every occurrence, in this order.
+  // ps: the prompt template; chosen: [{ group, option or null }] in group order.
+  function assemblePrompt(ps, chosen, p, mode) {
+    function all(s, token, value) { return s.split(token).join(value == null ? '' : String(value)); }
+    var s = String(ps.template || '');
+    chosen.forEach(function (c) { s = all(s, '{' + c.group.token + '}', c.option ? c.option.prompt : ''); });
+    s = all(s, '{TEXT}', mode === 'ai' ? ps.textAi : ps.textOverlay);
+    s = all(s, '{RULES}', ps.rules);
+    s = all(s, '{NAME}', p.nameEn || p.displayName || p.name);
+    s = all(s, '{KA}', kaName(p));
+    s = all(s, '{TYPE}', p.aiNote || 'product package');
+    s = all(s, '{PRICE}', priceText(p.price)); // whole number without decimals, else 2 decimals; ___ when none
+    return s;
+  }
+
+  function genSync() {
+    if (!genView || stale(genView.tok)) return;
+    genView.status.textContent = genJob ? t('gen.progress', { n: genJob.n, total: genJob.total }) : '';
+    genView.refresh();
+  }
+
+  // The card in the composer (drafts only). addPictures(list) puts finished pictures into the post.
+  function postPictureCard(tok, post, byId, addPictures) {
+    var card = h('section', { class: 'ads-gen', 'aria-labelledby': 'ads-gen-h' }, h('h3', { class: 'ads-h3 ads-gen__title', id: 'ads-gen-h' }, t('gen.title')));
+    var out = { el: card, update: function () {} };
+    if (!liveMode()) { card.appendChild(h('p', { class: 'ads-note' }, t('gen.mock'))); return out; }
+    var inner = h('div', {}, h('p', { class: 'ads-note' }, t('gen.loading')));
+    card.appendChild(inner);
+    var ps = null, groups = [], styles = [], ready = false;
+    var prodList, makeBtn, status, promptBox, promptHint, promptLabel;
+    Promise.all([api.getPictureSettings(post.business), api.listStyleGroups(post.business), api.listStyles(post.business)]).then(function (r) {
+      if (stale(tok)) return;
+      ps = r[0]; groups = r[1]; styles = r[2];
+      cacheImages(styles.map(function (s) { return s.image; }).filter(Boolean));
+      build();
+    }).catch(function (e) {
+      if (stale(tok)) return;
+      inner.innerHTML = '';
+      inner.appendChild(h('p', { class: 'ads-warn' }, errText(e) || t('common.errorText')));
+    });
+    out.update = function () { if (ready) refresh(); };
+    return out;
+
+    function build() {
+      inner.innerHTML = '';
+      if (!ps || !ps.template.trim()) {
+        inner.appendChild(h('p', { class: 'ads-note' }, [t('gen.noTemplate') + ' ', h('a', { class: 'ads-link', href: '#/styles' }, t('gen.toStyles'))]));
+        return;
+      }
+      // One select per group that has active options, in group order; the label is the group's name.
+      var row = h('div', { class: 'ads-row ads-row--3' });
+      groups.forEach(function (g, i) {
+        var act = styles.filter(function (s) { return s.groupId === g.id && s.active; });
+        if (!act.length) return;
+        if (!act.some(function (s) { return s.id === genLast.picks[g.id]; })) genLast.picks[g.id] = act[0].id;
+        var id = 'ads-gen-g' + i;
+        row.appendChild(h('div', { class: 'ads-field' }, [h('label', { class: 'ads-label', for: id }, g.name),
+          select(id, act.map(function (s) { return [s.id, s.code + ' — ' + s.name]; }), genLast.picks[g.id], function (v) { genLast.picks[g.id] = v; refresh(); })]));
+      });
+      var mode = radioGroup('ads-gen-mode', 'gen.text', [['overlay', 'gen.text.overlay', 'gen.text.overlay.d'], ['ai', 'gen.text.ai', 'gen.text.ai.d']],
+        genLast.mode, function (v) { genLast.mode = v; refresh(); });
+      var quality = radioGroup('ads-gen-q', 'aimg.quality', [['standard', 'aimg.q.standard', 'aimg.q.standard.d'], ['high', 'aimg.q.high', 'aimg.q.high.d']],
+        genLast.quality, function (v) { genLast.quality = v; });
+      prodList = h('ul', { class: 'ads-gen__prods', 'aria-labelledby': 'ads-gen-prods' });
+      makeBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: run });
+      status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
+      promptLabel = h('label', { class: 'ads-label', for: 'ads-gen-prompt' });
+      promptBox = h('textarea', { id: 'ads-gen-prompt', class: 'ads-input ads-textarea ads-prompt', rows: '8', readonly: true, spellcheck: 'false', 'aria-describedby': 'ads-gen-prompt-n' });
+      promptHint = h('p', { class: 'ads-hint', id: 'ads-gen-prompt-n' });
+      append(inner, [
+        h('p', { class: 'ads-note' }, t('gen.intro')), row, mode, quality,
+        h('p', { class: 'ads-label', id: 'ads-gen-prods' }, t('gen.prods')), prodList,
+        h('div', { class: 'ads-btnrow' }, makeBtn), status,
+        h('details', { class: 'ads-details ads-gen__prompt' }, [h('summary', {}, t('gen.showPrompt')), promptLabel, promptBox, promptHint,
+          h('div', { class: 'ads-btnrow' }, h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { copyText(promptBox); } }, t('gen.copy')))])
+      ]);
+      ready = true;
+      genView = { tok: tok, status: status, refresh: refresh };
+      genSync(); // a run that is still going (the post was left and opened again) shows its progress
+      refresh();
+    }
+    // [{ group, option }] in group order; option is null for a group without active options.
+    function picks() {
+      var by = {};
+      styles.forEach(function (s) { by[s.id] = s; });
+      return groups.map(function (g) {
+        var o = by[genLast.picks[g.id]];
+        return { group: g, option: o && o.groupId === g.id && o.active ? o : null };
+      });
+    }
+    function chosen() { return post.productIds.map(function (x) { return byId[x]; }).filter(Boolean); }
+    function refresh() {
+      var list = chosen(), ok = list.filter(photoOf), first = list[0];
+      prodList.innerHTML = '';
+      if (!list.length) prodList.appendChild(h('li', { class: 'ads-note' }, t('gen.noProducts')));
+      list.forEach(function (p) {
+        var ph = photoOf(p);
+        prodList.appendChild(h('li', { class: 'ads-gen__prod' }, [
+          ph ? h('img', { class: 'ads-gen__img', src: imageUri(ph), alt: '', loading: 'lazy' }) : h('span', { class: 'ads-gen__img', 'aria-hidden': 'true' }),
+          h('span', { class: 'ads-gen__text' }, [h('span', { class: 'ads-gen__name' }, prodName(p)), ph ? null : h('span', { class: 'ads-sub ads-sub--act' }, t('gen.noPhoto'))])
+        ]));
+      });
+      makeBtn.textContent = ok.length === 1 ? t('gen.makeOne') : t('gen.make', { n: ok.length });
+      makeBtn.disabled = !ok.length || !!genJob;
+      promptLabel.textContent = first ? t('gen.promptFor', { name: prodName(first) }) : t('gen.showPrompt');
+      promptBox.value = first ? assemblePrompt(ps, picks(), first, genLast.mode) : '';
+      promptHint.textContent = first ? t('gen.chars', { n: num(promptBox.value.length) }) : t('gen.noProducts');
+    }
+    function run() {
+      if (genJob) { toast(t('gen.busy'), 'act'); return; }
+      var list = chosen().filter(photoOf);
+      if (!list.length) return;
+      var set = ps, pk = picks(), o = { mode: genLast.mode, quality: genLast.quality, aspect: ps.aspect || '3:4' };
+      var made = [], failed = [], plain = [], notTried = [];
+      genJob = { tok: tok, n: 1, total: list.length };
+      toast(t('gen.started'));
+      genSync();
+      function step(i) {
+        if (i >= list.length) return finish();
+        genJob.n = i + 1; genSync();
+        var p = list[i];
+        return makePostPicture(post.business, set, pk, p, o).then(function (r) {
+          made.push(r.image);
+          if (r.plain) plain.push(prodName(p));
+          return step(i + 1);
+        }, function (e) {
+          failed.push([prodName(p), aiErrText(e)]);
+          if (e && (e.key || GEN_STOP.indexOf(e.code) !== -1)) { notTried = list.slice(i + 1).map(prodName); return finish(); }
+          return step(i + 1);
+        });
+      }
+      function finish() {
+        var job = genJob, added = 0;
+        genJob = null;
+        if (made.length && !stale(job.tok)) added = addPictures(made);
+        genSync();
+        if (made.length && stale(job.tok)) toast(t('gen.left', { n: made.length }));
+        else if (made.length) {
+          toast(added === 1 ? t('gen.addedOne') : t('gen.added', { n: added }));
+          if (added < made.length) toast(t('gen.full', { n: made.length - added, max: api.postRules.maxImages }), 'act');
+        }
+        if (failed.length || plain.length) genProblems(failed, plain, notTried, made.length);
+      }
+      step(0);
+    }
+  }
+  // What did not work, per product, at the end of a run.
+  function genProblems(failed, plain, notTried, made) {
+    var kids = [];
+    if (!made) kids.push(h('p', {}, h('strong', {}, t('gen.res.none'))));
+    if (failed.length) {
+      kids.push(h('p', {}, t('gen.res.failed')), h('ul', { class: 'ads-issues' }, failed.map(function (f) { return h('li', {}, [h('strong', {}, f[0] + ':'), ' ', f[1]]); })));
+    }
+    if (notTried.length) kids.push(h('p', {}, t('gen.res.stopped')), h('ul', { class: 'ads-issues ads-issues--watch' }, notTried.map(function (n) { return h('li', {}, n); })));
+    if (plain.length) kids.push(h('p', {}, t('gen.res.overlay')), h('ul', { class: 'ads-issues ads-issues--watch' }, plain.map(function (n) { return h('li', {}, n); })));
+    openDialog({ title: t('gen.res.title'), body: h('div', {}, kids), noCancel: true, actions: [{ label: t('common.close'), value: true }] });
+  }
+  // One post picture. chosen: [{ group, option }] (see picks()). Resolves { image: the picture for the
+  // post, plain: true when the name could not be written (the AI picture is used then; it always stays
+  // in the library too) }.
+  function makePostPicture(biz, ps, chosen, p, o) {
+    var refs = [], name = kaName(p), opts = chosen.filter(function (c) { return c.option; });
+    // Reference pictures: the product photo, then the chosen options' pictures; a picture listed twice
+    // is refused by the server, so each goes in once; at most GEN_MAX_REFS.
+    [p.imageId].concat(opts.map(function (c) { return c.option.imageId; })).forEach(function (x) { if (x && refs.indexOf(x) === -1) refs.push(x); });
+    var codes = opts.map(function (c) { return c.option.code; }).join('/') || '-';
+    // The name is written in the colour of the chosen option of the name-colour group; without one
+    // (the default) the colour follows the banner in the finished picture (see autoNameColor).
+    var nc = opts.filter(function (c) { return c.group.nameColor; })[0];
+    var color = nc && /^#[0-9a-f]{6}$/i.test(nc.option.textColor || '') ? nc.option.textColor : null;
+    return api.generateImage(biz, { prompt: assemblePrompt(ps, chosen, p, o.mode), aspect: o.aspect, quality: o.quality, refs: refs.slice(0, GEN_MAX_REFS), title: 'Post: ' + name + ' · ' + codes })
+      .then(function (r) {
+        cacheImages([r.image]);
+        if (o.mode !== 'overlay') return { image: r.image, plain: false };
+        return nameOnPicture(r.image, name, color).then(function (file) {
+          return api.uploadImage(biz, file, 'picture', { title: 'Post picture: ' + name });
+        }).then(function (im) { cacheImages([im]); return { image: im, plain: false }; },
+          function () { return { image: r.image, plain: true }; });
+      });
+  }
+  // The AI picture with the name written in the NAME ZONE (top 15 % of the height, full width, 6 %
+  // side padding): fetched as a blob, drawn on a canvas of the same size, saved as JPEG (0.92).
+  function nameOnPicture(im, text, color) {
+    if (!im.url) return Promise.reject(new Error('no address'));
+    var font = document.fonts && document.fonts.load
+      ? document.fonts.load('600 48px "Noto Sans Georgian"', text).catch(function () { return null; }) : Promise.resolve(null);
+    return fetch(im.url).then(function (r) {
+      if (!r.ok) throw new Error('fetch ' + r.status);
+      return r.blob();
+    }).then(function (blob) { return Promise.all([decodePicture(blob), font]); }).then(function (res) {
+      var pic = res[0], c = document.createElement('canvas');
+      c.width = pic.width; c.height = pic.height;
+      var g = c.getContext('2d');
+      g.drawImage(pic.source, 0, 0, pic.width, pic.height);
+      pic.done();
+      drawName(g, text, pic.width, pic.height, color || autoNameColor(g, pic.width, pic.height));
+      return new Promise(function (resolve, reject) {
+        c.toBlob(function (b) { if (b) resolve(b); else reject(new Error('jpeg')); }, 'image/jpeg', 0.92);
+      });
+    }).then(function (blob) {
+      return new File([blob], 'post-picture.jpg', { type: 'image/jpeg' });
+    });
+  }
+  function decodePicture(blob) {
+    if (window.createImageBitmap) {
+      return createImageBitmap(blob).then(function (b) { return { source: b, width: b.width, height: b.height, done: function () { if (b.close) b.close(); } }; });
+    }
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(blob), img = new Image();
+      img.onload = function () { resolve({ source: img, width: img.naturalWidth, height: img.naturalHeight, done: function () { URL.revokeObjectURL(url); } }); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  // Automatic name colour: the average brightness of the NAME ZONE of the picture as made by the AI.
+  // A dark banner (green or navy panel) gets white, a light one (off-white banner) the deep green.
+  function autoNameColor(g, W, H) {
+    try {
+      var zoneH = Math.max(1, Math.round(H * NAME_ZONE)), d = g.getImageData(0, 0, W, zoneH).data, sum = 0, n = 0;
+      for (var i = 0; i < d.length; i += 16) { sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; } // every 4th pixel
+      return n && sum / n / 255 < 0.5 ? '#FFFFFF' : NAME_COLOR;
+    } catch (e) { return NAME_COLOR; }
+  }
+  // The largest Noto Sans Georgian 600 size that fits the zone in at most 2 lines, centred, in the
+  // frame's colour with a soft outline + shadow in a contrasting colour.
+  function drawName(g, text, W, H, color) {
+    var zoneH = H * NAME_ZONE, maxW = W * (1 - 2 * NAME_PAD), LH = 1.2;
+    var words = String(text).replace(/\s+/g, ' ').trim().split(' ');
+    function setFont(px) { g.font = '600 ' + px + 'px ' + NAME_FONT; }
+    function wrap(px) { // greedy lines; null when one word alone is too wide
+      setFont(px);
+      var lines = [], line = '';
+      for (var i = 0; i < words.length; i++) {
+        var next = line ? line + ' ' + words[i] : words[i];
+        if (g.measureText(next).width <= maxW) { line = next; continue; }
+        if (!line) return null;
+        lines.push(line); line = words[i];
+        if (g.measureText(line).width > maxW) return null;
+      }
+      lines.push(line);
+      return lines;
+    }
+    var lo = 8, hi = Math.max(8, Math.floor(zoneH / LH)), best = null;
+    while (lo <= hi) {
+      var mid = Math.floor((lo + hi) / 2), ls = wrap(mid);
+      if (ls && ls.length <= 2 && ls.length * mid * LH <= zoneH) { best = { px: mid, lines: ls }; lo = mid + 1; } else hi = mid - 1;
+    }
+    if (!best) { // a very long name: two lines, squeezed to the width (fillText's maxWidth)
+      var half = Math.ceil(words.length / 2);
+      var two = words.length > 1 ? [words.slice(0, half).join(' '), words.slice(half).join(' ')] : [words[0]];
+      best = { px: Math.max(8, Math.floor(zoneH / (two.length * LH))), lines: two };
+    }
+    var m = /^#?([0-9a-f]{6})$/i.exec(color || ''), n = parseInt(m ? m[1] : '3E5C3A', 16);
+    var lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+    var halo = lum < 0.55 ? 'rgba(255, 255, 255, 0.85)' : 'rgba(20, 33, 61, 0.7)';
+    var lh = best.px * LH, top = (zoneH - best.lines.length * lh) / 2;
+    setFont(best.px);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    best.lines.forEach(function (line, i) {
+      var y = top + lh * (i + 0.5);
+      g.save();
+      g.shadowColor = halo; g.shadowBlur = best.px * 0.25;
+      g.lineJoin = 'round'; g.lineWidth = Math.max(2, best.px * 0.12); g.strokeStyle = halo;
+      g.strokeText(line, W / 2, y, maxW);
+      g.restore();
+      g.fillStyle = color; g.fillText(line, W / 2, y, maxW);
+    });
+  }
+  // Copies a read-only text box: the clipboard API, else select + copy, else the user copies by hand.
+  function copyText(ta) {
+    function byHand() {
+      var ok = false;
+      ta.focus(); ta.select();
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      toast(t(ok ? 'gen.copied' : 'gen.copyFail'), ok ? 'ok' : 'act');
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(function () { toast(t('gen.copied')); }, byHand);
+    else byHand();
   }
 
   /* ---------------------------------------------------------------------
@@ -1307,6 +1797,591 @@
     api.aiTest(ctx.business).then(function (r) { btn.disabled = false; toast(t('aimg.test.ok', { model: r.model })); },
       function (e) { btn.disabled = false; toast(aiErrText(e), 'act'); });
   }
+  // "Choose from library": one of the business's own uploads (not the samples). Resolves with its id, or null.
+  function chooseLibraryImage(biz, current) {
+    return api.listImages(biz).then(function (list) {
+      cacheImages(list);
+      var mine = list.filter(function (x) { return !x.sample && x.url; }), useBtn = null;
+      var pick = mine.some(function (x) { return x.id === current; }) ? current : '';
+      var body = !mine.length ? h('p', { class: 'ads-note' }, t('pd.lib.none')) : h('ul', { class: 'ads-aipicks' }, mine.map(function (im) {
+        var id = 'ads-lp-' + im.id;
+        var r = h('input', { type: 'radio', name: 'ads-lp', id: id, value: im.id, checked: im.id === pick });
+        r.addEventListener('change', function () { pick = im.id; if (useBtn) useBtn.disabled = false; });
+        return h('li', {}, h('label', { class: 'ads-aipick', for: id, title: im.title }, [r, h('img', { src: im.url, alt: '', loading: 'lazy' }), h('span', { class: 'ads-aipick__name' }, im.title)]));
+      }));
+      return openDialog({
+        title: t('pd.lib.title'), wide: true, body: body,
+        actions: mine.length ? [{ label: t('pd.lib.use'), value: 'use', disabled: !pick }] : [],
+        onOpen: function (dlg, btns) { useBtn = btns.use || null; }
+      }).then(function (v) { return v === 'use' && pick ? pick : null; });
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+     9b. Picture styles (live only, 6 Nov 2026): the prompt template, and groups of options (for
+         example frames, price tags, backgrounds) that the post-picture generator combines with
+         each product. The groups are data too (ads_style_groups): nothing is fixed in the
+         database; the owner types them in or imports the Prompt Library workbook (Excel).
+     --------------------------------------------------------------------- */
+  var styJob = null;  // an import or bulk upload in progress: { key (i18n of the progress line), n, total }
+  var styView = null; // the Picture styles view on screen: { tok, status }
+  function stySync() {
+    if (!styView || stale(styView.tok)) return;
+    styView.status.textContent = styJob ? t(styJob.key, { n: styJob.n, total: styJob.total }) : '';
+  }
+  function styleNo(code) { var m = /^[A-Za-z](\d{1,2})$/.exec(code || ''); return m ? parseInt(m[1], 10) : 0; }
+  function styleLabelAspect(a) { return a === '3:4' ? t('sty.aspect.3x4') : a === '4:3' ? t('sty.aspect.4x3') : t('aimg.aspect.' + a.replace(':', 'x')); }
+  // Style codes compare by letter and number: "f02" = "F2". '' when it is not a code.
+  function styleKey(code) {
+    var m = /^([A-Za-z])(\d{1,2})$/.exec(String(code || '').trim());
+    return m ? m[1].toUpperCase() + parseInt(m[2], 10) : '';
+  }
+  // A file named "F2 Arch Window.jpg" or "t1_round.png" belongs to option F2 / T1: a letter and 1-2
+  // digits, then a space, "_", "-" or "."; case and leading zeros do not matter. '' when none.
+  function fileStyleCode(name) {
+    var m = /^([A-Za-z]\d{1,2})[ _.\-]/.exec(String(name || ''));
+    return m ? styleKey(m[1]) : '';
+  }
+  // Token suggested from a group or sheet name: capitals, digits and _, starting with a letter, max 20.
+  function tokenFrom(name) {
+    return String(name || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^[^A-Z]+/, '').slice(0, 20).replace(/_+$/, '');
+  }
+  // Letter for a group: the wished one when free, else the first free letter A-Z ('' when all are used).
+  function freePrefix(groups, wish, self) {
+    var used = groups.filter(function (g) { return g !== self; }).map(function (g) { return g.prefix; });
+    wish = String(wish || '').toUpperCase();
+    if (/^[A-Z]$/.test(wish) && used.indexOf(wish) === -1) return wish;
+    for (var c = 65; c <= 90; c++) if (used.indexOf(String.fromCharCode(c)) === -1) return String.fromCharCode(c);
+    return '';
+  }
+  // A group's fields checked before saving: '' when fine, else the reason. self: the group being edited.
+  function groupProblem(groups, v, self) {
+    var token = String(v.token || '').trim().toUpperCase(), prefix = String(v.prefix || '').trim().toUpperCase();
+    if (!String(v.name || '').trim()) return t('sty.grp.err.name');
+    if (!/^[A-Z][A-Z0-9_]{0,19}$/.test(token)) return t('sty.grp.err.token');
+    if (api.reservedTokens.indexOf(token) !== -1) return t('sty.grp.err.reserved', { token: token });
+    if (groups.some(function (g) { return g !== self && g.token === token; })) return t('sty.grp.err.tokenTaken', { token: token });
+    if (!/^[A-Z]$/.test(prefix)) return t('sty.grp.err.prefix');
+    if (groups.some(function (g) { return g !== self && g.prefix === prefix; })) return t('sty.grp.err.prefixTaken', { prefix: prefix });
+    return '';
+  }
+
+  /* The owner's Prompt Library workbook: every sheet with the columns ID | Name | Prompt... becomes a
+     group (Frames, PriceTags, Backgrounds have fixed tokens and letters), the sheet Settings holds the
+     template texts in columns A (label) and B (text). Builder, Products and README are not read. */
+  var LIB_KNOWN = { frames: ['FRAME', 'F', 'element', 'Frame'], pricetags: ['TAG', 'T', 'element', 'Price tag'], backgrounds: ['BG', 'B', 'picture', 'Background'] };
+  var LIB_SKIP = ['products', 'builder', 'readme'];
+  var LIB_SETTINGS = { 'master template': 'template', 'fixed rules': 'rules', 'text mode: ai writes': 'textAi', 'text mode: overlay': 'textOverlay' };
+  var LIB_TPL_LABELS = { template: 'sty.tpl.master', rules: 'sty.tpl.rules', textAi: 'sty.tpl.textAi', textOverlay: 'sty.tpl.textOverlay' };
+  function cellText(v) { return v == null ? '' : String(v).replace(/\r\n?/g, '\n').trim(); }
+  // Columns of ID, Name and Prompt (a header that starts with "Prompt", e.g. "Prompt ({PRICE} filled automatically)").
+  function libColumns(r) {
+    var c = { id: -1, name: -1, prompt: -1 };
+    (r || []).forEach(function (v, i) {
+      var s = cellText(v).replace(/\s+/g, ' ').toLowerCase();
+      if (s === 'id' && c.id === -1) c.id = i;
+      else if (s === 'name' && c.name === -1) c.name = i;
+      else if (/^prompt\b/.test(s) && c.prompt === -1) c.prompt = i;
+    });
+    return c.id !== -1 && c.name !== -1 && c.prompt !== -1 ? c : null;
+  }
+  // -> { groups: [{ sheet, token, name, prefix, pictureKind, options: [{ code, name, prompt }], skipped }],
+  //      settings: { template, rules, textAi, textOverlay } (only those found) }
+  function parsePromptLibrary(X, wb) {
+    var out = { groups: [], settings: {} };
+    wb.SheetNames.forEach(function (sheet) {
+      var key = sheet.toLowerCase().replace(/[\s_\-]+/g, ''), ws = wb.Sheets[sheet];
+      if (!ws || LIB_SKIP.indexOf(key) !== -1) return;
+      var rows = X.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', blankrows: false });
+      if (key === 'settings') {
+        rows.forEach(function (r) {
+          var k = LIB_SETTINGS[cellText(r[0]).replace(/\s+/g, ' ').toLowerCase()];
+          if (k && cellText(r[1])) out.settings[k] = cellText(r[1]);
+        });
+        return;
+      }
+      var head = -1, cols = null;
+      for (var i = 0; i < Math.min(rows.length, 10) && !cols; i++) { cols = libColumns(rows[i]); head = i; }
+      if (!cols) return;
+      var byCode = {}, order = [], skipped = 0;
+      rows.slice(head + 1).forEach(function (r) {
+        var code = cellText(r[cols.id]).toUpperCase();
+        if (!code) return;
+        if (!/^[A-Z]\d{1,2}$/.test(code)) { skipped++; return; }
+        if (!byCode[code]) order.push(code);
+        byCode[code] = { code: code, name: cellText(r[cols.name]).replace(/\s+/g, ' '), prompt: cellText(r[cols.prompt]) };
+      });
+      if (!order.length) return;
+      var known = LIB_KNOWN[key], token = known ? known[0] : tokenFrom(sheet);
+      if (!/^[A-Z][A-Z0-9_]{0,19}$/.test(token) || api.reservedTokens.indexOf(token) !== -1) token = order[0].charAt(0) + '_GROUP';
+      out.groups.push({ sheet: sheet, token: token, name: known ? known[3] : sheet, prefix: known ? known[1] : order[0].charAt(0),
+        pictureKind: known ? known[2] : 'picture', options: order.map(function (c) { return byCode[c]; }), skipped: skipped });
+    });
+    return out;
+  }
+
+  function viewStyles(tok) {
+    var live = liveMode(), rules = api.imageRules, ps = null, groups = [], styles = [], loaded = false, seq = 0;
+    var cards = {};       // saved option id -> { setImage(id) }: the bulk upload links pictures through it
+    var colorFields = []; // [{ groupId, el }]: an option's colour field shows only in the name-colour group
+    var tokensHint = null, colourBox = null, groupsBox = null, noGroups = null, addGroupBtn = null;
+    var body = h('div', {}, live ? skeleton(4) : null);
+    var status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
+    var picker = h('input', { type: 'file', multiple: true, accept: rules.accept, hidden: true });
+    picker.addEventListener('change', function () { var f = [].slice.call(picker.files || []); picker.value = ''; if (f.length) bulk(f); });
+    var xls = h('input', { type: 'file', hidden: true, accept: '.xlsx,.xls,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet' });
+    xls.addEventListener('change', function () { var f = xls.files && xls.files[0]; xls.value = ''; if (f) readLibrary(f); });
+    function whenReady(fn) { return function () { if (styJob) toast(t('lib.busy'), 'act'); else if (loaded) fn(); }; }
+    render(h('div', { class: 'ads-styles' }, [
+      pageHead('sty.nav', live ? [
+        h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: whenReady(function () { xls.click(); }) }, t('sty.imp')),
+        h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: whenReady(function () { picker.click(); }) }, t('sty.bulk'))
+      ] : []),
+      h('p', { class: 'ads-note' }, t('sty.intro')),
+      live ? null : h('p', { class: 'ads-warn' }, t('sty.mock')),
+      picker, xls, status, body
+    ]), 'sty.nav');
+    if (!live) return;
+    styView = { tok: tok, status: status };
+    stySync();
+    load();
+
+    function load() {
+      Promise.all([api.getPictureSettings(ctx.business), api.listStyleGroups(ctx.business), api.listStyles(ctx.business)]).then(function (r) {
+        if (stale(tok)) return;
+        ps = r[0]; groups = r[1]; styles = r[2]; loaded = true;
+        cacheImages(styles.map(function (s) { return s.image; }).filter(Boolean));
+        draw();
+      }).catch(function (e) {
+        if (stale(tok)) return;
+        loaded = false;
+        body.innerHTML = '';
+        body.appendChild(h('div', { class: 'ads-warn', role: 'alert' }, [h('p', {}, errText(e) || t('common.errorText')),
+          h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { body.innerHTML = ''; body.appendChild(skeleton(4)); load(); } }, t('common.retry'))]));
+      });
+    }
+    function groupById(id) { return groups.filter(function (g) { return g.id === id; })[0] || null; }
+    function draw() {
+      body.innerHTML = ''; cards = {}; colorFields = [];
+      tokensHint = h('p', { class: 'ads-hint ads-tokens' });
+      colourBox = h('div', {});
+      noGroups = h('p', { class: 'ads-note' }, t('sty.groups.none'));
+      groupsBox = h('div', {}, noGroups);
+      addGroupBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: addGroup }, t('sty.grp.add'));
+      body.appendChild(templateCard());
+      body.appendChild(colourBox);
+      body.appendChild(groupsBox);
+      body.appendChild(h('div', { class: 'ads-btnrow ads-addgroup' }, addGroupBtn));
+      groups.forEach(function (g) { groupsBox.appendChild(groupSection(g)); });
+      syncMeta();
+    }
+    // After a group change: the group tokens line, the name-colour choice, the colour fields, the empty note.
+    function syncMeta() {
+      tokensHint.textContent = t('sty.tpl.groupTokens', { groups: groups.length
+        ? groups.map(function (g) { return '{' + g.token + '} ' + g.name; }).join(' · ') : t('sty.tpl.noGroups') });
+      drawColour();
+      syncColourFields();
+      noGroups.hidden = !!groups.length;
+    }
+    function syncColourFields() {
+      colorFields.forEach(function (c) { var g = groupById(c.groupId); c.el.hidden = !(g && g.nameColor); });
+    }
+    function templateCard() {
+      var s = ps || { template: '', rules: '', textAi: '', textOverlay: '', aspect: '3:4' };
+      // maxlength = the database limits (0029: template 8000, rules 4000, the two texts 2000)
+      function box(id, key, rows, max) { return h('textarea', { id: id, class: 'ads-input ads-textarea', rows: String(rows), maxlength: String(max), spellcheck: 'false', lang: 'en' }, s[key] || ''); }
+      var tpl = box('ads-sty-tpl', 'template', 10, 8000), rulesBox = box('ads-sty-rules', 'rules', 4, 4000), tAi = box('ads-sty-tai', 'textAi', 3, 2000), tOv = box('ads-sty-tov', 'textOverlay', 3, 2000);
+      var aspects = api.pictureAspects;
+      var aspect = select('ads-sty-aspect', aspects.map(function (a) { return [a, styleLabelAspect(a)]; }), aspects.indexOf(s.aspect) !== -1 ? s.aspect : '3:4', function () {});
+      var save = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
+        save.disabled = true;
+        api.savePictureSettings(ctx.business, { template: tpl.value, rules: rulesBox.value, textAi: tAi.value, textOverlay: tOv.value, aspect: aspect.value })
+          .then(function (r) { ps = r; toast(t('sty.tpl.saved')); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); })
+          .then(function () { save.disabled = false; });
+      } }, t('sty.tpl.save'));
+      return h('section', { class: 'ads-card', 'aria-labelledby': 'ads-sty-tpl-h' }, [
+        h('h2', { class: 'ads-h2', id: 'ads-sty-tpl-h' }, t('sty.tpl')),
+        h('p', { class: 'ads-hint ads-tokens' }, t('sty.tpl.tokens')), tokensHint,
+        field('sty.tpl.master', tpl, null, 'ads-sty-tpl'), field('sty.tpl.rules', rulesBox, null, 'ads-sty-rules'),
+        field('sty.tpl.textAi', tAi, null, 'ads-sty-tai'), field('sty.tpl.textOverlay', tOv, null, 'ads-sty-tov'),
+        field('sty.tpl.aspect', aspect, null, 'ads-sty-aspect'),
+        h('div', { class: 'ads-btnrow' }, save)
+      ]);
+    }
+    // "Name colour on the picture comes from: <group>", one group at most.
+    function drawColour() {
+      colourBox.innerHTML = '';
+      if (!groups.length) return;
+      var cur = groups.filter(function (g) { return g.nameColor; })[0];
+      var sel = select('ads-sty-nc', [['', t('sty.color.none')]].concat(groups.map(function (g) { return [g.id, g.name + ' {' + g.token + '}']; })), cur ? cur.id : '', function () {});
+      sel.setAttribute('aria-describedby', 'ads-sty-nc-hint');
+      var save = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { setNameColour(sel.value, save); } }, t('sty.color.save'));
+      colourBox.appendChild(h('section', { class: 'ads-card', 'aria-labelledby': 'ads-sty-nc-h' }, [
+        h('h2', { class: 'ads-h2', id: 'ads-sty-nc-h' }, t('sty.color.title')),
+        field('sty.color.from', sel, t('sty.color.hint'), 'ads-sty-nc'),
+        h('div', { class: 'ads-btnrow' }, save)
+      ]));
+    }
+    // The old group is switched off first, then the new one on, so two are never on together.
+    function setNameColour(id, btn) {
+      btn.disabled = true;
+      var steps = groups.filter(function (g) { return g.nameColor && g.id !== id; }).map(function (g) {
+        return function () { return api.saveStyleGroup({ id: g.id, nameColor: false }).then(function () { g.nameColor = false; }); };
+      });
+      var on = id ? groupById(id) : null;
+      if (on && !on.nameColor) steps.push(function () { return api.saveStyleGroup({ id: on.id, nameColor: true }).then(function () { on.nameColor = true; }); });
+      steps.reduce(function (p, fn) { return p.then(fn); }, Promise.resolve())
+        .then(function () { toast(t('sty.color.saved')); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); })
+        .then(function () { btn.disabled = false; if (!stale(tok)) syncColourFields(); });
+    }
+    // A group: heading + its token, letter and picture kind; "Edit group" (Save, Delete); its option cards.
+    function groupSection(g) {
+      var pre = 'ads-sty-g' + (++seq);
+      var heading = h('h2', { class: 'ads-h2 ads-grouphead', id: pre + '-h', tabindex: '-1' }), meta = h('p', { class: 'ads-hint ads-grouphead__meta' });
+      var grid = h('div', { class: 'ads-stylegrid' }), empty = h('p', { class: 'ads-note' }, t('sty.none'));
+      var name = h('input', { type: 'text', id: pre + '-name', class: 'ads-input', value: g.name, maxlength: '60', autocomplete: 'off' });
+      var token = h('input', { type: 'text', id: pre + '-token', class: 'ads-input ads-input--caps', value: g.token, maxlength: '20', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': pre + '-token-hint' });
+      var prefix = h('input', { type: 'text', id: pre + '-prefix', class: 'ads-input ads-input--caps', value: g.prefix, maxlength: '1', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': pre + '-prefix-hint' });
+      var kind = select(pre + '-kind', [['element', t('sty.grp.kind.element')], ['picture', t('sty.grp.kind.picture')]], g.pictureKind, function () {});
+      var err = h('p', { class: 'ads-hint ads-hint--warn', role: 'alert' });
+      var saveBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: save }, t('sty.grp.save'));
+      var delBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost', onclick: del }, t('sty.grp.delete'));
+      var addBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () {
+        var sort = styles.reduce(function (a, s) { return s.groupId === g.id ? Math.max(a, s.sort) : a; }, 0) + 1;
+        var s = { id: null, business: ctx.business, groupId: g.id, code: nextCode(g.prefix), name: '', prompt: '', imageId: null, textColor: null, active: true, sort: sort };
+        styles.push(s);
+        var card = styleCard(s, g, addBtn);
+        grid.appendChild(card); empty.hidden = true;
+        card.querySelectorAll('input[type=text]')[1].focus(); // the name (the code is filled in)
+      } });
+      var section = h('section', { class: 'ads-card', 'aria-labelledby': pre + '-h' }, [
+        heading, meta,
+        h('details', { class: 'ads-details ads-grouphead__edit' }, [h('summary', {}, t('sty.grp.edit')), h('div', { class: 'ads-grouphead__form' }, [
+          h('div', { class: 'ads-row' }, [field('sty.grp.name', name, null, pre + '-name'), field('sty.grp.kind', kind, null, pre + '-kind')]),
+          h('div', { class: 'ads-row' }, [field('sty.grp.token', token, t('sty.grp.token.hint'), pre + '-token'), field('sty.grp.prefix', prefix, t('sty.grp.prefix.hint'), pre + '-prefix')]),
+          err, h('div', { class: 'ads-btnrow' }, [saveBtn, delBtn])
+        ])]),
+        empty, grid, h('div', { class: 'ads-btnrow' }, addBtn)
+      ]);
+      var mine = styles.filter(function (s) { return s.groupId === g.id; });
+      mine.forEach(function (s) { grid.appendChild(styleCard(s, g, addBtn)); });
+      empty.hidden = !!mine.length;
+      head();
+      return section;
+
+      function head() {
+        heading.textContent = g.name;
+        meta.textContent = t('sty.grp.meta', { token: '{' + g.token + '}', prefix: g.prefix, kind: t('sty.grp.kindShort.' + g.pictureKind) });
+        addBtn.textContent = t('sty.opt.add', { name: g.name });
+      }
+      function save() {
+        var v = { name: name.value, token: token.value, prefix: prefix.value }, bad = groupProblem(groups, v, g);
+        err.textContent = bad;
+        if (bad) return;
+        saveBtn.disabled = true;
+        api.saveStyleGroup({ id: g.id, name: v.name, token: v.token, prefix: v.prefix, pictureKind: kind.value }).then(function (r) {
+          Object.keys(r).forEach(function (k) { g[k] = r[k]; });
+          name.value = g.name; token.value = g.token; prefix.value = g.prefix;
+          head(); syncMeta();
+          toast(t('sty.grp.saved', { name: g.name }));
+        }, function (e) { err.textContent = errText(e); }).then(function () { saveBtn.disabled = false; });
+      }
+      function del() {
+        var n = styles.filter(function (s) { return s.groupId === g.id && s.id; }).length;
+        confirmDialog({ title: t('sty.grp.del.title'), message: t('sty.grp.del.text', { name: g.name, n: n }), confirmLabel: t('sty.grp.delete'), danger: true }).then(function (ok) {
+          if (!ok) return;
+          api.deleteStyleGroup(g.id).then(function () {
+            groups.splice(groups.indexOf(g), 1);
+            styles = styles.filter(function (s) { return s.groupId !== g.id; });
+            section.remove(); syncMeta(); addGroupBtn.focus();
+            toast(t('sty.grp.deleted', { name: g.name }));
+          }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+        });
+      }
+    }
+    // Next free code of a group: its letter + the highest number in use + 1 (F6 after F1-F5).
+    function nextCode(letter) {
+      var n = 0;
+      styles.forEach(function (s) { if (String(s.code || '').charAt(0).toUpperCase() === letter) n = Math.max(n, styleNo(s.code)); });
+      return letter + (n + 1);
+    }
+    // One option: code, name, reference picture, prompt, (name-colour group) colour, active; Save, Delete.
+    // Picture changes of a saved option are saved at once; a new option keeps them until Save.
+    function styleCard(s, g, addBtn) {
+      var pre = 'ads-sty-o' + (++seq), imageId = s.imageId;
+      var head = h('h3', { class: 'ads-style__title', id: pre + '-h' });
+      var code = h('input', { type: 'text', id: pre + '-code', class: 'ads-input ads-input--caps', value: s.code, maxlength: '3', autocomplete: 'off', spellcheck: 'false' });
+      var name = h('input', { type: 'text', id: pre + '-name', class: 'ads-input', value: s.name, maxlength: '80', autocomplete: 'off' });
+      var prompt = h('textarea', { id: pre + '-prompt', class: 'ads-input ads-textarea', rows: '5', maxlength: '3000', spellcheck: 'false', lang: 'en' }, s.prompt);
+      var color = h('input', { type: 'color', id: pre + '-color', class: 'ads-color', value: /^#[0-9a-f]{6}$/i.test(s.textColor || '') ? s.textColor.toLowerCase() : NAME_COLOR.toLowerCase() });
+      var colorHex = h('span', { class: 'ads-color__hex', 'aria-hidden': 'true' }, color.value.toUpperCase());
+      color.addEventListener('input', function () { colorHex.textContent = color.value.toUpperCase(); });
+      // Ticked (the default): the colour follows the banner of each finished picture (white on dark, green on light).
+      var auto = h('input', { type: 'checkbox', id: pre + '-auto', checked: !/^#[0-9a-f]{6}$/i.test(s.textColor || '') });
+      function autoSync() { color.disabled = auto.checked; colorHex.hidden = auto.checked; }
+      auto.addEventListener('change', autoSync); autoSync();
+      var colorField = h('div', { class: 'ads-field' }, [h('label', { class: 'ads-label', for: pre + '-color' }, t('sty.color')),
+        h('span', { class: 'ads-color__row' }, [h('label', { class: 'ads-option ads-option--inline', for: pre + '-auto' }, [auto, h('span', {}, t('sty.colorAuto'))]), color, colorHex])]);
+      colorFields.push({ groupId: g.id, el: colorField });
+      colorField.hidden = !g.nameColor;
+      var active = h('input', { type: 'checkbox', id: pre + '-active', checked: s.active !== false });
+      var pic = h('div', { class: 'ads-style__pic' });
+      var file = h('input', { type: 'file', accept: api.imageRules.accept, hidden: true });
+      var upBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () { file.click(); } }, t('sty.upload'));
+      var chooseBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () {
+        chooseLibraryImage(ctx.business, imageId).then(function (id) { if (id) setPicture(id); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+      } }, t('sty.choose'));
+      var removeBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--danger-ghost', onclick: function () { setPicture(null); upBtn.focus(); } }, t('sty.removePic'));
+      var saveBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: saveCard }, t('sty.save'));
+      var delBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost', onclick: del }, t('sty.delete'));
+      file.addEventListener('change', function () {
+        var f = file.files && file.files[0]; file.value = '';
+        if (!f) return;
+        var bad = api.checkImageFile(f);
+        if (bad) { toast(f.name + ': ' + t(bad.key, bad.vars), 'act'); return; }
+        upBtn.disabled = true;
+        api.uploadImage(ctx.business, f, g.pictureKind).then(function (im) { cacheImages([im]); setPicture(im.id); },
+          function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); }).then(function () { upBtn.disabled = false; });
+      });
+      function title() { head.textContent = s.id ? s.code + ' — ' + s.name : t('sty.new'); }
+      function drawPic() {
+        pic.innerHTML = '';
+        pic.appendChild(imageId && imageById(imageId) ? imageEl(imageId, 'ads-style__img') : h('div', { class: 'ads-style__img ads-img-empty' }, t(imageId ? 'common.noImage' : 'sty.noPic')));
+        removeBtn.hidden = !imageId;
+      }
+      function setPicture(id) {
+        imageId = id; drawPic();
+        if (!s.id) return; // a new option: saved together with the rest
+        api.saveStyle({ id: s.id, imageId: id }).then(function (r) { s.imageId = r.imageId; toast(t('sty.picSaved', { code: s.code })); },
+          function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+      }
+      function saveCard() {
+        var c = code.value.trim().toUpperCase();
+        if (!/^[A-Z]\d{1,2}$/.test(c)) { toast(t('sty.err.code'), 'act'); code.focus(); return; }
+        if (styles.some(function (x) { return x !== s && x.id && styleKey(x.code) === styleKey(c); })) { toast(t('sty.err.codeTaken', { code: c }), 'act'); code.focus(); return; }
+        if (!name.value.trim()) { toast(t('sty.err.name'), 'act'); name.focus(); return; }
+        if (!prompt.value.trim()) { toast(t('sty.err.prompt'), 'act'); prompt.focus(); return; } // the database needs a prompt
+        saveBtn.disabled = true;
+        api.saveStyle({ id: s.id, business: ctx.business, groupId: g.id, code: c, name: name.value, prompt: prompt.value, imageId: imageId,
+          textColor: g.nameColor ? (auto.checked ? null : color.value) : undefined, active: active.checked, sort: s.sort }).then(function (r) {
+          var wasNew = !s.id;
+          Object.keys(r).forEach(function (k) { s[k] = r[k]; });
+          code.value = s.code; title();
+          if (wasNew) cards[s.id] = link;
+          toast(t('sty.saved', { code: s.code }));
+        }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); }).then(function () { saveBtn.disabled = false; });
+      }
+      function del() {
+        if (!s.id) { styles.splice(styles.indexOf(s), 1); card.remove(); addBtn.focus(); return; }
+        confirmDialog({ title: t('sty.del.title'), message: t('sty.del.text', { code: s.code, name: s.name }), confirmLabel: t('sty.delete'), danger: true }).then(function (ok) {
+          if (!ok) return;
+          api.deleteStyle(s.id).then(function () {
+            styles.splice(styles.indexOf(s), 1); delete cards[s.id];
+            card.remove(); addBtn.focus();
+            toast(t('sty.deleted', { code: s.code }));
+          }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+        });
+      }
+      var card = h('article', { class: 'ads-style', 'aria-labelledby': pre + '-h' }, [
+        head,
+        h('div', { class: 'ads-style__picrow' }, [pic, h('div', { class: 'ads-style__picbtns' }, [upBtn, chooseBtn, removeBtn]), file]),
+        h('div', { class: 'ads-row ads-row--code' }, [field('sty.code', code, null, pre + '-code'), field('sty.name', name, null, pre + '-name')]),
+        field('sty.prompt', prompt, null, pre + '-prompt'),
+        colorField,
+        h('label', { class: 'ads-option ads-option--inline', for: pre + '-active' }, [active, h('span', {}, t('sty.active'))]),
+        h('div', { class: 'ads-btnrow' }, [saveBtn, delBtn])
+      ]);
+      var link = { setImage: function (id) { imageId = id; s.imageId = id; drawPic(); } };
+      if (s.id) cards[s.id] = link;
+      title(); drawPic();
+      return card;
+    }
+    // "Add a group": name; token suggested from the name in capitals; letter = the token's first letter
+    // when free, else the first free letter; picture kind.
+    function addGroup() {
+      var name = h('input', { type: 'text', id: 'ads-sty-ng-name', class: 'ads-input', maxlength: '60', autocomplete: 'off', 'aria-describedby': 'ads-sty-ng-name-hint' });
+      var token = h('input', { type: 'text', id: 'ads-sty-ng-token', class: 'ads-input ads-input--caps', maxlength: '20', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'ads-sty-ng-token-hint' });
+      var prefix = h('input', { type: 'text', id: 'ads-sty-ng-prefix', class: 'ads-input ads-input--caps', maxlength: '1', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'ads-sty-ng-prefix-hint', value: freePrefix(groups, '') });
+      var kind = select('ads-sty-ng-kind', [['element', t('sty.grp.kind.element')], ['picture', t('sty.grp.kind.picture')]], 'element', function () {});
+      var err = h('p', { class: 'ads-hint ads-hint--warn', role: 'alert' });
+      var tokenTyped = false, prefixTyped = false, created = null;
+      name.addEventListener('input', function () {
+        if (!tokenTyped) token.value = tokenFrom(name.value);
+        if (!prefixTyped) prefix.value = freePrefix(groups, token.value.charAt(0));
+      });
+      token.addEventListener('input', function () { tokenTyped = true; if (!prefixTyped) prefix.value = freePrefix(groups, token.value.charAt(0)); });
+      prefix.addEventListener('input', function () { prefixTyped = true; });
+      openDialog({
+        title: t('sty.grp.addTitle'),
+        body: h('div', {}, [field('sty.grp.name', name, t('sty.grp.name.hint'), 'ads-sty-ng-name'), field('sty.grp.token', token, t('sty.grp.token.hint'), 'ads-sty-ng-token'),
+          field('sty.grp.prefix', prefix, t('sty.grp.prefix.hint'), 'ads-sty-ng-prefix'), field('sty.grp.kind', kind, null, 'ads-sty-ng-kind'), err]),
+        actions: [{ label: t('sty.grp.create'), value: 'add' }],
+        onOpen: function () { name.focus(); },
+        onAction: function () {
+          var v = { name: name.value, token: token.value, prefix: prefix.value }, bad = groupProblem(groups, v, null);
+          err.textContent = bad;
+          if (bad) return false;
+          var sort = groups.reduce(function (a, g) { return Math.max(a, g.sort); }, 0) + 1;
+          return api.saveStyleGroup({ business: ctx.business, name: v.name, token: v.token, prefix: v.prefix, pictureKind: kind.value, nameColor: false, sort: sort })
+            .then(function (g) { created = g; return true; }, function (e) { err.textContent = errText(e); return false; });
+        }
+      }).then(function () {
+        if (!created || stale(tok)) return;
+        groups.push(created);
+        var sec = groupSection(created);
+        groupsBox.appendChild(sec);
+        syncMeta();
+        toast(t('sty.grp.saved', { name: created.name }));
+        $('.ads-grouphead', sec).focus();
+      });
+    }
+    // Many files at once: each file whose name starts with a code goes to the library (as its group's
+    // picture kind) and to that option.
+    function bulk(files) {
+      var byCode = {}, used = {};
+      styles.forEach(function (s) { if (s.id && styleKey(s.code)) byCode[styleKey(s.code)] = s; });
+      var list = files.map(function (f, i) {
+        var code = fileStyleCode(f.name), s = code ? byCode[code] || null : null;
+        var problem = i >= rules.maxFiles ? { key: 'lib.err.tooMany', vars: { max: rules.maxFiles } } : api.checkImageFile(f);
+        var dup = !!(s && !problem && used[s.id]);
+        if (s && !problem && !dup) used[s.id] = true;
+        return { file: f, style: s, problem: problem, dup: dup };
+      });
+      var ok = list.filter(function (x) { return x.style && !x.problem && !x.dup; });
+      var rows = h('ul', { class: 'ads-filelist' }, list.map(function (x) {
+        var good = x.style && !x.problem && !x.dup;
+        var text = x.problem ? t(x.problem.key, x.problem.vars) : !x.style ? t('sty.bulk.noMatch')
+          : x.dup ? t('sty.bulk.dup', { code: x.style.code }) : t('sty.bulk.match', { code: x.style.code, name: x.style.name });
+        return h('li', { class: 'ads-filelist__item' }, [h('span', { class: 'ads-filelist__name' }, x.file.name), h('span', { class: 'ads-filelist__size' }, fmtBytes(x.file.size)),
+          h('span', { class: 'ads-filelist__state ads-filelist__state--' + (good ? 'ok' : 'bad') }, text)]);
+      }));
+      openDialog({
+        title: t('sty.bulk.title'), wide: true,
+        body: h('div', {}, [h('p', { class: 'ads-note' }, t('sty.bulk.intro')), rows, ok.length ? null : h('p', { class: 'ads-warn' }, t('sty.bulk.none'))]),
+        actions: [{ label: t(ok.length === 1 ? 'lib.uploadOne' : 'lib.uploadN', { n: ok.length }), value: true, disabled: !ok.length }]
+      }).then(function (yes) { if (yes) runBulk(ok); });
+    }
+    function runBulk(items) {
+      var biz = ctx.business, done = 0, failed = [];
+      styJob = { key: 'lib.progress', n: 1, total: items.length };
+      function step(i) {
+        if (i >= items.length) return finish();
+        var x = items[i], g = groupById(x.style.groupId);
+        styJob.n = i + 1; stySync();
+        return api.uploadImage(biz, x.file, g ? g.pictureKind : 'picture').then(function (im) {
+          cacheImages([im]);
+          return api.saveStyle({ id: x.style.id, imageId: im.id }).then(function () {
+            x.style.imageId = im.id; done++;
+            if (cards[x.style.id]) cards[x.style.id].setImage(im.id);
+          });
+        }).then(null, function () { failed.push(x.file.name); }).then(function () { return step(i + 1); });
+      }
+      function finish() {
+        styJob = null; stySync();
+        if (!failed.length) toast(t('sty.bulk.done', { n: done }));
+        else toast(t('sty.bulk.failed', { n: done, f: failed.length, names: failed.slice(0, 3).join(', ') + (failed.length > 3 ? ', …' : '') }), 'act');
+      }
+      step(0);
+    }
+    // "Import from Prompt Library (Excel)": read, show what was found, then add / update (never delete).
+    function readLibrary(file) {
+      var SI = window.AdsStockImport;
+      if (!/\.(xlsx|xls|ods)$/i.test(file.name || '')) { toast(t('sty.imp.err.type'), 'act'); return; }
+      if (file.size > 10 * 1048576) { toast(t('stock.err.size', { mb: 10 }), 'act'); return; }
+      if (!SI || !SI.loadXlsx) { toast(t('stock.err.load'), 'act'); return; }
+      status.textContent = t('stock.reading');
+      SI.loadXlsx().then(function (X) {
+        return file.arrayBuffer().then(function (buf) {
+          var wb;
+          try { wb = X.read(new Uint8Array(buf), { type: 'array', cellFormula: false, cellHTML: false }); } catch (e) {
+            var err = new Error('read'); err.key = /password|encrypt/i.test(String(e && e.message)) ? 'stock.err.password' : 'stock.err.read'; throw err;
+          }
+          return parsePromptLibrary(X, wb);
+        });
+      }).then(function (lib) {
+        status.textContent = '';
+        if (!stale(tok)) previewImport(lib, file);
+      }, function (e) { status.textContent = ''; toast(e && e.key ? t(e.key, e.vars) : t('stock.err.read'), 'act'); });
+    }
+    function previewImport(lib, file) {
+      var byToken = {}, byCode = {};
+      groups.forEach(function (g) { byToken[g.token] = g; });
+      styles.forEach(function (s) { if (s.id && styleKey(s.code)) byCode[styleKey(s.code)] = s; });
+      var tplKeys = ['template', 'rules', 'textAi', 'textOverlay'].filter(function (k) { return lib.settings[k]; });
+      var replace = h('input', { type: 'checkbox', id: 'ads-imp-tpl', checked: !ps || !String(ps.template || '').trim() });
+      var nothing = !lib.groups.length && !tplKeys.length;
+      var list = h('ul', { class: 'ads-filelist' }, lib.groups.map(function (gr) {
+        var ex = byToken[gr.token], a = 0, b = 0;
+        gr.options.forEach(function (o) { if (byCode[styleKey(o.code)]) b++; else a++; });
+        return h('li', { class: 'ads-filelist__item' }, [
+          h('span', { class: 'ads-filelist__name' }, gr.sheet + ' → {' + gr.token + '}'),
+          h('span', { class: 'ads-filelist__size' }, ex ? t('sty.imp.existing', { name: ex.name }) : t('sty.imp.newGroup', { name: gr.name, prefix: freePrefix(groups, gr.prefix) })),
+          h('span', { class: 'ads-filelist__state ads-filelist__state--ok' }, t('sty.imp.opts', { n: gr.options.length, a: a, b: b }) + (gr.skipped ? ' · ' + t('sty.imp.skipped', { n: gr.skipped }) : ''))
+        ]);
+      }));
+      openDialog({
+        title: t('sty.imp.title'), wide: true,
+        body: h('div', {}, [
+          h('p', { class: 'ads-note' }, t('sty.imp.intro')),
+          kv([[t('stock.pv.file'), file.name]]),
+          nothing ? h('p', { class: 'ads-warn' }, t('sty.imp.none')) : null,
+          lib.groups.length ? h('h3', { class: 'ads-h3' }, t('sty.imp.groups', { n: lib.groups.length })) : null,
+          lib.groups.length ? list : null,
+          h('h3', { class: 'ads-h3' }, t('sty.tpl')),
+          h('p', {}, tplKeys.length ? t('sty.imp.tpl', { list: tplKeys.map(function (k) { return t(LIB_TPL_LABELS[k]); }).join(', ') }) : t('sty.imp.noTpl')),
+          tplKeys.length ? h('label', { class: 'ads-option ads-option--inline', for: 'ads-imp-tpl' }, [replace, h('span', {}, t('sty.imp.replace'))]) : null
+        ]),
+        actions: [{ label: t('sty.imp.go'), value: 'go', disabled: nothing }]
+      }).then(function (v) { if (v === 'go' && !stale(tok)) runImport(lib, !!(tplKeys.length && replace.checked)); });
+    }
+    // Missing groups are created (by token), options added or updated by code, nothing is deleted.
+    function runImport(lib, withTpl) {
+      var biz = ctx.business, res = { groups: 0, added: 0, updated: 0, tpl: false, failed: [] }, byToken = {}, byCode = {};
+      groups.forEach(function (g) { byToken[g.token] = g; });
+      styles.forEach(function (s) { if (s.id && styleKey(s.code)) byCode[styleKey(s.code)] = s; });
+      styJob = { key: 'sty.imp.progress', n: 0, total: lib.groups.reduce(function (a, gr) { return a + gr.options.length + 1; }, 0) + (withTpl ? 1 : 0) };
+      function tick() { styJob.n++; stySync(); }
+      var chain = Promise.resolve();
+      lib.groups.forEach(function (gr) {
+        var target = null;
+        chain = chain.then(function () {
+          tick();
+          target = byToken[gr.token] || null;
+          if (target) return null;
+          var sort = groups.reduce(function (a, g) { return Math.max(a, g.sort); }, 0) + 1;
+          return api.saveStyleGroup({ business: biz, name: gr.name, token: gr.token, prefix: freePrefix(groups, gr.prefix), pictureKind: gr.pictureKind, nameColor: false, sort: sort })
+            .then(function (g) { groups.push(g); byToken[g.token] = g; target = g; res.groups++; },
+              function (e) { res.failed.push(gr.sheet + ' (' + errText(e) + ')'); });
+        });
+        gr.options.forEach(function (o, i) {
+          chain = chain.then(function () {
+            tick();
+            if (!target) return null; // the group could not be made: already listed
+            var ex = byCode[styleKey(o.code)];
+            var d = ex ? { id: ex.id, groupId: target.id, name: o.name || o.code, prompt: o.prompt, sort: i + 1 }
+              : { business: biz, groupId: target.id, code: o.code, name: o.name || o.code, prompt: o.prompt, active: true, sort: i + 1 };
+            return api.saveStyle(d).then(function (s) { if (ex) res.updated++; else { res.added++; byCode[styleKey(s.code)] = s; } },
+              function () { res.failed.push(o.code); });
+          });
+        });
+      });
+      if (withTpl) {
+        chain = chain.then(function () {
+          tick();
+          var cur = ps || {}, s = lib.settings;
+          function pickText(k) { return s[k] != null ? s[k] : cur[k] || ''; }
+          return api.savePictureSettings(biz, { template: pickText('template'), rules: pickText('rules'), textAi: pickText('textAi'), textOverlay: pickText('textOverlay'), aspect: cur.aspect || '3:4' })
+            .then(function (r) { ps = r; res.tpl = true; }, function (e) { res.failed.push(t('sty.tpl') + ' (' + errText(e) + ')'); });
+        });
+      }
+      chain.then(function () {
+        styJob = null; stySync();
+        toast(t('sty.imp.done', { g: res.groups, a: res.added, b: res.updated }) + (res.tpl ? ' ' + t('sty.imp.doneTpl') : ''));
+        if (res.failed.length) toast(t('sty.imp.failed', { f: res.failed.length, names: res.failed.slice(0, 5).join(', ') + (res.failed.length > 5 ? ', …' : '') }), 'act');
+        if (!stale(tok)) load();
+      });
+    }
+  }
 
   /* ---------------------------------------------------------------------
      10. Products and stock: upload a stock file, check it, then save
@@ -1334,10 +2409,12 @@
     load();
 
     function load() {
-      api.listProducts(ctx.business, { strict: true }).then(function (list) {
+      // The library comes along for the product photos (a failed library read only hides them).
+      Promise.all([api.listProducts(ctx.business, { strict: true }), api.listImages(ctx.business)]).then(function (r) {
         if (stale(tok)) return;
-        current = list.filter(function (p) { return !p.sample; });
-        draw(list.filter(function (p) { return p.sample; }));
+        cacheImages(r[1]);
+        current = r[0].filter(function (p) { return !p.sample; });
+        draw(r[0].filter(function (p) { return p.sample; }));
       }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(load)); } });
     }
     function draw(samples) {
@@ -1374,19 +2451,101 @@
         ]));
       }
     }
+    var COLS = ['pd.col.photo', 'stock.col.name', 'stock.col.qty', 'stock.col.price', 'stock.col.updated', 'col.actions'];
     function stockTable(rows) {
-      var cols = ['stock.col.name', 'stock.col.qty', 'stock.col.price', 'stock.col.updated'];
       return h('div', { class: 'ads-tablewrap', tabindex: '0', role: 'region', 'aria-label': t('nav.products') }, h('table', { class: 'ads-table ads-table--stack' }, [
-        h('thead', {}, h('tr', {}, cols.map(function (c) { return h('th', { scope: 'col' }, t(c)); }))),
-        h('tbody', {}, rows.map(function (p) {
-          return h('tr', {}, [
-            h('td', { 'data-label': t(cols[0]), class: 'ads-wrap' }, p.name),
-            h('td', { 'data-label': t(cols[1]), class: 'ads-num' }, h('span', {}, p.quantity === 0 ? [qty(0), ' ', pill(t('stock.out'), 'out')] : qty(p.quantity))),
-            h('td', { 'data-label': t(cols[2]), class: 'ads-num' }, gel(p.price)),
-            h('td', { 'data-label': t(cols[3]) }, p.updatedAt ? fmtDateTime(p.updatedAt) : '-')
-          ]);
-        }))
+        h('thead', {}, h('tr', {}, COLS.map(function (c) { return h('th', { scope: 'col' }, t(c)); }))),
+        h('tbody', {}, rows.map(function (p) { return row(p); }))
       ]));
+    }
+    // One stock row: photo (or "Add photo"), names and details, quantity, price, updated, Details.
+    function row(p) {
+      var ph = photoOf(p), tr = null;
+      tr = h('tr', {}, [
+        h('td', { 'data-label': t(COLS[0]) }, ph
+          ? h('img', { class: 'ads-pthumb', src: imageUri(ph), alt: t('pd.photoAlt', { name: p.name }), loading: 'lazy', width: '48', height: '48' })
+          : h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', 'aria-label': t('pd.addPhotoAria', { name: p.name }), onclick: function () { details(p, tr, true); } }, t('pd.addPhoto'))),
+        h('td', { 'data-label': t(COLS[1]), class: 'ads-wrap' }, h('span', { class: 'ads-pname' }, [
+          h('span', {}, p.name),
+          p.displayName ? h('span', { class: 'ads-sub' }, t('pd.on', { name: p.displayName })) : null,
+          p.nameEn ? h('span', { class: 'ads-sub' }, t('pd.en', { name: p.nameEn })) : null,
+          p.aiNote ? h('span', { class: 'ads-sub' }, t('pd.note', { note: p.aiNote })) : null
+        ])),
+        h('td', { 'data-label': t(COLS[2]), class: 'ads-num' }, h('span', {}, p.quantity === 0 ? [qty(0), ' ', pill(t('stock.out'), 'out')] : qty(p.quantity))),
+        h('td', { 'data-label': t(COLS[3]), class: 'ads-num' }, gel(p.price)),
+        h('td', { 'data-label': t(COLS[4]) }, p.updatedAt ? fmtDateTime(p.updatedAt) : '-'),
+        h('td', { 'data-label': t(COLS[5]), class: 'ads-actions' }, h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost',
+          'aria-label': t('pd.detailsAria', { name: p.name }), onclick: function () { details(p, tr, false); } }, t('pd.details')))
+      ]);
+      return tr;
+    }
+    // Product details: photo (upload, choose from the library, remove), display name, English name,
+    // description for the picture AI. Nothing is saved before Save; an uploaded photo is already in the library.
+    function details(p, tr, photoFirst) {
+      var biz = ctx.business, imageId = p.imageId || null, uploading = false, saveBtn = null;
+      var photo = h('div', { class: 'ads-pd__photo' });
+      var pstatus = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
+      var saveStatus = h('p', { class: 'ads-hint ads-hint--warn', role: 'alert' });
+      var file = h('input', { type: 'file', accept: api.imageRules.accept, hidden: true });
+      var upBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () { if (!uploading) file.click(); } }, t('pd.upload'));
+      var chooseBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () {
+        chooseLibraryImage(biz, imageId).then(function (id) { if (id) { imageId = id; drawPhoto(); } }, function (e) { pstatus.textContent = t('toast.failed') + ' ' + errText(e); });
+      } }, t('pd.choose'));
+      var removeBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--danger-ghost', onclick: function () { imageId = null; drawPhoto(); upBtn.focus(); } }, t('pd.remove'));
+      var dn = h('input', { type: 'text', id: 'ads-pd-dn', class: 'ads-input', value: p.displayName || '', maxlength: '200', autocomplete: 'off', placeholder: p.name, 'aria-describedby': 'ads-pd-dn-hint' });
+      var en = h('input', { type: 'text', id: 'ads-pd-en', class: 'ads-input', value: p.nameEn || '', maxlength: '200', autocomplete: 'off', lang: 'en', 'aria-describedby': 'ads-pd-en-hint' });
+      var note = h('textarea', { id: 'ads-pd-note', class: 'ads-input ads-textarea ads-textarea--short', rows: '3', maxlength: '500', lang: 'en', 'aria-describedby': 'ads-pd-note-hint' }, p.aiNote || '');
+      file.addEventListener('change', function () {
+        var f = file.files && file.files[0]; file.value = '';
+        if (!f) return;
+        var bad = api.checkImageFile(f);
+        if (bad) { pstatus.textContent = f.name + ': ' + t(bad.key, bad.vars); return; }
+        uploading = true; upBtn.disabled = true; if (saveBtn) saveBtn.disabled = true;
+        pstatus.textContent = t('pd.uploading');
+        api.uploadImage(biz, f, 'picture', { title: p.name }).then(function (im) {
+          cacheImages([im]); imageId = im.id; drawPhoto(); pstatus.textContent = t('pd.uploaded');
+        }, function (e) { pstatus.textContent = t('toast.failed') + ' ' + errText(e); }).then(function () {
+          uploading = false; upBtn.disabled = false; if (saveBtn) saveBtn.disabled = false;
+        });
+      });
+      function drawPhoto() {
+        var im = imageId ? imageById(imageId) : null;
+        photo.innerHTML = '';
+        photo.appendChild(im && imageUri(im) ? h('img', { class: 'ads-pd__img', src: imageUri(im), alt: t('pd.photoAlt', { name: p.name }) })
+          : h('div', { class: 'ads-pd__img ads-img-empty' }, t(imageId ? 'common.noImage' : 'pd.noPhoto')));
+        removeBtn.hidden = !imageId;
+      }
+      drawPhoto();
+      openDialog({
+        title: t('pd.title', { name: p.name }), wide: true,
+        body: h('div', {}, [
+          liveMode() ? null : h('p', { class: 'ads-warn' }, t('lib.mockNote')),
+          h('h3', { class: 'ads-h3 ads-pd__h' }, t('pd.photo')),
+          h('div', { class: 'ads-pd__row' }, [photo, h('div', { class: 'ads-pd__btns' }, [upBtn, chooseBtn, removeBtn])]), file,
+          h('p', { class: 'ads-hint' }, t('pd.photoHint', { mb: api.imageRules.maxMb })), pstatus,
+          field('pd.displayName', dn, t('pd.displayName.hint', { name: p.name }), 'ads-pd-dn'),
+          field('pd.nameEn', en, t('pd.nameEn.hint'), 'ads-pd-en'),
+          field('pd.aiNote', note, t('pd.aiNote.hint'), 'ads-pd-note'),
+          saveStatus
+        ]),
+        actions: [{ label: t('pd.save'), value: 'save' }],
+        onOpen: function (dlg, btns) { saveBtn = btns.save; (photoFirst ? upBtn : dn).focus(); },
+        onAction: function () {
+          if (uploading) return false;
+          saveStatus.textContent = '';
+          return api.setProductDetails(p.id, { imageId: imageId, displayName: dn.value, nameEn: en.value, aiNote: note.value }).then(function (r) {
+            p.imageId = r.imageId; p.displayName = r.displayName; p.nameEn = r.nameEn; p.aiNote = r.aiNote;
+            return true;
+          }, function (e) { saveStatus.textContent = t('toast.failed') + ' ' + errText(e); return false; });
+        }
+      }).then(function (v) {
+        if (v !== 'save') return;
+        toast(t('pd.saved', { name: p.name }));
+        if (stale(tok) || !tr.parentNode) return;
+        var nr = row(p);
+        tr.parentNode.replaceChild(nr, tr);
+        nr.querySelector('.ads-actions button').focus();
+      });
     }
     function getTemplate() {
       if (!SI) { toast(t('stock.err.load'), 'act'); return; }
@@ -1607,7 +2766,7 @@
       tl.kind !== 'pause_campaign' ? h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () {
         tl.state = 'edited'; drawChat(); closeDrawer(true);
         if (tl.kind === 'create_campaign') { wizard = newWizard({ name: p.name, goal: p.goal, accountId: p.accountId, dailyBudget: p.dailyBudget, days: p.days, location: p.audience.location, caption: p.caption, imageIds: p.imageIds }); go('#/campaigns/new'); }
-        else { composerPrefill = { caption: p.caption, productId: p.productId || '', imageId: p.imageId || '' }; go('#/posts/new'); }
+        else { composerPrefill = { caption: p.caption, productIds: (p.productIds || []).slice(), imageIds: (p.imageIds || []).slice() }; go('#/posts/new'); }
       } }, t('tool.edit')) : null
     ]);
     card.appendChild(bar);
@@ -1629,8 +2788,8 @@
         // Prefer a product with a price (stock rows may have none); no product at all -> a plain caption.
         var prod = r[0].filter(function (x) { return x.price != null; })[0] || r[0][0] || null;
         var caption = !prod ? t('ai.campaignCaption') : AdsI18n.lang() === 'ka'
-          ? settings.georgianTemplates[0].replace('{product}', prod.name_ka).replace('{price}', priceText(prod.price)) : t('ai.postCaption', { product: prod.name_en });
-        return { role: 'bot', text: t('ai.post'), tool: { kind: 'create_post', params: { business: biz, productId: prod ? prod.id : '', caption: caption, imageId: r[1][0] ? r[1][0].id : '' } } };
+          ? fillTemplate(settings.georgianTemplates[0], [prod]) : t('ai.postCaption', { product: prod.displayName || prod.name_en });
+        return { role: 'bot', text: t('ai.post'), tool: { kind: 'create_post', params: { business: biz, productIds: prod ? [prod.id] : [], caption: caption, imageIds: r[1][0] ? [r[1][0].id] : [] } } };
       });
     }
     if (has(/campaign|ad\b|ads\b|advert|კამპან|რეკლამ/)) {
