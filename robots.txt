@@ -6,5 +6,6 @@ Disallow: /preferences.html
 Disallow: /admin.html
 Disallow: /campaigns/
 Disallow: /ads/
+Disallow: /tenders/
 
 Sitemap: https://solvephantasma.com/sitemap.xml
