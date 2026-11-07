@@ -1,57 +1,42 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en" data-build="202611080207">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Tender Portal: demo</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans+Georgian:wght@400;600&display=swap">
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,600&display=swap">
-<style>
-:root{--bg:#f7f5f2;--surface:#efece6;--ink:#14213d;--accent:#f26b1d;--accent-deep:#b8420a;--rule:#ddd8cf;
---muted:#4a5468;--r:6px}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 'General Sans',system-ui,sans-serif;
-overflow-x:hidden}
-[lang=ka]{font-family:'Noto Sans Georgian','General Sans',Sylfaen,'Segoe UI',sans-serif}
-h1,h2,h3{font-family:Fraunces,Georgia,serif;line-height:1.2;margin:0 0 .5em}
-h1{font-size:clamp(1.5rem,4vw,2.2rem);overflow-wrap:anywhere} h2{font-size:1.35rem;margin-top:2rem} h3{font-size:1.05rem}
-a{color:var(--accent-deep)}
-a:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
-.bar{background:var(--ink);color:#fff;padding:8px 0;font-size:.9rem}
-header.top{padding:24px 0 8px}
-.note{background:var(--surface);border-left:4px solid var(--accent);padding:10px 14px;border-radius:var(--r);margin:12px 0}
-.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:var(--r);background:#fff}
-table{border-collapse:collapse;width:100%;font-size:.93rem}
-th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--rule);vertical-align:top}
-th{background:var(--surface);white-space:nowrap} td.num,th.num{text-align:right;white-space:nowrap}
-input[type=search]{width:100%;max-width:420px;padding:10px 12px;border:1px solid var(--ink);border-radius:var(--r);
-font:inherit;margin:8px 0 12px;background:#fff}
-dl.facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0}
-dl.facts dt{color:var(--muted)} dl.facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
-.btn{display:inline-block;background:var(--accent);color:var(--ink);padding:10px 16px;border-radius:var(--r);
-font-weight:600;text-decoration:none;margin:4px 8px 4px 0}
-.btn.alt{background:#fff;border:1px solid var(--ink)}
-.panel{background:#fff;border:1px solid var(--rule);border-radius:var(--r);padding:14px 16px;margin:12px 0}
-.req{border-top:1px solid var(--rule);padding:10px 0;overflow-wrap:anywhere} .req:first-of-type{border-top:0}
-.ref{font-weight:700;color:var(--accent-deep)} .kind{font-size:.8rem;color:var(--muted);text-transform:uppercase}
-.chip{display:inline-block;background:var(--surface);border:1px solid var(--rule);border-radius:99px;
-padding:1px 10px;font-size:.82rem;margin:2px 4px 2px 0}
-.chip.body{background:#e5eef2;border-color:#bcd2dc}
-.lead{color:var(--muted);font-size:.9rem}
-details{background:#fff;border:1px solid var(--rule);border-radius:var(--r);margin:8px 0}
-summary{cursor:pointer;padding:10px 14px;font-weight:600;overflow-wrap:anywhere}
-details .inner{padding:0 14px 8px}
-footer{margin:40px 0 24px;padding-top:14px;border-top:1px solid var(--rule);color:var(--muted);font-size:.9rem}
-.small{font-size:.88rem;color:var(--muted)}
-@media(max-width:600px){dl.facts{grid-template-columns:1fr}dl.facts dt{margin-top:6px}}
-</style></head><body>
-<div class="bar"><div class="wrap">Demo: an early look at the Phantasma Tender Portal. <a href="mailto:consult@solvephantasma.com?subject=Tender%20Portal%20demo%20feedback">Send feedback</a> · <a href="../services.html">Back to Services</a></div></div>
-<main class="wrap"><header class="top"><h1>Tender Portal: demo</h1><p>Data: public notices and documents from tenders.procurement.gov.ge, collected 2026-11-07. Twelve consolidated tenders from 2026, shown as the portal will show them.</p><div class="note">The interface is in English for now; the Georgian interface comes later. Tender content stays in Georgian as published. Requirements were read automatically and may contain errors; always check the original record.</div></header><label for="q" class="small">Filter by number, title or buyer</label><br><input id="q" type="search" placeholder="Type to filter" autocomplete="off"><div class="tablewrap"><table id="t"><thead><tr><th>Number</th><th>Title</th><th>Buyer</th><th>Category</th><th class="num">Estimated value (GEL)</th><th>Status</th><th class="num">Requirement items</th><th class="num">Must be proven</th></tr></thead><tbody><tr><td><a href="tender-CON260000321.html">CON260000321</a></td><td><span lang="ka">გაყინული თევზი</span></td><td><span lang="ka">სახელმწიფო შესყიდვების სააგენტო</span></td><td><span lang="ka">15200000-მზა და დაკონსერვებული თევზი</span></td><td class="num">420 000.00</td><td><span lang="ka">გამარჯვებული გამოვლენილია</span></td><td class="num">63</td><td class="num">11</td></tr><tr><td><a href="tender-CON260000325.html">CON260000325</a></td><td><span lang="ka">სიმინდის ფქვილი</span></td><td><span lang="ka">სახელმწიფო შესყიდვების სააგენტო</span></td><td><span lang="ka">15600000-დაფქული მარცვლეული პროდუქტები, სახამებელი და სახამებლის პროდუქტები</span></td><td class="num">113 100.00</td><td><span lang="ka">გამარჯვებული გამოვლენილია</span></td><td class="num">60</td><td class="num">9</td></tr><tr><td><a href="tender-CON260000330.html">CON260000330</a></td><td><span lang="ka">კვერცხი</span></td><td><span lang="ka">სახელმწიფო შესყიდვების სააგენტო</span></td><td><span lang="ka">03100000-სოფლის მეურნეობისა და ბაღჩეული პროდუქტები</span></td><td class="num">1 089 487.20</td><td><span lang="ka">გამარჯვებული გამოვლენილია</span></td><td class="num">59</td><td class="num">9</td></tr><tr><td><a href="tender-CON260000331.html">CON260000331</a></td><td><span lang="ka">ნაწილები და აქსესუარები სატრანსპორტო საშუალებებისა და მათი ძრავებისათვის</span></td><td><span lang="ka">სახელმწიფო შესყიდვების სააგენტო</span></td><td><span lang="ka">34300000-ნაწილები და აქსესუარები სატრანსპორტო საშუალებებისა და მათი ძრავებისათვის</span></td><td class="num">266 224.00</td><td><span lang="ka">გამარჯვებული გამოვლენილია</span></td><td class="num">48</td><td class="num">3</td></tr><tr><td><a href="tender-CON260000350.html">CON260000350</a></td><td><span lang="ka">სასკოლო ავეჯი</span></td><td><span lang="ka">სახელმწიფო შესყიდვების სააგენტო</span></td><td><span lang="ka">39100000-ავეჯი</span></td><td class="num">9 849 000.00</td><td><span lang="ka">გამარჯვებული გამოვლენილია</span></td><td class="num">139</td><td class="num">66</td></tr><tr><td><a href="tender-CON260000351.html">CON260000351</a></td><td><span lang="ka">ბეჭდვა და ადგილზე მიწოდება</span></td><td><span lang="ka">სახელმწიფო შესყიდვების სააგენტო</span></td><td><span lang="ka">79800000-ბეჭდვა და მასთან დაკავშირებული მომსახურებები</span></td><td class="num">4 997 709.77</td><td><span lang="ka">გამარჯვებული გამოვლენილია</span></td><td class="num">64</td><td class="num">6</td></tr><tr><td><a href="tender-CON260000355.html">CON260000355</a></td><td><span lang="ka">ყველის პროდუქტები</span></td><td><span lang="ka">სახელმწიფო შესყიდვების სააგენტო</span></td><td><span lang="ka">15500000-რძის პროდუქტები</span></td><td class="num">1 820 000.00</td><td><span lang="ka">გამარჯვებული გამოვლენილია</span></td><td class="num">70</td><td class="num">11</td></tr><tr><td><a href="tender-CON260000360.html">CON260000360</a></td><td><span lang="ka">საწვავი ხის მასალა (შეშა)</span></td><td><span lang="ka">ცენტრალური შემსყიდველი ორგანო</span></td><td><span lang="ka">03400000-მეტყევეობისა და ტყეკაფვის პროდუქტები</span></td><td class="num">2 337 500.00</td><td><span lang="ka">გამარჯვებული მიმწოდებლის მიერ გადახდილია თანხა</span></td><td class="num">60</td><td class="num">24</td></tr><tr><td><a href="tender-CON260000383.html">CON260000383</a></td><td><span lang="ka">ავეჯი 39151000 - სხვადასხვა სახის ავეჯი 39161000 - საბავშვო ბაღის ავეჯი</span></td><td><span lang="ka">ცენტრალური შემსყიდველი ორგანო</span></td><td><span lang="ka">39100000-ავეჯი</span></td><td class="num">1 998 950.00</td><td><span lang="ka">გამარჯვებული მიმწოდებლის მიერ გადახდილია თანხა</span></td><td class="num">441</td><td class="num">14</td></tr><tr><td><a href="tender-CON260000384.html">CON260000384</a></td><td><span lang="ka">ავეჯი 39151000 - სხვადასხვა სახის ავეჯი 39161000 - საბავშვო ბაღის ავეჯი</span></td><td><span lang="ka">ცენტრალური შემსყიდველი ორგანო</span></td><td><span lang="ka">39100000-ავეჯი</span></td><td class="num">1 157 515.00</td><td><span lang="ka">გამარჯვებული მიმწოდებლის მიერ გადახდილია თანხა</span></td><td class="num">506</td><td class="num">20</td></tr><tr><td><a href="tender-CON260000385.html">CON260000385</a></td><td><span lang="ka">ავეჯი 39151000 - სხვადასხვა სახის ავეჯი 39161000 - საბავშვო ბაღის ავეჯი</span></td><td><span lang="ka">ცენტრალური შემსყიდველი ორგანო</span></td><td><span lang="ka">39100000-ავეჯი</span></td><td class="num">1 410 745.00</td><td><span lang="ka">გამარჯვებული მიმწოდებლის მიერ გადახდილია თანხა</span></td><td class="num">589</td><td class="num">20</td></tr><tr><td><a href="tender-CON260000449.html">CON260000449</a></td><td><span lang="ka">სხვადასხვა საკვები პროდუქტი</span></td><td><span lang="ka">ცენტრალური შემსყიდველი ორგანო</span></td><td><span lang="ka">15800000-სხვადასხვა საკვები პროდუქტი</span></td><td class="num">990 528.90</td><td><span lang="ka">გამარჯვებული მიმწოდებლის მიერ გადახდილია თანხა</span></td><td class="num">126</td><td class="num">11</td></tr></tbody></table></div>
-<p id="none" class="small" hidden>No tender matches.</p>
-<script>
-(function(){var q=document.getElementById('q'),rows=document.querySelectorAll('#t tbody tr'),
-none=document.getElementById('none');
-q.addEventListener('input',function(){var s=q.value.trim().toLowerCase(),n=0;
-rows.forEach(function(r){var m=!s||[0,1,2].some(function(i){return r.cells[i].textContent.toLowerCase().indexOf(s)>-1;});
-r.hidden=!m;if(m)n++;});none.hidden=n>0;});})();
-</script><footer>Facts from the state procurement site; always check the original record. Collected 2026-11-07.</footer></main></body></html>
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f7f5f2">
+<title>Dashboard · Tender Portal demo · Phantasma</title>
+<meta name="description" content="Demo of the Phantasma Tender Portal: Georgian public tenders, buyers and companies, facts only.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Noto+Sans+Georgian:wght@400;600&amp;display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600&amp;display=swap">
+<link rel="stylesheet" href="app.css?v=202611080207">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script src="app.js?v=202611080207" defer></script>
+</head>
+<body data-page="dashboard">
+<a class="skip" href="#main">Skip to content</a>
+<div class="demo-bar"><div class="wrap">
+<p><strong>Demo</strong> · an early look at the Phantasma Tender Portal.</p>
+<p class="demo-bar__links"><a href="mailto:consult@solvephantasma.com?subject=Tender%20Portal%20demo%20feedback">Send feedback</a> <a href="../services.html">Back to Services</a></p>
+</div></div>
+<header class="site-head"><div class="wrap">
+<a class="brand" href="index.html">Tender Portal <span>by Phantasma</span></a>
+<nav class="nav" aria-label="Tender Portal"><a href="index.html" aria-current="page">Dashboard</a><a href="tenders.html">Tenders</a><a href="companies.html">Companies</a><a href="buyers.html">Buyers</a></nav>
+<p class="stamp">Data collected on <time datetime="2026-11-08T02:02">8 Nov 2026</time></p>
+</div></header>
+<main id="main" class="wrap" tabindex="-1">
+<h1 id="title">Public tenders in Georgia</h1>
+<p class="lead" id="lead">Tenders announced on the state procurement site, in figures. Choose a view, then click any bar to open those tenders.</p>
+<div id="app"><p class="loading">Loading…</p></div>
+<noscript><p class="note">This demo needs JavaScript to show the data.</p></noscript>
+</main>
+<footer class="site-foot"><div class="wrap">
+<p>Facts from the public procurement site <a href="https://tenders.procurement.gov.ge/public/?lang=ge" rel="noopener">tenders.procurement.gov.ge</a>; every tender links to its original record, and documents link to the state's copy. Always check the original.</p>
+<p>Interface in English; tender texts stay in Georgian as published. Data collected on 8 Nov 2026. Built 8 Nov 2026.</p>
+</div></footer>
+</body>
+</html>
