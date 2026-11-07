@@ -38,6 +38,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sqlite3
 import sys
 import urllib.error
@@ -311,9 +312,41 @@ def read_workbook_notes():
     return out
 
 
-def read_shortlists(con, by_local, by_url):
+def _scorer(con, prefs_by_email):
+    """-> score(slug, local_vacancy_id) giving Match % 0-100 (Solve Assistant\\scripts\\match_score.py), or None."""
+    scripts = _local_path(r"D:\Web Development\Solve Assistant\scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    try:
+        import rules as rulemod
+        from match_score import match_percent
+    except Exception as e:                            # scoring is a bonus; never block the sync on it
+        print(f"  shortlists   Match % skipped: {e}")
+        return lambda slug, vid: None
+    cands = {r["slug"]: r for r in rows_of(con, "select * from candidates")}
+    loaded = {}
+
+    def score(slug, vid):
+        c = cands.get(slug)
+        if not c or vid is None:
+            return None
+        if slug not in loaded:
+            loaded[slug] = rulemod.load_rule(c)
+        if not loaded[slug]:
+            return None
+        v = con.execute("select title, title_en, seniority, description, salary_text, source from vacancies where id=?",
+                        (vid,)).fetchone()
+        if not v:
+            return None
+        return match_percent(c, v, loaded[slug], prefs_by_email.get((c["email"] or "").lower()))[0]
+    return score
+
+
+def read_shortlists(con, by_local, by_url, prefs_by_email=None):
     """Parse every workbook. Returns (rows, unmatched) where rows are cloud-ready."""
     folder_to_slug = {r["folder"]: r["slug"] for r in rows_of(con, "select slug, folder from candidates") if r["folder"]}
+    local_of = {v: k for k, v in by_local.items()}    # cloud vacancy id -> local id
+    score = _scorer(con, prefs_by_email or {})
     rows, unmatched = [], []
     for path in workbooks():
         folder = os.path.basename(os.path.dirname(path))
@@ -348,12 +381,15 @@ def read_shortlists(con, by_local, by_url):
                     "start_processing": start,
                     "salary_text": None if row[5].value in (None, "—") else str(row[5].value),
                     "why_matches": row[6].value,
+                    "score": score(slug, local_of.get(vid)),
                 })
     return rows, unmatched
 
 
 def sync_shortlists(con, rest, by_local, by_url):
-    rows, unmatched = read_shortlists(con, by_local, by_url)
+    emails = {p["id"]: (p.get("email") or "").lower() for p in rest.select("profiles", "id,email")}
+    prefs = {emails.get(p["user_id"]): p for p in rest.select("preferences", "user_id,salary_min,currency,answers")}
+    rows, unmatched = read_shortlists(con, by_local, by_url, prefs)
     rest.upsert("shortlists", rows, "candidate,vacancy_id,week")
     prune_shortlists(rest, rows)
     for line in unmatched:
