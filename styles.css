@@ -4496,6 +4496,12 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .service-tile__link:focus-visible { outline: none; }
 .service-tile__link:focus-visible::after { outline: 3px solid var(--accent-deep); outline-offset: 2px; }
 .service-tile.is-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+/* "Coming soon" tile (Tender Portal, 8 Nov 2026): it has no link, so it must not
+   look clickable: no hover lift, dashed border, softer icon and title. */
+.service-tile--soon { background: transparent; border-style: dashed; }
+.service-tile--soon:hover { border-color: var(--rule); box-shadow: none; transform: none; }
+.service-tile--soon .service-tile__icon,
+.service-tile--soon .service-tile__title { opacity: 0.7; }
 .service-tile__icon {
   width: 44px;
   height: 44px;
