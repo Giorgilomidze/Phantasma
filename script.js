@@ -2909,8 +2909,13 @@
       closePanel();
       current = session;                                // Profile details + My simple CV read it
       startMatch(session);                              // Start matching: its place is kept until its data is in
-      if (!session) { nameEl.hidden = true; prefsRow = null; cand = null; return; }   // the name sits outside #account-who
+      if (!session) {                                   // the name sits outside #account-who
+        nameEl.hidden = true; prefsRow = null; cand = null;
+        if (titleEl) titleEl.textContent = 'Your account';
+        return;
+      }
       paintLogin(session);                              // login icon (8 Nov 2026; the email text is gone)
+      greet();                                          // the login's name until the profile has arrived
       paintStatus(stLi, hasLinkedIn(session));
       fillLogin(); fillLinkedIn();                      // Profile details, should it be open
       Auth.loadProfile().then(({ data: p }) => {
@@ -3008,7 +3013,8 @@
     const pfModal = modalCtl(pfEl);
     const pfForm  = document.getElementById('profile-form');
     const pfNote  = document.getElementById('profile-status');
-    const nameEl  = root.querySelector('#account-name');   // next to the title (5 Nov 2026)
+    const nameEl  = root.querySelector('#account-name');   // next to the title (5 Nov 2026); hidden since 8 Nov
+    const titleEl = root.querySelector('#account-h');      // "Hi <name>" when signed in (owner, 8 Nov 2026)
     const slugOf  = (u) => { const m = /linkedin\.com\/in\/([^/?#]+)/i.exec(u || ''); return m ? m[1] : ''; };
     const pfSay   = (kind, text) => { pfNote.textContent = text; pfNote.dataset.kind = kind; pfNote.hidden = !text; };
     const clean   = (v) => (v == null ? '' : String(v).trim());
@@ -3021,10 +3027,19 @@
 
     // The LinkedIn link is edited only here, in Profile details (the header
     // line with the slug and Edit / Add was removed 5 Nov 2026).
+    // The heading greets the client by name (owner, 8 Nov 2026): "Hi Giorgi Lomidze". The saved
+    // profile name first, else the name the login gave (Google / LinkedIn), else "Hi there".
+    function greet() {
+      if (!titleEl) return;
+      const p = profile || {};
+      const full = [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' ');
+      const meta = (current && current.user && current.user.user_metadata) || {};
+      const name = full || clean(meta.full_name || meta.name);
+      titleEl.textContent = name ? 'Hi ' + name : 'Hi there';
+    }
     function paintProfile() {
-      const full = [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(' ');
-      nameEl.textContent = full;
-      nameEl.hidden = !full;
+      nameEl.hidden = true;                             // the name now sits in the heading
+      greet();
     }
     function openProfile() {
       ['first_name', 'middle_name', 'last_name', 'linkedin_url'].forEach((k) => { pfForm[k].value = profile[k] || ''; });
