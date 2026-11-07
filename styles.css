@@ -3535,6 +3535,175 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .li-audit:last-child { border-bottom: 0; }
 .li-audit__title { font-family: var(--font-display); font-size: var(--type-h3); margin: 0 0 var(--space-3); }
 .li-audit__text { margin: 0; white-space: pre-wrap; }
+
+/* Profile details (8 Nov 2026): the details grouped by source. The panel is a
+   column — title, a scrolling body with the groups, then the Save bar, which
+   stays in view. Each group opens with a source badge (logo / icon + words);
+   label / value rows sit side by side from 600px, stacked below. */
+.profile-panel {
+  width: min(640px, 100%);
+  max-height: 92vh;
+  max-height: calc(100dvh - 2 * var(--space-4));
+  display: flex;
+  flex-direction: column;
+}
+.profile-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.profile-form__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+  padding: var(--space-1);              /* room for focus outlines inside the scroll box */
+  margin: calc(-1 * var(--space-1));
+}
+.profile-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule);
+}
+.profile-src { display: grid; gap: var(--space-3); min-width: 0; }
+.profile-src + .profile-src { padding-top: var(--space-5); border-top: 1px solid var(--rule); }
+.profile-src__h,
+.profile-src__title { margin: 0; font-family: var(--font-body); font-size: var(--type-body-sm); font-weight: 500; }
+.profile-src__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-size: var(--type-caption);
+  line-height: 1.2;
+  color: var(--ink);
+}
+.profile-src__badge svg { width: 16px; height: 16px; flex: none; }
+.profile-src__sub {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--type-eyebrow);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.profile-src__sub[hidden] { display: none; }
+.profile-src__none,
+.profile-src__meta,
+.profile-src__action { margin: 0; font-size: var(--type-body-sm); line-height: 1.5; color: var(--ink-soft); }
+.profile-src__none[hidden] { display: none; }
+.profile-names { display: grid; gap: var(--space-3); }
+.profile-field { display: grid; gap: var(--space-1); min-width: 0; }
+.profile-facts { margin: 0; display: grid; gap: var(--space-2); font-size: var(--type-body-sm); line-height: 1.45; }
+.profile-facts[hidden],
+.profile-facts > [hidden] { display: none; }
+.profile-facts > div { display: grid; gap: 2px; min-width: 0; }
+.profile-facts dt { font-size: var(--type-caption); color: var(--ink-soft); }
+.profile-facts dd { margin: 0; min-width: 0; color: var(--ink); overflow-wrap: anywhere; white-space: pre-line; }
+.profile-facts a { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--ink) 35%, transparent); }
+.profile-facts a:hover { color: var(--accent-deep); text-decoration-color: currentColor; }
+.profile-facts a:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; border-radius: 2px; }
+.profile-li { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.profile-li[hidden] { display: none; }
+.profile-li .profile-facts { flex: 1 1 auto; min-width: 0; }
+.profile-li__photo { width: 48px; height: 48px; flex: none; border-radius: 50%; object-fit: cover; background: var(--surface); }
+.profile-li__photo[hidden] { display: none; }
+.profile-cv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+.profile-cv__file { margin: 0; min-width: 0; font-size: var(--type-body-sm); overflow-wrap: anywhere; }
+@media (min-width: 600px) {
+  .profile-names { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .profile-facts > div { grid-template-columns: 10em minmax(0, 1fr); column-gap: var(--space-3); align-items: baseline; }
+  .profile-facts dt { font-size: inherit; }
+}
+@media (max-width: 599px) {
+  .profile-panel,
+  .scv-panel { padding: var(--space-6) var(--space-4) var(--space-4); }
+}
+
+/* My simple CV (8 Nov 2026). The preview sheet is white, A4-shaped, and sized
+   in em of one base that is 10 pt on a 210 mm page (1.68% of its width), so
+   the preview, the print copy and the JPG that script.js draws (cvJpeg) share
+   one layout: margins 18 mm (5.1em), name 2.6em, headline 1.3em, headings
+   0.85em, text 1.05em. Change a size here, change it in cvJpeg too. */
+.scv-panel { width: min(760px, 100%); }
+.scv-hint { margin: 0 0 var(--space-3); }
+.scv-status { margin: 0 0 var(--space-3); }
+.scv-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+}
+.scv-page { container-type: inline-size; width: min(100%, 620px); margin-inline: auto; }
+.scv {
+  box-sizing: border-box;
+  aspect-ratio: 210 / 297;
+  padding: 5.1em;
+  background: #fff;
+  color: var(--ink);
+  font-family: "General Sans", "Noto Sans Georgian", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 9px;                       /* browsers without container units */
+  font-size: 1.68cqi;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  box-shadow: 0 1px 2px rgb(20 33 61 / 0.08), 0 12px 32px -16px rgb(20 33 61 / 0.25);
+}
+.scv__head > * { margin: 0; }
+.scv__name {
+  font-family: "Fraunces", "Noto Sans Georgian", "Iowan Old Style", Georgia, serif;
+  font-size: 2.6em;
+  font-weight: 500;
+  line-height: 1.15;
+}
+.scv__headline { font-size: 1.3em; font-weight: 500; line-height: 1.35; color: var(--ink-soft); }
+.scv__head > * + .scv__headline { margin-top: 0.35em; }
+.scv__contact { display: flex; flex-wrap: wrap; gap: 0 1.6em; }
+.scv__head > * + .scv__contact { margin-top: 0.8em; }
+.scv__rule { width: 3.4em; margin-top: 1.3em; border-top: 0.25em solid var(--accent); }
+.scv__sec { margin-top: 1.9em; }
+.scv__h {
+  margin: 0 0 0.6em;
+  font-family: inherit;
+  font-size: 0.85em;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.scv__text { margin: 0; font-size: 1.05em; white-space: pre-line; }
+.scv__facts { margin: 0; display: grid; gap: 0.3em; font-size: 1.05em; }
+.scv__facts > div { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); column-gap: 1em; }
+.scv__facts dt { color: var(--ink-soft); }
+.scv__facts dd { margin: 0; }
+/* Download PDF: while the dialog is open, <body> carries .is-printing-cv and a
+   hidden .scv-print copy of the CV; printing shows that copy alone on an A4
+   page without margins (the CV has its own), so "Save as PDF" gives the CV. */
+.scv-print { display: none; }
+@media print {
+  @page simple-cv { size: A4; margin: 0; }
+  body.is-printing-cv { overflow: visible !important; background: #fff; }
+  body.is-printing-cv > :not(.scv-print) { display: none !important; }
+  body.is-printing-cv > .scv-print { display: block; page: simple-cv; }
+  .scv-print .scv { aspect-ratio: auto; font-size: 10pt; box-shadow: none; }
+}
 .account-newpass {
   display: grid;
   gap: var(--space-3);
@@ -3576,8 +3745,9 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   .account__head .account__identity { justify-items: end; text-align: right; }
 }
 /* account.html (5 Nov 2026): one compact row, no eyebrow. Left: title + name
-   on one baseline (name under the title on phones). Right: email + the three
-   status controls (.account-status). Tighter space above and below the rule. */
+   on one baseline (name under the title on phones). Right: the status
+   controls (.account-status: since 8 Nov 2026 the login icon first, in place
+   of the email text) and Start matching. Tighter space above and below the rule. */
 #account { padding-top: var(--space-3); }
 .account__head--row { margin-bottom: var(--space-3); }
 .account__head--row .project-hero__title { margin: 0; }
@@ -3664,24 +3834,22 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   color: var(--act);
 }
 .account-status__note[hidden] { display: none; }
-/* Start matching (7 Nov 2026, CAR-05): a row under the title row — status
-   line or what is missing, then the button; right-aligned under the status
-   controls from 768px. Disabled = aria-disabled (still focusable, with the
-   missing line as its description), drawn as a quiet grey button. */
-.account-match {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  margin: 0 0 var(--space-3);
-}
+/* Start matching (7 Nov 2026, CAR-05). Since 8 Nov 2026 the button sits in
+   the title row after the Preferences pill (it wraps under the icons on
+   phones); .account-match is only the compact line under that row — what is
+   missing, the last run or a problem — and is hidden when there is nothing to
+   say. Disabled = aria-disabled (still focusable, with the line as its
+   description), drawn as a quiet grey button. .is-pending keeps its place,
+   unseen, while the data loads. */
+.account-match { margin: 0 0 var(--space-3); }
 .account-match[hidden],
 .account-match__btn[hidden] { display: none; }
+.account-match__btn.is-pending { visibility: hidden; }
 .account-match__line,
 .account-match__need {
   max-width: 72ch;
   margin: 0;
-  font-size: var(--type-body-sm);
+  font-size: var(--type-caption);
   line-height: 1.5;
   color: var(--ink-soft);
 }
@@ -3707,8 +3875,30 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   cursor: not-allowed;
 }
 .account-match__btn[aria-busy="true"] { cursor: wait; }
+/* "Matching in progress" (8 Nov 2026): in place of the button while a request
+   is queued / running; its tooltip (#match-chip-tip) says when it started. */
+.account-match__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  color: var(--ink);
+  font-size: var(--type-caption);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: default;
+}
+.account-match__chip[hidden] { display: none; }
+.account-match__chip:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.account-match__dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--accent); }
 @media (min-width: 768px) {
-  .account-match { justify-content: flex-end; text-align: right; }
+  .account-match { text-align: right; }
+  .account-match__line,
+  .account-match__need { margin-left: auto; }
 }
 .account__panel {
   max-width: 640px;
@@ -3834,6 +4024,8 @@ main:focus { outline: none; }
   color: var(--bg);
   font-size: var(--type-caption);
   line-height: 1.45;
+  text-align: left;                     /* the title-row tips sit in a right-aligned block */
+  overflow-wrap: anywhere;              /* a long email in the login tip */
   border-radius: var(--radius-sm);
   box-shadow: 0 8px 24px rgb(20 33 61 / 0.12);
 }

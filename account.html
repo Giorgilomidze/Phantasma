@@ -32,7 +32,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://api.fontshare.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&display=swap" />
+  <!-- Noto Sans Georgian (8 Nov 2026) is only for Georgian names in My simple CV
+       (preview, PDF, JPG); the browser fetches its files only when Georgian
+       letters are actually shown. Same request as Fraunces, so no extra one. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&family=Noto+Sans+Georgian:wght@400;500&display=swap" />
   <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap" />
 
   <!-- Consent mode: deny by default until user accepts (GDPR) -->
@@ -63,7 +66,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261108a" />
+  <link rel="stylesheet" href="./styles.css?v=20261108b" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -93,11 +96,15 @@
     <!-- Client dashboard, v1: the numbers only. Filled by bootAccountPage
          (script.js) from get_my_stats(); forms and tables come later. -->
     <section class="account page-grid" id="account" aria-labelledby="account-h">
-      <!-- Title row (5 Nov 2026): one compact row. Left: the title, then the
-           client's name (under it on phones). Right, when signed in: email and
-           three status controls (LinkedIn connected / CV uploaded / preferences
-           filled), painted by bootAccountPage. #account-who is shown together
-           with #account-signed-in. The LinkedIn link is edited in Profile details. -->
+      <!-- Title row (5 Nov 2026; one row since 8 Nov 2026). Left: the title,
+           then the client's name (under it on phones). Right, when signed in:
+           the status controls — login (the logo of the way they signed in,
+           always checked; hover / keyboard focus shows "Signed in with … as …"),
+           LinkedIn connected / CV uploaded / preferences filled — then Start
+           matching, or while a request is open the "Matching in progress" chip
+           (its start time on hover / focus / tap). Painted by bootAccountPage.
+           #account-who is shown together with #account-signed-in. The LinkedIn
+           link is edited in Profile details. -->
       <div class="account__head account__head--row">
         <div class="account__title">
           <h1 class="project-hero__title" id="account-h">Your account</h1>
@@ -110,8 +117,16 @@
           </nav>
         </div>
         <div class="account__identity" id="account-who" hidden>
-          <p class="account__email" id="account-email"></p>
           <div class="account-status" role="group" aria-label="Your setup">
+            <!-- Login (8 Nov 2026): logo from #login-logos by app_metadata.provider
+                 (paintLogin). Its name and #status-login-tip are the same text;
+                 a click opens Profile details. No title: the tip replaces it. -->
+            <button class="account-status__btn" type="button" id="status-login" data-state="on"
+                    data-label="Signed in with {provider} as {email}" data-label-no-email="Signed in with {provider}"
+                    data-providers='{"google":"Google","email":"email","linkedin_oidc":"LinkedIn"}'
+                    aria-label="Signed in">
+              <span class="account-status__check" aria-hidden="true"></span>
+            </button>
             <button class="account-status__btn" type="button" id="status-linkedin" data-state="off"
                     data-label-on="LinkedIn connected. Open Profile details" data-label-off="LinkedIn not connected. Connect your LinkedIn account"
                     aria-label="LinkedIn not connected. Connect your LinkedIn account" title="LinkedIn not connected. Connect your LinkedIn account">
@@ -132,18 +147,32 @@
               <span class="account-status__pct" id="status-prefs-pct">0%</span>
             </a>
           </div>
+          <!-- Start matching (7 Nov 2026, CAR-05, owner answer V-08; in this row
+               since 8 Nov 2026). Its place is kept (invisible) while the data
+               loads; hidden for good until supabase/0030 exists. -->
+          <button class="btn btn-primary btn-sm account-match__btn" type="button" id="match-start" hidden>Start matching</button>
+          <button class="account-match__chip" type="button" id="match-chip" aria-describedby="match-chip-tip" hidden>
+            <span class="account-match__dot" aria-hidden="true"></span>Matching in progress
+          </button>
+          <!-- Tooltips, placed by bootAccountPage (fixed, like #delete-tip). The
+               login one repeats the button's name, so it is hidden from screen readers. -->
+          <p class="account-tip" id="status-login-tip" aria-hidden="true" hidden></p>
+          <p class="account-tip" id="match-chip-tip" role="tooltip" hidden></p>
           <p class="account-status__note" id="status-note" role="status" aria-live="polite" hidden
              data-msg-linkedin-off="Connecting LinkedIn is not switched on yet — please try again later."></p>
         </div>
       </div>
 
-      <!-- Start matching (7 Nov 2026, CAR-05, owner answer V-08): under the title
-           row, right-aligned under the status controls from 768px. Painted by
-           bootAccountPage from the own match_requests rows (supabase/0030); stays
-           hidden until that table exists. Enabled with a CV, LinkedIn connected,
-           or the main preferences filled; otherwise #match-need says what is
-           missing. While a request is queued / running the button gives way to
-           the status line. Texts below ({when} / {date} / {list} filled in). -->
+      <!-- Start matching messages (7 Nov 2026, CAR-05; 8 Nov 2026: one compact
+           line under the title row, shown only when there is something to say,
+           so no empty space otherwise). Painted by bootAccountPage from the own
+           match_requests rows (supabase/0030). The button (#match-start, in the
+           title row) is enabled with a CV, LinkedIn connected, or the main
+           preferences filled; otherwise #match-need says what is missing. While
+           a request is queued / running the button gives way to #match-chip,
+           whose tooltip says when it started (data-msg-started). Last run /
+           failed / errors use #match-line. Texts below ({when} / {date} / {list}
+           filled in; data-msg-busy is the button label while it starts one). -->
       <div class="account-match" id="account-match" hidden
            data-msg-started="Matching started on {when}. Your list appears here when it is ready (usually within a day)."
            data-msg-done="Last matching: {date}"
@@ -163,7 +192,6 @@
           <button class="account-match__link" type="button" id="match-li">Connect LinkedIn</button> or
           <a class="account-match__link" href="./preferences.html">Fill in preferences</a><span id="match-missing"></span>.
         </p>
-        <button class="btn btn-primary btn-sm account-match__btn" type="button" id="match-start">Start matching</button>
       </div>
 
       <!-- Signed out -->
@@ -192,7 +220,7 @@
               <ul>
                 <li><button class="account-nav__item" type="button" data-nav-panel="processed">Vacancy lists</button></li>
                 <li><a class="account-nav__item" id="account-workbook" href="#" hidden
-                       download data-msg-error="The file is not available right now — please try again later.">Download processed vacancies</a></li>
+                       download data-msg-error="The file is not available right now — please try again later.">Download vacancies</a></li>
               </ul>
             </li>
             <li><button class="account-nav__item" type="button" id="account-profile-btn">Profile details</button></li>
@@ -339,28 +367,136 @@
     </div>
   </div>
 
-  <!-- Profile details modal — names + LinkedIn → profiles. -->
-  <div class="auth-modal" id="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title" hidden>
+  <!-- Login provider logos (8 Nov 2026), keyed by app_metadata.provider.
+       paintLogin() / fillLogin() copy the right one into the login icon in the
+       title row and into the "From your login" badge below. -->
+  <template id="login-logos">
+    <svg data-logo="google" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.07.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
+    <svg data-logo="email" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg>
+    <svg data-logo="linkedin_oidc" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#0A66C2" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
+  </template>
+
+  <!-- Profile details (8 Nov 2026): the person's details grouped by where each
+       one comes from, every group opened by a source badge. Editable, as
+       before: first / middle / last name and the LinkedIn link (→ profiles,
+       one Save). Read-only: the login (session), LinkedIn (the linkedin_oidc
+       identity), the CV (profiles.cv_path + the own candidates row) and the
+       preferences row. Filled by fillProfile() in bootAccountPage; a row
+       without a value stays hidden. -->
+  <div class="auth-modal" id="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title" aria-describedby="profile-sub" hidden
+       data-providers='{"google":"Google","email":"Email","linkedin_oidc":"LinkedIn"}'>
     <div class="auth-modal__backdrop" data-close></div>
-    <div class="auth-modal__panel">
+    <div class="auth-modal__panel profile-panel">
       <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
       <h2 class="auth-modal__title" id="profile-title">Profile details</h2>
-      <p class="auth-modal__sub">How you'd like to appear on applications, and the LinkedIn profile we match our research to.</p>
-      <form class="auth-modal__form" id="profile-form" novalidate
+      <p class="auth-modal__sub" id="profile-sub">Your details, grouped by where each one comes from. You can change your name and LinkedIn link here.</p>
+      <form class="profile-form" id="profile-form" novalidate
             data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-bad="Please paste a linkedin.com/in/… address."
             data-msg-error="Could not save — please try again.">
-        <label class="auth-modal__label" for="pf-first">First name</label>
-        <input class="auth-modal__input" id="pf-first" name="first_name" type="text" autocomplete="given-name" />
-        <label class="auth-modal__label" for="pf-middle">Middle name <small>(optional)</small></label>
-        <input class="auth-modal__input" id="pf-middle" name="middle_name" type="text" autocomplete="additional-name" />
-        <label class="auth-modal__label" for="pf-last">Surname</label>
-        <input class="auth-modal__input" id="pf-last" name="last_name" type="text" autocomplete="family-name" />
-        <label class="auth-modal__label" for="pf-linkedin">LinkedIn profile</label>
-        <input class="auth-modal__input" id="pf-linkedin" name="linkedin_url" type="url" autocomplete="url" inputmode="url"
-               placeholder="https://www.linkedin.com/in/your-name/" />
-        <button class="btn btn-primary" type="submit">Save</button>
+        <div class="profile-form__body">
+
+          <section class="profile-src" aria-labelledby="pf-h-login">
+            <h3 class="profile-src__h" id="pf-h-login"><span class="profile-src__badge" id="pf-login-badge">From your login</span></h3>
+            <p class="account__hint">How you'd like to appear on applications.</p>
+            <div class="profile-names">
+              <div class="profile-field">
+                <label class="auth-modal__label" for="pf-first">First name</label>
+                <input class="auth-modal__input" id="pf-first" name="first_name" type="text" autocomplete="given-name" />
+              </div>
+              <div class="profile-field">
+                <label class="auth-modal__label" for="pf-middle">Middle name <small>(optional)</small></label>
+                <input class="auth-modal__input" id="pf-middle" name="middle_name" type="text" autocomplete="additional-name" />
+              </div>
+              <div class="profile-field">
+                <label class="auth-modal__label" for="pf-last">Surname</label>
+                <input class="auth-modal__input" id="pf-last" name="last_name" type="text" autocomplete="family-name" />
+              </div>
+            </div>
+            <dl class="profile-facts">
+              <div data-login="email"><dt>Email</dt><dd></dd></div>
+              <div data-login="provider"><dt>Signed in with</dt><dd></dd></div>
+              <div data-login="since"><dt>Member since</dt><dd></dd></div>
+            </dl>
+          </section>
+
+          <section class="profile-src" aria-labelledby="pf-h-li">
+            <h3 class="profile-src__h" id="pf-h-li"><span class="profile-src__badge"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#0A66C2" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>From LinkedIn</span></h3>
+            <!-- Connected: what LinkedIn gave us (identity_data). The photo comes
+                 from LinkedIn's own server, loaded only when this dialog opens. -->
+            <div class="profile-li" id="pf-li-on" hidden>
+              <img class="profile-li__photo" id="pf-li-photo" alt="Your LinkedIn photo" width="48" height="48" referrerpolicy="no-referrer" hidden />
+              <dl class="profile-facts">
+                <div data-li="name"><dt>Name</dt><dd></dd></div>
+                <div data-li="email"><dt>Email</dt><dd></dd></div>
+              </dl>
+            </div>
+            <p class="profile-src__none" id="pf-li-off" hidden>
+              LinkedIn is not connected.
+              <button class="auth-modal__link" type="button" id="pf-li-connect">Connect LinkedIn</button>
+            </p>
+            <p class="account-form__status" id="pf-li-note" role="status" aria-live="polite" hidden></p>
+            <div class="profile-field">
+              <label class="auth-modal__label" for="pf-linkedin">LinkedIn profile link <small>(typed by you)</small></label>
+              <input class="auth-modal__input" id="pf-linkedin" name="linkedin_url" type="url" autocomplete="url" inputmode="url"
+                     placeholder="https://www.linkedin.com/in/your-name/" aria-describedby="pf-linkedin-hint" />
+              <p class="account__hint" id="pf-linkedin-hint">The LinkedIn profile we match our research to.</p>
+            </div>
+          </section>
+
+          <section class="profile-src" aria-labelledby="pf-h-cv">
+            <h3 class="profile-src__h" id="pf-h-cv"><span class="profile-src__badge"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>From your CV</span></h3>
+            <div class="profile-cv">
+              <p class="profile-cv__file" id="pf-cv-file" data-fmt="{file} · uploaded {date}" data-none="No CV uploaded yet."></p>
+              <button class="btn btn-sm account__quiet" type="button" id="pf-cv-btn"
+                      data-label-upload="Upload CV" data-label-review="Review my CV">Upload CV</button>
+            </div>
+            <!-- From the own candidates row (written by the pipeline). -->
+            <h4 class="profile-src__sub" id="pf-cv-read-h" hidden>What we read from your CV</h4>
+            <dl class="profile-facts" id="pf-cv-read" hidden>
+              <div data-cand="headline"><dt>Headline</dt><dd></dd></div>
+              <div data-cand="company_current"><dt>Current company</dt><dd></dd></div>
+              <div data-cand="function"><dt>Function</dt><dd></dd></div>
+              <div data-cand="seniority"><dt>Seniority</dt><dd></dd></div>
+              <div data-cand="target_titles"><dt>Target titles</dt><dd></dd></div>
+              <div data-cand="locations"><dt>Locations</dt><dd></dd></div>
+              <div data-cand="work_language"><dt>Work language</dt><dd></dd></div>
+              <div data-cand="profile_url"><dt>Profile link</dt><dd></dd></div>
+            </dl>
+            <p class="profile-src__none" id="pf-cv-none">We read your CV with your first search.</p>
+          </section>
+
+          <section class="profile-src" aria-labelledby="pf-h-prefs">
+            <h3 class="profile-src__h" id="pf-h-prefs"><span class="profile-src__badge"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>From your preferences</span></h3>
+            <dl class="profile-facts" id="pf-prefs"
+                data-salary-range="{min} – {max} {cur} (net, per month)"
+                data-salary-min="From {min} {cur} (net, per month)" data-salary-max="Up to {max} {cur} (net, per month)">
+              <div data-pref="salary"><dt>Salary range</dt><dd></dd></div>
+              <div data-pref="q5"><dt>Target job titles</dt><dd></dd></div>
+              <div data-pref="q20"><dt>Languages</dt><dd></dd></div>
+              <div data-pref="q22"><dt>Email addresses</dt><dd></dd></div>
+            </dl>
+            <p class="profile-src__meta">
+              <span id="pf-prefs-count" data-label="{n} of 24 answered">0 of 24 answered</span> ·
+              <a class="link-quiet" href="./preferences.html">Edit preferences</a>
+            </p>
+          </section>
+
+          <section class="profile-src" aria-labelledby="pf-h-simple">
+            <h3 class="profile-src__title" id="pf-h-simple">My simple CV</h3>
+            <p class="account__hint">A short CV made from your profile. Your own CV stays as it is.</p>
+            <p class="profile-src__action">
+              <button class="btn btn-sm account__quiet" type="button" id="pf-simple-cv"
+                      aria-haspopup="dialog" aria-controls="scv-modal">Preview my simple CV</button>
+            </p>
+          </section>
+
+        </div>
+        <div class="profile-form__actions">
+          <button class="btn btn-primary" type="submit">Save</button>
+          <p class="account__hint">Saves your name and LinkedIn link.</p>
+          <p class="account-form__status" id="profile-status" role="status" aria-live="polite" hidden></p>
+        </div>
       </form>
-      <p class="auth-modal__status" id="profile-status" role="status" aria-live="polite" hidden></p>
     </div>
   </div>
 
@@ -386,6 +522,37 @@
       <span class="visually-hidden" id="account-cv-name"></span>
       <p class="auth-modal__status" id="account-cv-status" role="status" aria-live="polite" hidden></p>
       <iframe class="account-cv__preview" id="account-cv-preview" title="CV preview" hidden></iframe>
+    </div>
+  </div>
+
+  <!-- My simple CV (8 Nov 2026), opened from Profile details (on top of it).
+       A one-page CV made only from the data shown there (cvModel / buildSheet
+       in bootAccountPage); missing pieces are left out, nothing is made up.
+       Download PDF = the browser's print window with only the CV (print rules
+       in styles.css section 26: body.is-printing-cv + .scv-print). Download
+       JPG = the same layout drawn on a canvas, A4 at 150 dpi (1240 × 1754,
+       white). The CV's headings and labels are the data-h-* / data-l-* below. -->
+  <div class="auth-modal" id="scv-modal" role="dialog" aria-modal="true" aria-labelledby="scv-title" aria-describedby="scv-sub" hidden
+       data-h-current="Current role" data-h-targets="Target roles" data-h-locations="Locations" data-h-languages="Languages"
+       data-l-company="Company" data-l-function="Function" data-l-seniority="Seniority"
+       data-file="Simple CV" data-msg-busy="Making the picture…" data-msg-error="Could not make the picture — please try again."
+       data-msg-no-name="Your name is missing — add it in Profile details to put it on the CV.">
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel auth-modal__panel--wide scv-panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <div class="account-cv__head">
+        <div>
+          <h2 class="auth-modal__title" id="scv-title">My simple CV</h2>
+          <p class="account__hint" id="scv-sub">A short CV made from your profile. Your own CV stays as it is.</p>
+        </div>
+        <div class="account__actions account-cv__actions">
+          <button class="btn btn-sm account__quiet" type="button" id="scv-pdf" aria-describedby="scv-pdf-hint">Download PDF</button>
+          <button class="btn btn-sm account__quiet" type="button" id="scv-jpg">Download JPG</button>
+        </div>
+      </div>
+      <p class="account__hint scv-hint" id="scv-pdf-hint">PDF: choose “Save as PDF” in the window that opens.</p>
+      <p class="auth-modal__status scv-status" id="scv-status" role="status" aria-live="polite" hidden></p>
+      <div class="scv-frame"><div class="scv-page" id="scv-page"></div></div>
     </div>
   </div>
 
@@ -458,7 +625,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261108a"></script>
+  <script src="./script.js?v=20261108b"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
   <script src="./career.js?v=20261107a"></script>
 </body>

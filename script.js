@@ -1460,6 +1460,15 @@
         .eq('id', session.user.id).maybeSingle();
     }
 
+    // Profile details, "What we read from your CV" (8 Nov 2026): the client's
+    // own candidates row, written by the pipeline (RLS: account_id = auth.uid();
+    // the filter keeps it one row should admins ever read more). No row yet = null.
+    function loadCandidate() {
+      return getClient().from('candidates')
+        .select('headline, company_current, function, seniority, target_titles, locations, work_language, profile_url')
+        .eq('account_id', session.user.id).maybeSingle();
+    }
+
     // CV: upload the new file first, then delete the old one, then point the
     // profile at the new path — so a failed upload never loses the old CV.
     async function uploadCv(file, oldPath) {
@@ -1630,6 +1639,7 @@
       updatePassword,
       deleteAccount,
       loadProfile,
+      loadCandidate,
       saveProfile,
       uploadCv,
       removeCv,
@@ -2897,16 +2907,24 @@
       inn.hidden = !session;
       if (who) who.hidden = !session;
       closePanel();
-      startMatch(session);                              // Start matching row: hidden until its data is in
-      if (!session) { nameEl.hidden = true; return; }   // the name sits outside #account-who
-      root.querySelector('#account-email').textContent = session.user.email;
+      current = session;                                // Profile details + My simple CV read it
+      startMatch(session);                              // Start matching: its place is kept until its data is in
+      if (!session) { nameEl.hidden = true; prefsRow = null; cand = null; return; }   // the name sits outside #account-who
+      paintLogin(session);                              // login icon (8 Nov 2026; the email text is gone)
       paintStatus(stLi, hasLinkedIn(session));
+      fillLogin(); fillLinkedIn();                      // Profile details, should it be open
       Auth.loadProfile().then(({ data: p }) => {
         profile = p || {}; paintProfile();
         cvPath = (p && p.cv_path) || null; paintCv();
       }, () => matchSet({ cv: !!cvPath }));
-      Auth.loadPreferences().then(({ data: pr }) => { paintPrefs(prefsPct(pr)); matchSet({ need: missingPrefs(pr) }); },
-                                  () => { paintPrefs(0); matchSet({ need: missingPrefs(null) }); });
+      Auth.loadPreferences().then(({ data: pr }) => {
+        prefsRow = pr || null; fillPrefs();
+        paintPrefs(prefsPct(pr)); matchSet({ need: missingPrefs(pr) });
+      }, () => { paintPrefs(0); matchSet({ need: missingPrefs(null) }); });
+      Auth.loadCandidate().then(({ data: c, error }) => {
+        if (error) console.warn('account: candidate read failed', error.message);
+        cand = (!error && c) || null; fillCv();
+      }, () => {});
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
       workbookPath = data.workbook;
@@ -2942,12 +2960,17 @@
       if (e.detail.event === 'PASSWORD_RECOVERY') showNewpass('recovery');
     });
 
-    // ---- small modal controller (same conventions as the login modal)
-    function modalCtl(el) {
+    // ---- small modal controller (same conventions as the login modal).
+    // Dialogs can stack (8 Nov 2026: Review my CV and My simple CV open on
+    // top of Profile details): only the top one answers Esc / Tab, and the
+    // page stays locked until the last one closes. onClose runs on every close.
+    const openModals = [];
+    function modalCtl(el, onClose) {
       let lastFocus = null;
       function open(focusSel) {
         lastFocus = document.activeElement;
         el.hidden = false;
+        if (openModals.indexOf(el) === -1) openModals.push(el);
         requestAnimationFrame(() => el.classList.add('is-open'));
         document.body.classList.add('is-locked');
         const f = focusSel && el.querySelector(focusSel);
@@ -2956,26 +2979,45 @@
       function close() {
         el.classList.remove('is-open');
         el.hidden = true;
-        document.body.classList.remove('is-locked');
+        const i = openModals.indexOf(el);
+        if (i !== -1) openModals.splice(i, 1);
+        if (!openModals.length) document.body.classList.remove('is-locked');
+        if (onClose) onClose();
         if (lastFocus && lastFocus.focus) lastFocus.focus();
       }
       el.querySelectorAll('[data-close]').forEach((c) => c.addEventListener('click', close));
       document.addEventListener('keydown', (e) => {
-        if (el.hidden) return;
-        if (e.key === 'Escape') close();
+        // defaultPrevented: the Esc that just closed the dialog above this one
+        if (el.hidden || e.defaultPrevented || openModals[openModals.length - 1] !== el) return;
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
         else trapTab(el, e);
       });
       return { open, close, get isOpen() { return !el.hidden; } };
     }
 
-    // ---- profile details modal (names + LinkedIn)
+    // ---- profile details modal (names + LinkedIn link, editable). Since 8 Nov
+    // 2026 also everything else we show about the person, grouped by where it
+    // comes from (login, LinkedIn, CV, preferences), plus My simple CV. The
+    // fill*() functions paint one group each and run again when its data
+    // arrives, so an open dialog stays current; they never touch the inputs.
     let profile = {};
-    const pfModal = modalCtl(document.getElementById('profile-modal'));
+    let current = null;     // the session render() painted last
+    let prefsRow = null;    // the own preferences row (null = nothing saved)
+    let cand = null;        // the own candidates row (null = none yet)
+    const pfEl    = document.getElementById('profile-modal');
+    const pfModal = modalCtl(pfEl);
     const pfForm  = document.getElementById('profile-form');
     const pfNote  = document.getElementById('profile-status');
     const nameEl  = root.querySelector('#account-name');   // next to the title (5 Nov 2026)
     const slugOf  = (u) => { const m = /linkedin\.com\/in\/([^/?#]+)/i.exec(u || ''); return m ? m[1] : ''; };
     const pfSay   = (kind, text) => { pfNote.textContent = text; pfNote.dataset.kind = kind; pfNote.hidden = !text; };
+    const clean   = (v) => (v == null ? '' : String(v).trim());
+    // '{a} of {b}' + { a, b } → text. Values go in as they are (an email with
+    // "$&" in it would trip String.replace's patterns).
+    const fillIn  = (tpl, map) => String(tpl || '').replace(/\{(\w+)\}/g,
+      (m, k) => (Object.prototype.hasOwnProperty.call(map, k) ? String(map[k]) : m));
+    const jsonData = (el, key) => { try { return JSON.parse((el && el.dataset[key]) || '{}'); } catch (_e) { return {}; } };
+    const PF_WORDS = jsonData(pfEl, 'providers');            // "Signed in with" values
 
     // The LinkedIn link is edited only here, in Profile details (the header
     // line with the slug and Edit / Add was removed 5 Nov 2026).
@@ -2987,13 +3029,158 @@
     function openProfile() {
       ['first_name', 'middle_name', 'last_name', 'linkedin_url'].forEach((k) => { pfForm[k].value = profile[k] || ''; });
       pfSay('', '');
+      pfLiNote.hidden = true;
       pfModal.open('#pf-first');
+      fillProfile();                       // after open: the LinkedIn photo is fetched only now
     }
     root.querySelector('#account-profile-btn').addEventListener('click', openProfile);
+
+    // The way the person signed in: app_metadata.provider (the method the
+    // account was made with). Anything unknown counts as email.
+    function provKey(s) {
+      const p = clean(s && s.user && s.user.app_metadata && s.user.app_metadata.provider);
+      return p === 'google' ? 'google' : (p === 'linkedin_oidc' || p === 'linkedin') ? 'linkedin_oidc' : 'email';
+    }
+    // That provider's logo (from <template id="login-logos">), first in box.
+    const logoTpl = document.getElementById('login-logos');
+    function setLogo(box, key) {
+      if (!box || box.dataset.provider === key) return;
+      const old = box.querySelector('svg');
+      if (old) old.remove();
+      const logo = logoTpl && logoTpl.content.querySelector('[data-logo="' + key + '"]');
+      if (logo) box.insertBefore(logo.cloneNode(true), box.firstChild);
+      box.dataset.provider = key;
+    }
+    // One label / value row (value: text or a node); no value → row hidden.
+    function setRow(row, value) {
+      if (!row) return false;
+      const dd = row.querySelector('dd');
+      dd.textContent = '';
+      if (value && typeof value === 'object') dd.appendChild(value);
+      else dd.textContent = value || '';
+      row.hidden = !value;
+      return !!value;
+    }
+    const pfRow = (kind, key) => pfEl.querySelector('[data-' + kind + '="' + key + '"]');
+
+    // From your login: the session.
+    function fillLogin() {
+      const s = current;
+      if (!s || !s.user) return;
+      const key = provKey(s);
+      setLogo(document.getElementById('pf-login-badge'), key);
+      setRow(pfRow('login', 'email'), clean(s.user.email));
+      setRow(pfRow('login', 'provider'), PF_WORDS[key] || key);
+      setRow(pfRow('login', 'since'), s.user.created_at ? fmtDate(s.user.created_at) : '');
+    }
+
+    // From LinkedIn: what LinkedIn gave us when it was connected (the OpenID
+    // claims in the linkedin_oidc identity's identity_data). Not connected:
+    // one line + Connect LinkedIn (the same action as the status button).
+    const pfLiOn    = document.getElementById('pf-li-on');
+    const pfLiOff   = document.getElementById('pf-li-off');
+    const pfLiPhoto = document.getElementById('pf-li-photo');
+    const pfLiNote  = document.getElementById('pf-li-note');
+    pfLiPhoto.addEventListener('error', () => { pfLiPhoto.hidden = true; });   // e.g. LinkedIn's photo link expired
+    function fillLinkedIn() {
+      const s = current;
+      if (!s || !s.user) return;
+      const id = (s.user.identities || []).find((i) => i.provider === 'linkedin_oidc');
+      pfLiOn.hidden = !id;
+      pfLiOff.hidden = !!id;
+      if (!id) return;
+      const d = id.identity_data || {};
+      setRow(pfRow('li', 'name'), clean(d.name || d.full_name || [d.given_name, d.family_name].filter(Boolean).join(' ')));
+      setRow(pfRow('li', 'email'), clean(d.email));
+      const pic = clean(d.picture || d.avatar_url);
+      if (!/^https:\/\//i.test(pic)) { pfLiPhoto.hidden = true; pfLiPhoto.removeAttribute('src'); return; }
+      if (!pfModal.isOpen) return;          // no request to LinkedIn until the dialog is open
+      if (pfLiPhoto.getAttribute('src') !== pic) pfLiPhoto.src = pic;
+      pfLiPhoto.hidden = false;
+    }
+    document.getElementById('pf-li-connect').addEventListener('click', () => connectLinkedIn(pfLiNote));
+
+    // From your CV: the file (profiles.cv_path / cv_uploaded_at), then what
+    // the pipeline read from it (the candidates row; none yet → one line).
+    const pfCvBtn   = document.getElementById('pf-cv-btn');
+    const pfCvFile  = document.getElementById('pf-cv-file');
+    const pfCvReadH = document.getElementById('pf-cv-read-h');
+    const pfCvRead  = document.getElementById('pf-cv-read');
+    const pfCvNone  = document.getElementById('pf-cv-none');
+    function fillCv() {
+      pfCvBtn.textContent = cvPath ? pfCvBtn.dataset.labelReview : pfCvBtn.dataset.labelUpload;
+      pfCvFile.textContent = !cvPath ? pfCvFile.dataset.none
+        : profile.cv_uploaded_at ? fillIn(pfCvFile.dataset.fmt, { file: cvShownName(), date: fmtDate(profile.cv_uploaded_at) })
+        : cvShownName();
+      let any = false;
+      pfCvRead.querySelectorAll('[data-cand]').forEach((row) => {
+        const k = row.dataset.cand;
+        const v = clean(cand && cand[k]);
+        let value = v;
+        if (k === 'profile_url') {
+          const url = safeUrl(v);
+          value = url ? extLink(url, url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')) : '';
+        }
+        if (setRow(row, value)) any = true;
+      });
+      pfCvReadH.hidden = !any;
+      pfCvRead.hidden = !any;
+      pfCvNone.hidden = any;
+    }
+
+    // From your preferences: salary range, q5 / q20 / q22 and the count.
+    const pfPrefs = document.getElementById('pf-prefs');
+    const pfCount = document.getElementById('pf-prefs-count');
+    // An answer as text: what was typed, or a list (older rows) joined.
+    function answerText(v) {
+      if (typeof v === 'string') return v.trim();
+      if (typeof v === 'number') return String(v);
+      if (Array.isArray(v)) return v.map(clean).filter(Boolean).join(', ');
+      return '';
+    }
+    function salaryText(p) {
+      if (!p) return '';
+      const has = (v) => v != null && v !== '';
+      const num = (v) => (isNaN(Number(v)) ? clean(v) : Number(v).toLocaleString('en-GB'));
+      const lo = has(p.salary_min), hi = has(p.salary_max);
+      const t = pfPrefs.dataset;
+      const tpl = lo && hi ? t.salaryRange : lo ? t.salaryMin : hi ? t.salaryMax : '';
+      return fillIn(tpl, { min: lo ? num(p.salary_min) : '', max: hi ? num(p.salary_max) : '', cur: clean(p.currency) || 'GEL' });
+    }
+    function fillPrefs() {
+      const a = (prefsRow && prefsRow.answers) || {};
+      let any = false;
+      pfPrefs.querySelectorAll('[data-pref]').forEach((row) => {
+        const k = row.dataset.pref;
+        if (setRow(row, k === 'salary' ? salaryText(prefsRow) : answerText(a[k]))) any = true;
+      });
+      pfPrefs.hidden = !any;
+      pfCount.textContent = fillIn(pfCount.dataset.label, { n: prefsCount(prefsRow) });
+    }
+
+    function fillProfile() { fillLogin(); fillLinkedIn(); fillCv(); fillPrefs(); }
 
     // ---- status controls in the title row (5 Nov 2026): LinkedIn connected
     // (a linkedin_oidc identity on the login), CV uploaded, preferences filled.
     // Each shows its state in the icon (green check) and in aria-label + title.
+    // 8 Nov 2026: first of them the login icon, which replaced the email text:
+    // the provider's logo, always checked; "Signed in with Google as
+    // name@example.com" is its name and its tooltip (no title, see the
+    // tooltips at the end); a click opens Profile details.
+    const stLogin    = root.querySelector('#status-login');
+    const stLoginTip = root.querySelector('#status-login-tip');
+    const LOGIN_WORDS = jsonData(stLogin, 'providers');      // google → "Google", email → "email", …
+    function paintLogin(s) {
+      if (!stLogin || !s || !s.user) return;
+      const key = provKey(s);
+      const email = clean(s.user.email);
+      const label = fillIn(email ? stLogin.dataset.label : stLogin.dataset.labelNoEmail,
+                           { provider: LOGIN_WORDS[key] || key, email });
+      stLogin.setAttribute('aria-label', label);
+      stLoginTip.textContent = label;
+      setLogo(stLogin, key);
+    }
+    if (stLogin) stLogin.addEventListener('click', openProfile);
     const stLi    = root.querySelector('#status-linkedin');
     const stCv    = root.querySelector('#status-cv');
     const stPrefs = root.querySelector('#status-prefs');
@@ -3008,7 +3195,8 @@
     const hasLinkedIn = (s) => !!(s && s.user && (s.user.identities || []).some((i) => i.provider === 'linkedin_oidc'));
     // Same count as the admin panel (career_admin_clients, 0024): the salary
     // range (min or max set) + every non-empty answer, out of 24 items.
-    function prefsPct(p) {
+    // prefsCount is also Profile details' "N of 24 answered".
+    function prefsCount(p) {
       if (!p) return 0;
       let n = p.salary_min != null || p.salary_max != null ? 1 : 0;
       const a = p.answers || {};
@@ -3017,45 +3205,54 @@
         const s = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
         if (['', '[]', '{}'].indexOf(s.trim()) === -1) n++;
       });
-      return Math.min(100, Math.round(100 * n / 24));
+      return Math.min(24, n);
     }
+    function prefsPct(p) { return Math.min(100, Math.round(100 * prefsCount(p) / 24)); }
     function paintPrefs(pct) {
       stPct.textContent = pct + '%';
       const label = stPrefs.dataset.label.replace('{n}', pct);
       stPrefs.setAttribute('aria-label', label);
       stPrefs.title = label;
     }
-    // Add LinkedIn to this login (also the "Connect LinkedIn" link under
-    // Start matching).
-    async function connectLinkedIn() {
-      stNote.hidden = true;
+    // Add LinkedIn to this login (also the "Connect LinkedIn" links under
+    // Start matching and in Profile details). note: where a failure is said
+    // (default: the line under the status controls).
+    async function connectLinkedIn(note) {
+      const box = note || stNote;
+      box.hidden = true;
       let error = null;
       try { ({ error } = await Auth.linkLinkedIn()); } catch (err) { error = err; }
       // Success leaves the page for LinkedIn; anything else means linking is off.
-      if (error) { stNote.textContent = stNote.dataset.msgLinkedinOff; stNote.hidden = false; }
+      if (error) { box.textContent = stNote.dataset.msgLinkedinOff; box.dataset.kind = 'error'; box.hidden = false; }
     }
     stLi.addEventListener('click', () => {
       if (stLi.dataset.state === 'on') { openProfile(); return; }
       connectLinkedIn();
     });
 
-    // ---- Start matching (7 Nov 2026, CAR-05; owner rule V-08): the row
-    // under the title row (#account-match). Enabled when ANY of: a CV
+    // ---- Start matching (7 Nov 2026, CAR-05; owner rule V-08). Since 8 Nov
+    // 2026 the button sits in the title row, after the Preferences pill, and
+    // #account-match is only the compact line under that row, shown when
+    // there is something to say. Enabled when ANY of: a CV
     // (profiles.cv_path), LinkedIn connected (the same identity test as the
     // status button), or the main preferences filled: salary from AND to
     // (q1), target job titles (q5), languages (q20), email addresses (q22).
-    // Otherwise a line says what is missing, with links. A click calls
+    // Otherwise the line says what is missing, with links. A click calls
     // request_matching(), which checks the same rule on the server and allows
     // one open request at a time (supabase/0030). The newest own
-    // match_requests row decides the rest: queued / running = a status line
-    // instead of the button; done = "Last matching" + the button; failed = a
-    // short note + the button (so the client is never stuck). Until 0030 is
-    // run the table is missing and the whole row stays hidden.
+    // match_requests row decides the rest: queued / running = the "Matching
+    // in progress" chip instead of the button (start time in its tooltip);
+    // done = "Last matching" + the button; failed = a short note + the button
+    // (so the client is never stuck). Until 0030 is run the table is missing
+    // and neither the button nor the line shows.
     const mBox  = root.querySelector('#account-match');
     const mBtn  = root.querySelector('#match-start');
+    const mChip = root.querySelector('#match-chip');
+    const mChipTip = root.querySelector('#match-chip-tip');
     const mLine = root.querySelector('#match-line');
     const mNeed = root.querySelector('#match-need');
     const mMiss = root.querySelector('#match-missing');
+    const mBtnLabel = mBtn ? mBtn.textContent : '';
     // cv / need / reqs stay null until their data is in; the row shows only
     // then, so it never flips from disabled to enabled while loading.
     const mState = { uid: null, gen: 0, li: false, cv: null, need: null, reqs: null, missing: false, busy: false, note: null };
@@ -3084,32 +3281,49 @@
     function paintMatch() {
       if (!mBox) return;
       const s = mState;
-      if (!s.uid || s.missing || s.cv == null || s.need == null || s.reqs == null) { mBox.hidden = true; return; }
+      if (!s.uid || s.missing || s.cv == null || s.need == null || s.reqs == null) {
+        // Data still loading: the button keeps its place in the row, unseen
+        // (.is-pending), so the icons do not jump when it appears. Signed out
+        // or no table yet: no button at all.
+        const wait = !!s.uid && !s.missing;
+        mBtn.hidden = !wait;
+        mBtn.classList.toggle('is-pending', wait);
+        mChip.hidden = true;
+        mChipTip.hidden = true;
+        mBox.hidden = true;
+        return;
+      }
       const msg = mBox.dataset;
       const latest = s.reqs[0] || null;
       const open = isOpen(latest);
       const done = s.reqs.find((r) => r.status === 'done') || null;
       const ready = s.cv || s.li || !s.need.length;
+      mNeed.hidden = open || ready;
       let text = '', kind = '';
       if (s.note) { text = s.note.text; kind = s.note.kind; }
-      else if (open) text = msg.msgStarted.replace('{when}', fmtWhen(latest.created_at));
+      else if (open) text = '';                      // the chip says it; its tooltip has the time
       else if (latest && latest.status === 'failed') { text = msg.msgFailed; kind = 'error'; }
-      else if (done) text = msg.msgDone.replace('{date}', fmtDate(done.finished_at || done.created_at));
+      else if (done && mNeed.hidden) text = fillIn(msg.msgDone, { date: fmtDate(done.finished_at || done.created_at) });   // one line: what is missing wins
       mLine.textContent = text;
       mLine.dataset.kind = kind;
       mLine.hidden = !text;
-      mNeed.hidden = open || ready;
-      mMiss.textContent = mNeed.hidden ? '' : msg.msgMissing.replace('{list}', s.need.map((k) => PREF_LABELS[k] || k).join(', '));
-      // The button gives way to the status line while a request is open;
-      // keyboard focus moves with it instead of getting lost.
-      const hadFocus = document.activeElement === mBtn;
+      mMiss.textContent = mNeed.hidden ? '' : fillIn(msg.msgMissing, { list: s.need.map((k) => PREF_LABELS[k] || k).join(', ') });
+      // The button gives way to the chip while a request is open; keyboard
+      // focus moves with it (and back) instead of getting lost.
+      const onBtn = document.activeElement === mBtn, onChip = document.activeElement === mChip;
+      mBtn.classList.remove('is-pending');
       mBtn.hidden = open;
+      mBtn.textContent = s.busy ? msg.msgBusy : mBtnLabel;     // "Starting…" while it asks
+      mChip.hidden = !open;
+      mChipTip.textContent = open ? fillIn(msg.msgStarted, { when: fmtWhen(latest.created_at) }) : '';
+      if (!open) mChipTip.hidden = true;
       if (!ready || s.busy) mBtn.setAttribute('aria-disabled', 'true'); else mBtn.removeAttribute('aria-disabled');
       if (s.busy) mBtn.setAttribute('aria-busy', 'true'); else mBtn.removeAttribute('aria-busy');
       const desc = [mLine, mNeed].filter((p) => !p.hidden).map((p) => p.id).join(' ');
       if (desc) mBtn.setAttribute('aria-describedby', desc); else mBtn.removeAttribute('aria-describedby');
-      mBox.hidden = false;
-      if (open && hadFocus) { mLine.tabIndex = -1; mLine.focus(); }
+      mBox.hidden = mLine.hidden && mNeed.hidden;    // nothing to say: no line, no space
+      if (open && onBtn) mChip.focus();
+      else if (!open && onChip) mBtn.focus();
     }
     function matchSet(part) { Object.assign(mState, part); paintMatch(); }
 
@@ -3146,7 +3360,7 @@
         if (mBtn.getAttribute('aria-disabled') === 'true' || !s.uid) return;
         const g = s.gen;
         const msg = mBox.dataset;
-        matchSet({ busy: true, note: { text: msg.msgBusy, kind: 'busy' } });
+        matchSet({ busy: true, note: null });        // the button itself reads "Starting…"
         let res;
         try { res = await Auth.requestMatching(); } catch (err) { res = { error: err }; }
         if (g !== s.gen) return;
@@ -3169,7 +3383,7 @@
       });
       // The links in the "what is missing" line do what the status buttons do.
       root.querySelector('#match-cv').addEventListener('click', () => (cvPath ? showCv() : cvFile.click()));
-      root.querySelector('#match-li').addEventListener('click', connectLinkedIn);
+      root.querySelector('#match-li').addEventListener('click', () => connectLinkedIn());
       // Back on the tab while a request is open: has it finished meanwhile?
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && mState.reqs && isOpen(mState.reqs[0])) loadMatch();
@@ -3191,7 +3405,8 @@
       Object.assign(profile, fields);
       paintProfile();
       pfSay('ok', pfForm.dataset.msgSaved);
-      setTimeout(() => { if (pfModal.isOpen) pfModal.close(); }, 700);
+      // Closes as before, unless My simple CV / the CV was opened on top meanwhile.
+      setTimeout(() => { if (pfModal.isOpen && openModals[openModals.length - 1] === pfEl) pfModal.close(); }, 700);
     });
 
     // ---- LinkedIn profile modal — candidates.linkedin_audit, written by
@@ -3235,17 +3450,20 @@
     const MAX_CV  = 5 * 1024 * 1024;
     let cvPath = null;
     const cvSay = (kind, text) => { cvNote.textContent = text; cvNote.dataset.kind = kind; cvNote.hidden = !text; };
+    // The stored name is <uid>/cv-<time>.pdf; people see "cv.pdf".
+    const cvShownName = () => (cvPath ? cvPath.split('/').pop().replace(/^cv-\d+\./, 'cv.') : '');
 
     function paintCv() {
       cvBtn.textContent = cvPath ? cvBtn.dataset.labelReview : cvBtn.dataset.labelUpload;
       paintStatus(stCv, !!cvPath);
+      fillCv();                                      // Profile details, "From your CV"
       matchSet({ cv: !!cvPath });                    // a CV is enough for Start matching
     }
     async function showCv() {
       cvSay('', '');
       cvPrev.hidden = true;
       cvPrev.removeAttribute('src');
-      cvName.textContent = cvPath.split('/').pop().replace(/^cv-\d+\./, 'cv.');
+      cvName.textContent = cvShownName();
       if (!cvModal.isOpen) cvModal.open();
       const { data, error } = await Auth.cvUrl(cvPath);
       if (error || !data) { cvSay('error', cvModalEl.dataset.msgError); return; }
@@ -3255,6 +3473,7 @@
     }
     cvBtn.addEventListener('click', () => { if (cvPath) showCv(); else cvFile.click(); });
     stCv.addEventListener('click', () => { if (cvPath) showCv(); else cvFile.click(); });   // same as the side panel
+    pfCvBtn.addEventListener('click', () => { if (cvPath) showCv(); else cvFile.click(); }); // and Profile details (opens on top)
     document.getElementById('account-cv-replace').addEventListener('click', () => cvFile.click());
     cvFile.addEventListener('change', async () => {
       const file = cvFile.files[0];
@@ -3272,6 +3491,7 @@
       const { path, error } = await Auth.uploadCv(file, cvPath);
       if (error) { cvSay('error', cvModalEl.dataset.msgError); return; }
       cvPath = path;
+      Object.assign(profile, { cv_path: path, cv_uploaded_at: new Date().toISOString() });   // as uploadCv saved it
       paintCv();
       await showCv();
       cvSay('ok', cvModalEl.dataset.msgUploaded);
@@ -3281,11 +3501,289 @@
       const { error } = await Auth.removeCv(cvPath);
       if (error) { cvSay('error', cvModalEl.dataset.msgError); return; }
       cvPath = null;
+      Object.assign(profile, { cv_path: null, cv_uploaded_at: null });
       paintCv();
       cvModal.close();
     });
 
-    // Download processed vacancies — the client's shortlist workbook (.xlsx),
+    // ---- My simple CV (8 Nov 2026): a one-page CV made only from what
+    // Profile details shows — the names and LinkedIn link as typed there now,
+    // the login email, the candidates row and the preferences. Missing pieces
+    // are left out; nothing is made up. One model feeds the preview, the
+    // print copy (Download PDF) and the canvas (Download JPG), so they match.
+    const scvEl   = document.getElementById('scv-modal');
+    const scvPage = document.getElementById('scv-page');
+    const scvNote = document.getElementById('scv-status');
+    const scvJpg  = document.getElementById('scv-jpg');
+    const scvSay  = (kind, text) => { scvNote.textContent = text; scvNote.dataset.kind = kind; scvNote.hidden = !text; };
+    let scvModel = null;
+    let scvPrint = null;          // the hidden print copy, there while the dialog is open
+    let scvTitle = '';            // the page title while the PDF's name stands in for it
+    const scvModal = modalCtl(scvEl, () => {          // closing takes the print copy away
+      document.body.classList.remove('is-printing-cv');
+      if (scvPrint) { scvPrint.remove(); scvPrint = null; }
+      if (scvTitle) { document.title = scvTitle; scvTitle = ''; }
+    });
+    const GEORGIAN = /[Ⴀ-ჿᲐ-Ჿⴀ-⴯]/;
+    const listOf = (t) => clean(t).split(/\s*[\n;,]\s*/).filter(Boolean);
+    const safeDecode = (s) => { try { return decodeURIComponent(s); } catch (_e) { return s; } };
+
+    function cvModel() {
+      const h = scvEl.dataset;
+      const typed = (k) => clean(pfForm[k].value);
+      const c = cand || {};
+      const a = (prefsRow && prefsRow.answers) || {};
+      const targets = listOf(answerText(a.q5) || c.target_titles);   // preferences first, else what we read
+      const contact = [];
+      const email = clean(current && current.user && current.user.email);
+      if (email) contact.push({ text: email, href: 'mailto:' + email });
+      const slug = slugOf(typed('linkedin_url')) || slugOf(c.profile_url);
+      if (slug) contact.push({ text: 'linkedin.com/in/' + safeDecode(slug), href: 'https://www.linkedin.com/in/' + slug + '/' });
+      const sections = [];
+      const role = [[h.lCompany, clean(c.company_current)], [h.lFunction, clean(c.function)], [h.lSeniority, clean(c.seniority)]]
+        .filter((r) => r[1]);
+      if (role.length) sections.push({ title: h.hCurrent, rows: role });
+      if (targets.length) sections.push({ title: h.hTargets, text: targets.join(', ') });
+      if (clean(c.locations)) sections.push({ title: h.hLocations, text: clean(c.locations) });
+      const langs = answerText(a.q20) || clean(c.work_language);
+      if (langs) sections.push({ title: h.hLanguages, text: langs });
+      return {
+        name: [typed('first_name'), typed('middle_name'), typed('last_name')].filter(Boolean).join(' '),
+        headline: clean(c.headline) || targets[0] || '',
+        contact,
+        sections,
+      };
+    }
+
+    // The CV as DOM (textContent only). links: real mailto / LinkedIn links
+    // for the print copy (they stay clickable in the PDF); text in the preview.
+    function buildSheet(m, links) {
+      const el = (tag, cls, text) => {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text != null) n.textContent = text;
+        return n;
+      };
+      const sheet = el('article', 'scv');
+      const head = el('header', 'scv__head');
+      if (m.name) head.appendChild(el('p', 'scv__name', m.name));
+      if (m.headline) head.appendChild(el('p', 'scv__headline', m.headline));
+      if (m.contact.length) {
+        const p = el('p', 'scv__contact');
+        m.contact.forEach((c) => {
+          const item = el(links ? 'a' : 'span', null, c.text);
+          if (links) item.href = c.href;
+          p.appendChild(item);
+        });
+        head.appendChild(p);
+      }
+      sheet.appendChild(head);
+      sheet.appendChild(el('div', 'scv__rule'));
+      m.sections.forEach((s) => {
+        const sec = el('section', 'scv__sec');
+        sec.appendChild(el('h3', 'scv__h', s.title));
+        if (s.rows) {
+          const dl = el('dl', 'scv__facts');
+          s.rows.forEach((r) => {
+            const row = el('div');
+            row.appendChild(el('dt', null, r[0]));
+            row.appendChild(el('dd', null, r[1]));
+            dl.appendChild(row);
+          });
+          sec.appendChild(dl);
+        } else {
+          sec.appendChild(el('p', 'scv__text', s.text));
+        }
+        sheet.appendChild(sec);
+      });
+      return sheet;
+    }
+
+    // "Simple CV - Giorgi Lomidze": the JPG's file name and the PDF's suggested one.
+    function cvFileName(m) {
+      const name = m.name.replace(/[\\/:*?"<>|\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim();
+      return scvEl.dataset.file + (name ? ' - ' + name : '');
+    }
+
+    // Opens on top of Profile details. The print copy waits, hidden, in
+    // <body> while the dialog is open, so Download PDF (or Ctrl+P) prints the
+    // CV alone; closing the dialog removes it again (see scvModal above).
+    function openSimpleCv() {
+      scvModel = cvModel();
+      scvPage.textContent = '';
+      scvPage.appendChild(buildSheet(scvModel, false));
+      if (scvPrint) scvPrint.remove();
+      scvPrint = document.createElement('div');
+      scvPrint.className = 'scv-print';
+      scvPrint.appendChild(buildSheet(scvModel, true));
+      document.body.appendChild(scvPrint);
+      document.body.classList.add('is-printing-cv');
+      scvSay('', scvModel.name ? '' : scvEl.dataset.msgNoName);
+      scvModal.open('#scv-pdf');
+    }
+    document.getElementById('pf-simple-cv').addEventListener('click', openSimpleCv);
+
+    // Download PDF: the browser's own print window ("Save as PDF"), which
+    // suggests the page title as the file name.
+    document.getElementById('scv-pdf').addEventListener('click', () => {
+      if (!scvModel) return;
+      if (!scvTitle) scvTitle = document.title;
+      document.title = cvFileName(scvModel);
+      const back = () => {
+        window.removeEventListener('afterprint', back);
+        if (scvTitle) { document.title = scvTitle; scvTitle = ''; }
+      };
+      window.addEventListener('afterprint', back);
+      window.print();
+    });
+
+    // Download JPG: the sheet drawn again on a canvas, A4 at 150 dpi
+    // (1240 × 1754, white), with the sizes of .scv in styles.css section 26:
+    // base 10 pt, margins 18 mm, everything else in em of that base.
+    const CV_W = 1240, CV_H = 1754;
+    const CV_B = 10 * 150 / 72;                    // 10 pt at 150 dpi, in px
+    const CV_M = 18 * CV_W / 210;                  // 18 mm
+    const CV_INK = '#14213d', CV_SOFT = '#4a5568', CV_ACCENT = '#f26b1d';   // --ink, --ink-soft, --accent
+    const CV_SANS = '"General Sans", "Noto Sans Georgian", Arial, sans-serif';
+    const CV_SERIF = '"Fraunces", "Noto Sans Georgian", Georgia, serif';
+
+    // The fonts the drawing uses, loaded first (Georgian letters come from
+    // Noto Sans Georgian). Never waits more than 4 s; then the fallbacks draw.
+    function cvFonts(m) {
+      const fonts = document.fonts;
+      if (!fonts || !fonts.load) return Promise.resolve();
+      const text = [m.name, m.headline].concat(
+        m.contact.map((c) => c.text),
+        m.sections.map((s) => s.title + ' ' + (s.rows ? s.rows.map((r) => r.join(' ')).join(' ') : s.text))
+      ).join(' ');
+      const jobs = ['500 54px "Fraunces"', '400 22px "General Sans"', '500 22px "General Sans"'].map((f) => fonts.load(f, text));
+      if (GEORGIAN.test(text)) jobs.push(fonts.load('400 22px "Noto Sans Georgian"', text), fonts.load('500 22px "Noto Sans Georgian"', text));
+      return Promise.race([Promise.all(jobs).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
+    }
+
+    // Lines that fit maxW; a word longer than a line (a long email) is cut.
+    function wrapLines(ctx, text, maxW) {
+      const out = [];
+      String(text).split('\n').forEach((para) => {
+        let line = '';
+        para.split(/\s+/).filter(Boolean).forEach((word) => {
+          let w = word;
+          while (ctx.measureText(w).width > maxW) {
+            const ch = Array.from(w);
+            let n = Math.max(1, ch.length - 1);
+            while (n > 1 && ctx.measureText(ch.slice(0, n).join('')).width > maxW) n--;
+            if (line) { out.push(line); line = ''; }
+            out.push(ch.slice(0, n).join(''));
+            w = ch.slice(n).join('');
+          }
+          if (!w) return;
+          const test = line ? line + ' ' + w : w;
+          if (line && ctx.measureText(test).width > maxW) { out.push(line); line = w; } else line = test;
+        });
+        if (line) out.push(line);
+      });
+      return out;
+    }
+
+    function cvJpeg(m) {
+      return cvFonts(m).then(() => {
+        const canvas = document.createElement('canvas');
+        canvas.width = CV_W;
+        canvas.height = CV_H;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, CV_W, CV_H);
+        ctx.textBaseline = 'middle';
+        const B = CV_B, X = CV_M, W = CV_W - 2 * CV_M, BOTTOM = CV_H - CV_M;
+        const track = (px) => { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; };
+        // Wrapped text from y down (nothing below the bottom margin); returns the y under it.
+        function put(text, y, o) {
+          ctx.font = o.weight + ' ' + o.size.toFixed(2) + 'px ' + o.family;
+          ctx.fillStyle = o.color;
+          track(o.spacing || 0);
+          const lh = o.size * o.lh;
+          wrapLines(ctx, o.caps ? text.toUpperCase() : text, o.w).forEach((ln) => {
+            if (y + lh <= BOTTOM) ctx.fillText(ln, o.x, y + lh / 2);
+            y += lh;
+          });
+          track(0);
+          return y;
+        }
+        let y = X;
+        let first = true;
+        if (m.name) {
+          y = put(m.name, y, { size: 2.6 * B, weight: 500, family: CV_SERIF, color: CV_INK, lh: 1.15, x: X, w: W });
+          first = false;
+        }
+        if (m.headline) {
+          if (!first) y += 0.35 * 1.3 * B;
+          y = put(m.headline, y, { size: 1.3 * B, weight: 500, family: CV_SANS, color: CV_SOFT, lh: 1.35, x: X, w: W });
+          first = false;
+        }
+        if (m.contact.length) {
+          if (!first) y += 0.8 * B;
+          ctx.font = '400 ' + B.toFixed(2) + 'px ' + CV_SANS;
+          ctx.fillStyle = CV_INK;
+          const lh = 1.5 * B;
+          let x = X;
+          m.contact.forEach((c) => {
+            const w = Math.min(ctx.measureText(c.text).width, W);
+            if (x > X && x + w > X + W) { x = X; y += lh; }
+            ctx.fillText(c.text, x, y + lh / 2, X + W - x);   // a too-long item is squeezed, not cut off
+            x += w + 1.6 * B;
+          });
+          y += lh;
+        }
+        y += 1.3 * B;                                         // .scv__rule: a short orange bar
+        ctx.fillStyle = CV_ACCENT;
+        ctx.fillRect(X, y, 3.4 * B, 0.25 * B);
+        y += 0.25 * B;
+        m.sections.forEach((s) => {
+          const hs = 0.85 * B, ts = 1.05 * B;
+          y += 1.9 * B;
+          y = put(s.title, y, { size: hs, weight: 500, family: CV_SANS, color: CV_SOFT, lh: 1.4, x: X, w: W, caps: true, spacing: 0.12 * hs });
+          y += 0.6 * hs;
+          if (s.rows) {
+            const lab = 7.5 * ts, gap = ts;
+            s.rows.forEach((r, i) => {
+              if (i) y += 0.3 * ts;
+              const y1 = put(r[0], y, { size: ts, weight: 400, family: CV_SANS, color: CV_SOFT, lh: 1.5, x: X, w: lab });
+              const y2 = put(r[1], y, { size: ts, weight: 400, family: CV_SANS, color: CV_INK, lh: 1.5, x: X + lab + gap, w: W - lab - gap });
+              y = Math.max(y1, y2);
+            });
+          } else {
+            y = put(s.text, y, { size: ts, weight: 400, family: CV_SANS, color: CV_INK, lh: 1.5, x: X, w: W });
+          }
+        });
+        return new Promise((resolve, reject) => {
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('no picture'))), 'image/jpeg', 0.92);
+        });
+      });
+    }
+
+    scvJpg.addEventListener('click', async () => {
+      if (!scvModel || scvJpg.getAttribute('aria-busy') === 'true') return;
+      scvJpg.setAttribute('aria-busy', 'true');
+      scvSay('busy', scvEl.dataset.msgBusy);
+      try {
+        const blob = await cvJpeg(scvModel);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = cvFileName(scvModel) + '.jpg';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        scvSay('', scvModel.name ? '' : scvEl.dataset.msgNoName);
+      } catch (err) {
+        console.warn('simple CV: picture failed', err);
+        scvSay('error', scvEl.dataset.msgError);
+      }
+      scvJpg.removeAttribute('aria-busy');
+    });
+
+    // Download vacancies — the client's shortlist workbook (.xlsx),
     // uploaded by sync_local.py. Signed URL fetched on click (10-min life).
     const wb = root.querySelector('#account-workbook');
     let workbookPath = null;
@@ -3402,6 +3900,50 @@
       await Auth.signOut();
       render(null);
     });
+
+    // ---- Tooltips in the title row (8 Nov 2026): the login icon ("Signed in
+    // with … as …", also its name) and the "Matching in progress" chip (when
+    // it started, also its description). Same look and placement as
+    // #delete-tip (.account-tip, fixed, kept on screen): hover or keyboard
+    // focus shows them; leaving, Esc, blur or scrolling hides them. A click /
+    // tap on the chip shows its tip too (phones have no hover).
+    function hoverTip(anchor, tip) {
+      let timer = 0;
+      function show() {
+        clearTimeout(timer);
+        if (!tip.textContent) return;
+        tip.hidden = false;
+        tip.style.left = '0px';                    // measure at full width
+        tip.style.top = '0px';
+        const r = anchor.getBoundingClientRect();
+        const w = tip.offsetWidth, h = tip.offsetHeight;
+        let top = r.bottom + EDGE;
+        if (top + h > window.innerHeight - EDGE) top = Math.max(EDGE, r.top - EDGE - h);
+        tip.style.left = Math.max(EDGE, Math.min(r.left + (r.width - w) / 2, window.innerWidth - w - EDGE)) + 'px';
+        tip.style.top = top + 'px';
+      }
+      function hide(later) {
+        clearTimeout(timer);
+        if (later) timer = setTimeout(() => { tip.hidden = true; }, 150);
+        else tip.hidden = true;
+      }
+      if (window.matchMedia('(hover: hover)').matches) {
+        anchor.addEventListener('mouseenter', show);
+        anchor.addEventListener('mouseleave', () => hide(true));
+        tip.addEventListener('mouseenter', show);   // the pointer may move onto the tip
+        tip.addEventListener('mouseleave', () => hide(true));
+      }
+      anchor.addEventListener('focus', () => { if (focusVisible(anchor)) show(); });
+      anchor.addEventListener('blur', () => hide(false));
+      anchor.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(false); });
+      window.addEventListener('scroll', () => { if (!tip.hidden) hide(false); }, { passive: true, capture: true });
+      return { show, hide };
+    }
+    if (stLogin && stLoginTip) hoverTip(stLogin, stLoginTip);
+    if (mChip && mChipTip) {
+      const chipTip = hoverTip(mChip, mChipTip);
+      mChip.addEventListener('click', () => chipTip.show());
+    }
 
     document.addEventListener('phantasma:auth', (e) => render(e.detail.session));
   }
