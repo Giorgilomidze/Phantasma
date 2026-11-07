@@ -7,17 +7,21 @@
      1. Helpers         — dates, sorting, badges, session watcher
      2. Chat component  — one conversation: history, composer, edit/delete,
                           emoji. Used by the client window AND the admin pane.
+     2b. Feedback       — the Feedback view of the client window (7 Nov 2026)
      3. Client | Admin  — the switch on account.html (admins only)
-     4. Client chat     — round "Messages" button + floating window
-                          (account.html, preferences.html; signed in only)
-     5. Admin panel     — admin.html: Clients / Messages / Admins tabs
+     4. Client chat     — round button + floating window with the switch
+                          Messages | Feedback (account.html, preferences.html;
+                          signed in only)
+     5. Admin panel     — admin.html: Clients / Messages / Feedback / Admins tabs
 
    Supabase is reached through the client script.js already holds
    (window.PhantasmaAuth, set at the end of script.js). Backend contract:
-   supabase/0024-career-admin-chat.sql and
-   supabase/functions/career-admin-invite/index.ts. The database checks every
+   supabase/0024-career-admin-chat.sql,
+   supabase/functions/career-admin-invite/index.ts and (feedback)
+   supabase/0030-start-matching-feedback.sql. The database checks every
    call itself (RLS + is_career_admin()), so what this file shows or hides is
    convenience, not security. Message text only ever goes in via textContent.
+   Until 0030 is run, the feedback parts only say they are not available yet.
    ========================================================================= */
 (function () {
   'use strict';
@@ -98,14 +102,33 @@
   }
   const nextDir = (dir) => (dir === 'asc' ? 'desc' : dir === 'desc' ? 'none' : 'asc');
 
-  // Unread count in a red pill, plus " unread" for screen readers.
-  function paintBadge(badge, n) {
+  // Unread count in a red pill, plus " unread" (or `word`) for screen readers.
+  function paintBadge(badge, n, word) {
     if (!badge) return;
     badge.replaceChildren();
     badge.hidden = !(n > 0);
     if (!(n > 0)) return;
     badge.appendChild(document.createTextNode(n > 99 ? '99+' : String(n)));
-    badge.appendChild(el('span', 'visually-hidden', ' unread'));
+    badge.appendChild(el('span', 'visually-hidden', ' ' + (word || 'unread')));
+  }
+
+  // PostgREST's answer for a table / function that is not there yet
+  // (a migration not run): the new parts then say "not available yet".
+  const isMissing = (err) => !!err && (['42P01', '42883', 'PGRST202', 'PGRST205'].indexOf(err.code) !== -1
+    || /does not exist|schema cache|could not find/i.test(err.message || ''));
+
+  // The Georgian calendar day of a moment (Asia/Tbilisi): the daily feedback
+  // limit counts by it, as the server does. Only compared for equality.
+  let tbilisiFmt = null;
+  function tbilisiDay(v) {
+    const d = v instanceof Date ? v : toDate(v);
+    if (!d) return '';
+    try {
+      tbilisiFmt = tbilisiFmt || new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tbilisi', year: 'numeric', month: '2-digit', day: '2-digit' });
+      return tbilisiFmt.format(d);
+    } catch (_e) {
+      return new Date(d.getTime() + 4 * 3600000).toISOString().slice(0, 10);   // UTC+4, no summer time
+    }
   }
 
   // Calls fn(session) once per signed-in user, and with null on sign-out.
@@ -611,6 +634,246 @@
   }
 
   /* ---------------------------------------------------------------------
+     2b. Feedback component (7 Nov 2026, D-30 version 1): the Feedback view
+     of the client window. What it is about (Feedback / Feature request /
+     Problem with the platform; at least one), a message of at most 500
+     characters with a counter, Send; at most 3 a day, counted by the
+     Georgian day. No attachments. send_feedback() (supabase/0030) checks
+     all of it again. Below, the person's own requests, newest first, as chat
+     bubbles: types, text, date, status, and the team's note when there is
+     one. Until 0030 is run the view only says it is not available yet.
+     createFeedback(host) draws into `host` and returns
+       { open(userId|null), show(), focus() }:
+       open  — set / clear the person (nothing is loaded yet)
+       show  — the view came on screen: (re)load the person's requests
+     --------------------------------------------------------------------- */
+  const FB_KINDS = [['feedback', 'Feedback'], ['feature', 'Feature request'], ['problem', 'Problem with the platform']];
+  const FB_STATUS = [['new', 'New'], ['reviewed', 'Reviewed'], ['planned', 'Planned'], ['done', 'Done'], ['wont_do', "Won't do"]];
+  const toMap = (pairs) => pairs.reduce((o, [k, v]) => { o[k] = v; return o; }, {});
+  const FB_KIND_TEXT = toMap(FB_KINDS);
+  const FB_STATUS_TEXT = toMap(FB_STATUS);
+  const fbKinds = (list) => (list || []).map((k) => FB_KIND_TEXT[k] || k).join(', ');
+  const FB_MAX = 500;                              // feedback.message limit
+  const FB_PER_DAY = 3;                            // per Georgian day
+  const FB_COLS = 'id, kinds, message, status, admin_note, created_at';
+  const FB_OFF = 'Feedback is not available yet. Please try again later.';
+  let fbCount = 0;
+
+  function createFeedback(host) {
+    const n = ++fbCount;
+    let uid = null;
+    let rows = null;                               // own requests, newest first; null = not loaded
+    let loadToken = 0;
+    let sending = false;
+
+    // ---- DOM
+    const root = el('div', 'fb');
+    const off = el('p', 'fb__off', FB_OFF);
+    off.hidden = true;
+    const form = el('form', 'fb__form');
+    form.noValidate = true;
+    const kinds = el('fieldset', 'fb__kinds');
+    kinds.appendChild(el('legend', 'fb__legend', 'What is it about? Tick one or more.'));
+    const chips = el('div', 'fb__chips');
+    const boxes = FB_KINDS.map(([value, text]) => {
+      const lab = el('label', 'fb-kind');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.name = 'kind';
+      cb.value = value;
+      lab.append(cb, el('span', null, text));
+      chips.appendChild(lab);
+      return cb;
+    });
+    kinds.appendChild(chips);
+    const label = el('label', 'fb__label', 'Your message');
+    label.htmlFor = 'fb-text-' + n;
+    const ta = el('textarea', 'chat__input fb__text');
+    ta.id = 'fb-text-' + n;
+    ta.rows = 4;
+    ta.maxLength = FB_MAX;
+    const bar = el('div', 'fb__bar');
+    const counter = el('span', 'fb__counter');
+    counter.id = 'fb-counter-' + n;
+    const left = el('span', 'fb__left');
+    left.id = 'fb-left-' + n;
+    left.hidden = true;
+    ta.setAttribute('aria-describedby', counter.id + ' ' + left.id);
+    const sendBtn = el('button', 'btn btn-primary btn-sm fb__send', 'Send');
+    sendBtn.type = 'submit';
+    bar.append(counter, left, sendBtn);
+    const status = el('p', 'fb__status');
+    status.setAttribute('role', 'status');
+    status.hidden = true;
+    form.append(kinds, label, ta, bar, status);
+    const listH = el('h3', 'fb__h', 'Your requests');
+    listH.id = 'fb-h-' + n;
+    const empty = el('p', 'fb__empty');
+    const list = el('ol', 'fb__list');
+    list.setAttribute('aria-labelledby', listH.id);
+    list.hidden = true;
+    root.append(off, form, listH, empty, list);
+    host.appendChild(root);
+
+    function say(kind, text) {
+      status.textContent = text || '';
+      status.dataset.kind = kind || '';
+      status.hidden = !text;
+    }
+    function paintCounter() {
+      const len = ta.value.length;
+      counter.textContent = len + ' / ' + FB_MAX;
+      counter.classList.toggle('is-full', len >= FB_MAX);
+    }
+    // Requests left today; null while the person's list is unknown.
+    function leftToday() {
+      if (!rows) return null;
+      const today = tbilisiDay(new Date());
+      return Math.max(0, FB_PER_DAY - rows.filter((r) => tbilisiDay(r.created_at) === today).length);
+    }
+    function paintLeft() {
+      const k = leftToday();
+      left.hidden = k == null;
+      left.textContent = k == null ? '' : k + ' of ' + FB_PER_DAY + ' left today';
+      if (sending || k === 0) sendBtn.setAttribute('aria-disabled', 'true');
+      else sendBtn.removeAttribute('aria-disabled');
+    }
+    // 0030 not run: the note instead of the form and the list.
+    function setOff(on) {
+      off.hidden = !on;
+      form.hidden = on;
+      listH.hidden = on;
+      if (on) { empty.hidden = true; list.hidden = true; }
+    }
+
+    // One request: the person's own bubble on the right (as in the chat),
+    // the team's note as a reply on the left.
+    function itemFor(r) {
+      const li = el('li', 'fb-item');
+      const own = el('div', 'chat-msg chat-msg--right');
+      const bubble = el('div', 'chat-msg__bubble');
+      bubble.appendChild(el('p', 'fb-item__kinds', fbKinds(r.kinds)));
+      bubble.appendChild(el('p', 'chat-msg__text', r.message));
+      const meta = el('p', 'chat-msg__meta');
+      const time = el('time', null, fmtDateTime(r.created_at));
+      time.dateTime = r.created_at;
+      meta.appendChild(time);
+      const st = el('span', 'fb-status');
+      st.dataset.status = r.status || '';
+      st.appendChild(el('span', 'visually-hidden', 'Status: '));
+      st.appendChild(document.createTextNode(FB_STATUS_TEXT[r.status] || r.status || ''));
+      meta.appendChild(st);
+      bubble.appendChild(meta);
+      own.appendChild(bubble);
+      li.appendChild(own);
+      if (r.admin_note) {
+        const reply = el('div', 'chat-msg');
+        reply.appendChild(el('p', 'chat-msg__who', 'Phantasma team'));
+        const b = el('div', 'chat-msg__bubble');
+        b.appendChild(el('p', 'chat-msg__text', r.admin_note));
+        reply.appendChild(b);
+        li.appendChild(reply);
+      }
+      return li;
+    }
+    function renderList() {
+      list.replaceChildren();
+      (rows || []).forEach((r) => list.appendChild(itemFor(r)));
+      list.hidden = !(rows && rows.length);
+      empty.hidden = !list.hidden;
+      if (rows && !rows.length) empty.textContent = 'Nothing sent yet. Your requests and our answers appear here.';
+    }
+
+    async function load() {
+      if (!uid) return;
+      const token = ++loadToken;
+      const who = uid;
+      if (!rows) { empty.textContent = 'Loading…'; empty.hidden = false; list.hidden = true; }
+      // Admins may read everyone's rows (RLS), so the filter is needed here.
+      const { data, error } = await call(db().from('feedback').select(FB_COLS)
+        .eq('user_id', who).order('created_at', { ascending: false }).limit(50));
+      if (token !== loadToken || who !== uid) return;
+      if (error) {
+        if (isMissing(error)) { setOff(true); return; }
+        if (!rows) empty.textContent = 'Could not load your requests. Please try again later.';
+        return;
+      }
+      setOff(false);
+      rows = data || [];
+      renderList();
+      paintLeft();
+    }
+
+    async function send() {
+      if (sending || !uid) return;
+      const picked = boxes.filter((b) => b.checked).map((b) => b.value);
+      const text = ta.value.trim();
+      if (leftToday() === 0) { say('error', 'You have sent ' + FB_PER_DAY + ' today. You can send more tomorrow.'); return; }
+      if (!picked.length) { say('error', 'Tick at least one: Feedback, Feature request or Problem with the platform.'); boxes[0].focus(); return; }
+      if (!text) { say('error', 'Please write your message first.'); ta.focus(); return; }
+      if (text.length > FB_MAX) { say('error', 'Please keep it to ' + FB_MAX + ' characters.'); ta.focus(); return; }
+      const who = uid;
+      sending = true;
+      sendBtn.setAttribute('aria-disabled', 'true');
+      say('busy', 'Sending…');
+      const { data, error } = await call(db().rpc('send_feedback', { p_kinds: picked, p_message: text }));
+      if (who !== uid) return;                     // signed out meanwhile
+      sending = false;
+      if (error) {
+        const m = String(error.message || '');
+        say('error', /daily_limit/.test(m) ? 'You have sent ' + FB_PER_DAY + ' today. You can send more tomorrow.'
+          : /too_long/.test(m) ? 'Please keep it to ' + FB_MAX + ' characters.'
+          : /no_kind/.test(m) ? 'Tick at least one: Feedback, Feature request or Problem with the platform.'
+          : /not_signed_in/.test(m) ? 'Please log in again.'
+          : isMissing(error) ? FB_OFF
+          : 'Could not send. Please try again.');
+        if (/daily_limit/.test(m)) load();         // e.g. sent from another device: recount
+        paintLeft();
+        return;
+      }
+      const row = Array.isArray(data) ? data[0] : data;
+      ta.value = '';
+      boxes.forEach((b) => { b.checked = false; });
+      paintCounter();
+      if (rows && row && row.id != null) {
+        if (!rows.some((r) => r.id === row.id)) rows.unshift(row);
+        renderList();
+      } else {
+        load();                                    // the list was not there: fetch it now
+      }
+      paintLeft();
+      say('ok', 'Thank you, sent. You can follow it below.');
+    }
+
+    form.addEventListener('submit', (e) => { e.preventDefault(); send(); });
+    ta.addEventListener('input', paintCounter);
+    // A fix (or a new message) clears the last answer, but not "Sending…".
+    form.addEventListener('input', () => { if (status.dataset.kind !== 'busy') say('', ''); });
+    paintCounter();
+
+    return {
+      open(id) {
+        uid = id || null;
+        rows = null;
+        ++loadToken;
+        sending = false;
+        ta.value = '';
+        boxes.forEach((b) => { b.checked = false; });
+        paintCounter();
+        say('', '');
+        setOff(false);
+        list.replaceChildren();
+        list.hidden = true;
+        empty.textContent = '';
+        empty.hidden = true;
+        paintLeft();
+      },
+      show() { load(); },
+      focus() { if (!form.hidden) boxes[0].focus(); },
+    };
+  }
+
+  /* ---------------------------------------------------------------------
      3. Client | Admin switch (account.html). Hidden for everyone except
      career-service admins, after login. admin.html carries the same switch;
      bootAdminPanel shows it there.
@@ -629,10 +892,13 @@
 
   /* ---------------------------------------------------------------------
      4. Client chat window (account.html, preferences.html; signed in only).
-     A round Messages button bottom-right with the unread count; it opens a
-     floating window (about 360×520, expandable; near full screen on phones).
-     History loads on first open; realtime keeps the badge and the window
-     live; messages are marked read only while the window is open.
+     A round button bottom-right with the unread count; it opens a floating
+     window (about 360×520, expandable; near full screen on phones). Since
+     7 Nov 2026 (D-30) the window has switch toggles at the top, one view at
+     a time: Messages (the chat) | Feedback (section 2b). Emails and Support
+     come later as more entries in VIEWS. History loads on first open;
+     realtime keeps the badge and the window live; messages are marked read
+     only while the Messages view is on screen.
      --------------------------------------------------------------------- */
   function bootClientChat() {
     if (!document.getElementById('account') && !document.getElementById('preferences')) return;
@@ -648,7 +914,7 @@
     dock.hidden = true;
     const fab = el('button', 'chat-fab');
     fab.type = 'button';
-    fab.title = 'Messages';
+    fab.title = 'Messages and feedback';
     fab.setAttribute('aria-controls', 'chat-panel');
     fab.setAttribute('aria-expanded', 'false');
     fab.appendChild(icon('chat'));
@@ -664,28 +930,86 @@
     panel.setAttribute('aria-modal', 'false');
     panel.setAttribute('aria-labelledby', 'chat-panel-title');
     const head = el('div', 'chat-panel__head');
-    const title = el('h2', 'chat-panel__title', 'Messages — Phantasma team');
+    const title = el('h2', 'chat-panel__title', 'Phantasma team');
     title.id = 'chat-panel-title';
     const sizeBtn = el('button', 'chat-panel__btn chat-panel__size');
     sizeBtn.type = 'button';
     const closeBtn = el('button', 'chat-panel__btn');
     closeBtn.type = 'button';
     closeBtn.title = 'Close';
-    closeBtn.setAttribute('aria-label', 'Close messages');
+    closeBtn.setAttribute('aria-label', 'Close the window');
     closeBtn.appendChild(icon('close'));
     head.append(title, sizeBtn, closeBtn);
+
+    // Switch toggles (ARIA tabs, the segmented look of the Client | Admin
+    // switch) on a second line of the head; one view per entry.
+    const VIEWS = [
+      { key: 'messages', label: 'Messages' },
+      { key: 'feedback', label: 'Feedback' },
+    ];
+    const tabsBar = el('div', 'chat-panel__tabs');
+    const tabList = el('div', 'chat-switch');
+    tabList.setAttribute('role', 'tablist');
+    tabList.setAttribute('aria-label', 'Show');
+    const views = {};
+    const tabBtns = VIEWS.map((v) => {
+      const b = el('button', 'chat-switch__btn', v.label);
+      b.type = 'button';
+      b.id = 'chat-tab-' + v.key;
+      b.dataset.view = v.key;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-controls', 'chat-view-' + v.key);
+      tabList.appendChild(b);
+      const box = el('div', 'chat-view');
+      box.id = 'chat-view-' + v.key;
+      box.setAttribute('role', 'tabpanel');
+      box.setAttribute('aria-labelledby', b.id);
+      views[v.key] = box;
+      return b;
+    });
+    tabsBar.appendChild(tabList);
+    head.appendChild(tabsBar);
     panel.appendChild(head);
+    VIEWS.forEach((v) => panel.appendChild(views[v.key]));
     dock.append(fab, panel);
 
-    const chat = createChat(panel, {
+    let view = 'messages';                         // the view on screen
+    const chat = createChat(views.messages, {
       isAdmin: false,
       me: () => me,
-      isActive: () => !panel.hidden,
+      isActive: () => !panel.hidden && view === 'messages',
       onRead: () => refreshUnreadSoon(),
       emptyText: 'No messages yet. Ask the Phantasma team anything about your service — replies appear here.',
     });
+    const feedback = createFeedback(views.feedback);
     document.body.appendChild(dock);
     liftAboveCookieBanner(dock);
+
+    // Show one view; while the window is open it also reveals the chat
+    // (newest at the bottom, mark read) or reloads the feedback list.
+    function showView(key, focusTab) {
+      view = key;
+      tabBtns.forEach((b) => {
+        const on = b.dataset.view === key;
+        b.setAttribute('aria-selected', String(on));
+        b.tabIndex = on ? 0 : -1;
+        views[b.dataset.view].hidden = !on;
+        if (on && focusTab) b.focus();
+      });
+      if (panel.hidden) return;
+      if (key === 'messages') chat.reveal();
+      else feedback.show();
+    }
+    tabBtns.forEach((b, i) => {
+      b.addEventListener('click', () => showView(b.dataset.view, false));
+      b.addEventListener('keydown', (e) => {
+        const to = { ArrowRight: i + 1, ArrowLeft: i - 1 + tabBtns.length, Home: 0, End: tabBtns.length - 1 }[e.key];
+        if (to == null) return;
+        e.preventDefault();
+        showView(tabBtns[to % tabBtns.length].dataset.view, true);
+      });
+    });
+    showView('messages', false);
 
     function paintSize(big) {
       panel.classList.toggle('is-expanded', big);
@@ -701,8 +1025,9 @@
       panel.hidden = false;
       fab.setAttribute('aria-expanded', 'true');
       requestAnimationFrame(() => panel.classList.add('is-open'));
-      if (!opened) { opened = true; chat.open(me); } else chat.reveal();
-      chat.focus();
+      if (!opened) { opened = true; chat.open(me); }
+      showView(view, false);
+      (view === 'messages' ? chat : feedback).focus();
     }
     function closePanel(refocus) {
       panel.classList.remove('is-open');
@@ -724,7 +1049,7 @@
     // ---- unread badge: chat_unread() = admin replies not yet read
     function paintFab(count) {
       paintBadge(badge, count);
-      fab.setAttribute('aria-label', count > 0 ? 'Messages, ' + count + ' unread' : 'Messages');
+      fab.setAttribute('aria-label', count > 0 ? 'Messages and feedback, ' + count + ' unread' : 'Messages and feedback');
     }
     async function refreshUnread() {
       if (!me) return;
@@ -755,6 +1080,8 @@
       me = s ? s.user.id : null;
       opened = false;
       chat.open(null);
+      feedback.open(me);                           // its list loads when the view is shown
+      showView('messages', false);
       dock.hidden = !s;
       document.body.classList.toggle('has-chat', !!s);
       paintFab(0);
@@ -767,19 +1094,24 @@
       if (!me || document.visibilityState !== 'visible') return;
       refreshUnreadSoon();
       if (opened) chat.sync();
-      if (!panel.hidden) chat.markReadSoon();
+      if (!panel.hidden) chat.markReadSoon();      // only while the Messages view shows (isActive)
+      if (!panel.hidden && view === 'feedback') feedback.show();   // a status or note may have changed
     });
   }
 
   /* ---------------------------------------------------------------------
      5. Admin panel (admin.html). Signed out → Log in prompt; signed in but
-     not an admin → "No access"; admins → three tabs:
+     not an admin → "No access"; admins → four tabs:
        Clients  — every account: plan, searches, LinkedIn, CV, preferences
                   filled, unread (opens that client's chat), dates. Search
                   box + sortable headers (same look as the account tables).
        Messages — conversation list (newest first, unread counts) + chat pane.
+       Feedback — every feedback request (7 Nov 2026, 0030): filter by
+                  status; per request a status, a note the client sees, Save.
        Admins   — the list with Remove, and Add admin (invitation email).
-     One realtime channel without a filter keeps all of it live.
+     One realtime channel without a filter keeps the chat parts live; the
+     feedback list reloads when its tab is opened and when the page is back
+     on screen (it is not in the realtime publication).
      --------------------------------------------------------------------- */
   function bootAdminPanel() {
     const root = document.getElementById('admin');
@@ -803,6 +1135,7 @@
     let gen = 0;                                   // bumps on every sign-in / sign-out
     let me = null;                                 // { id, email (lower case) }
     let clients = [];                              // career_admin_clients() rows
+    let clientsReady = false;                      // the first clients list has arrived
     let openId = null;                             // conversation in the Messages pane
     let channel = null;
     let refreshTimer = null;
@@ -837,6 +1170,7 @@
       if (focus) t.focus();
       if (history.replaceState) history.replaceState(null, '', '#' + t.dataset.tab);
       if (t.dataset.tab === 'messages') chat.reveal();
+      if (t.dataset.tab === 'feedback') loadFeedback();
     }
     tabs.forEach((t, i) => {
       t.addEventListener('click', () => selectTab(t, false));
@@ -1176,6 +1510,8 @@
       paintPane();
       const sum = clients.reduce((acc, c) => acc + (Number(c.unread) || 0), 0);
       paintBadge(tabBadge, total.error ? sum : Number(total.data) || 0);
+      // The feedback list may have arrived first: give it the names once.
+      if (!clientsReady) { clientsReady = true; if (fbRows) paintFeedback(); }
     }
     function refreshSoon() {
       clearTimeout(refreshTimer);
@@ -1194,6 +1530,155 @@
     }
     function stopListening() {
       if (channel) { db().removeChannel(channel); channel = null; }
+    }
+
+    // ---- Feedback (7 Nov 2026, D-30): every request sent from the Feedback
+    // view of the client window (table feedback, supabase/0030; RLS lets
+    // admins read all rows and change status + admin_note). Newest first,
+    // filter by status; one card per request (who, when, types, text) with a
+    // status select, a note the client sees under their request, and Save.
+    // Names and emails come from the Clients list, keyed by user id. Edits
+    // not saved yet are kept in fbDraft, so a reload never eats a note.
+    const fbBox    = $('#fb-list');
+    const fbFilter = $('#fb-filter');
+    const fbCount  = $('#fb-count');
+    const fbBadge  = $('#admin-fb-new');
+    let fbRows = null;                             // null = not loaded (or 0030 not run)
+    let fbSig = '';                                // what is painted, to skip needless repaints
+    const fbDraft = new Map();                     // id -> { status, note } edited, not saved
+    const fbSigOf = (list) => list.map((f) => f.id + ':' + f.status + ':' + (f.updated_at || '')).join(',');
+    const paintFbBadge = () => paintBadge(fbBadge, fbRows ? fbRows.filter((f) => f.status === 'new').length : 0, 'new');
+
+    async function loadFeedback() {
+      if (!fbBox) return;
+      const g = gen;
+      const { data, error } = await call(db().from('feedback')
+        .select('id, user_id, kinds, message, status, admin_note, created_at, updated_at')
+        .order('created_at', { ascending: false }).limit(500));
+      if (g !== gen) return;
+      if (error) {
+        if (fbRows) return;                        // keep what is on screen
+        fbBox.replaceChildren(el('p', 'account__hint', isMissing(error)
+          ? 'Feedback is not set up on the server yet (supabase/0030).'
+          : 'Could not load the feedback. Please reload the page.'));
+        fbCount.textContent = '';
+        return;
+      }
+      fbRows = data || [];
+      const sig = fbSigOf(fbRows);
+      if (sig !== fbSig) { fbSig = sig; paintFeedback(); }
+      paintFbBadge();
+    }
+
+    function fbItem(f) {
+      const c = clientOf(f.user_id);
+      const d = fbDraft.get(f.id);
+      const li = el('li', 'fb-admin__item');
+      li.dataset.status = f.status;
+      const info = el('div', 'fb-admin__info');
+      const whoP = el('p', 'fb-admin__who');
+      whoP.appendChild(el('span', 'admin-client', c ? nameOf(c) : clientsReady ? 'Unknown account' : '…'));
+      if (c && c.full_name && c.email) whoP.appendChild(el('span', 'fb-admin__email', c.email));
+      info.appendChild(whoP);
+      const meta = el('p', 'fb-admin__meta');
+      const time = el('time', null, fmtDateTime(f.created_at));
+      time.dateTime = f.created_at;
+      meta.append(time, document.createTextNode(' · ' + fbKinds(f.kinds)));
+      info.appendChild(meta);
+      info.appendChild(el('p', 'fb-admin__text', f.message));
+
+      const form = el('form', 'fb-admin__edit');
+      form.noValidate = true;
+      form.dataset.fb = String(f.id);
+      const sl = el('label', 'fb-admin__label', 'Status');
+      sl.htmlFor = 'fb-st-' + f.id;
+      const sel = el('select', 't-filter__select fb-admin__select');
+      sel.id = sl.htmlFor;
+      sel.dataset.focusKey = 'st:' + f.id;
+      FB_STATUS.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; sel.appendChild(o); });
+      sel.value = d ? d.status : f.status;
+      const nl = el('label', 'fb-admin__label', 'Note to the client ');
+      nl.htmlFor = 'fb-note-' + f.id;
+      nl.appendChild(el('small', null, '(shown under their request)'));
+      const ta = el('textarea', 'auth-modal__input fb-admin__note');
+      ta.id = nl.htmlFor;
+      ta.rows = 2;
+      ta.maxLength = 1000;                          // feedback.admin_note limit
+      ta.dataset.focusKey = 'note:' + f.id;
+      ta.value = d ? d.note : (f.admin_note || '');
+      const actions = el('div', 'fb-admin__actions');
+      const save = el('button', 'btn btn-primary btn-sm', 'Save');
+      save.type = 'submit';
+      save.dataset.focusKey = 'save:' + f.id;
+      save.setAttribute('aria-label', 'Save status and note for the request from ' + (c ? nameOf(c) : 'this account'));
+      const st = el('p', 'account-form__status');
+      st.setAttribute('role', 'status');
+      st.hidden = true;
+      actions.append(save, st);
+      form.append(sl, sel, nl, ta, actions);
+      li.append(info, form);
+      return li;
+    }
+
+    // Rebuilt on load (when something changed), on the filter, and once when
+    // the names arrive; keyboard focus survives the rebuild.
+    function paintFeedback() {
+      if (!fbBox || !fbRows) return;
+      const pick = fbFilter.value;
+      const shown = fbRows.filter((f) => pick === 'all' || f.status === pick);
+      const keep = fbBox.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+      if (shown.length) {
+        const list = el('ol', 'fb-admin');
+        list.setAttribute('aria-label', 'Feedback requests');
+        shown.forEach((f) => list.appendChild(fbItem(f)));
+        fbBox.replaceChildren(list);
+      } else {
+        fbBox.replaceChildren(el('p', 'account__hint', fbRows.length ? 'No requests with this status.' : 'No feedback yet.'));
+      }
+      fbCount.textContent = pick === 'all'
+        ? fbRows.length + (fbRows.length === 1 ? ' request' : ' requests')
+        : 'Showing ' + shown.length + ' of ' + fbRows.length;
+      if (keep) {
+        const f = fbBox.querySelector('[data-focus-key="' + keep + '"]');
+        if (f) f.focus();
+      }
+    }
+
+    if (fbBox) {
+      fbFilter.addEventListener('change', paintFeedback);
+      const keepDraft = (e) => {
+        const f = e.target.closest('form[data-fb]');
+        if (f) fbDraft.set(Number(f.dataset.fb), { status: f.querySelector('select').value, note: f.querySelector('textarea').value });
+      };
+      fbBox.addEventListener('input', keepDraft);
+      fbBox.addEventListener('change', keepDraft);
+      fbBox.addEventListener('submit', async (e) => {
+        const f = e.target.closest('form[data-fb]');
+        if (!f) return;
+        e.preventDefault();
+        const id = Number(f.dataset.fb);
+        const btn = f.querySelector('button[type="submit"]');
+        const st = f.querySelector('.account-form__status');
+        if (btn.getAttribute('aria-disabled') === 'true') return;
+        const status = f.querySelector('select').value;
+        const text = f.querySelector('textarea').value.trim();
+        btn.setAttribute('aria-disabled', 'true');
+        note(st, 'busy', 'Saving…');
+        // .select() returns the changed row: an empty answer means nothing was saved.
+        const { data, error } = await call(db().from('feedback')
+          .update({ status, admin_note: text || null }).eq('id', id)
+          .select('id, status, admin_note, updated_at'));
+        btn.removeAttribute('aria-disabled');
+        if (error || !data || !data.length) { note(st, 'error', 'Could not save. Please try again.'); return; }
+        // The card stays as it is (with "Saved."); the next load repaints the
+        // list, so the status filter applies to it again then.
+        const row = fbRows && fbRows.find((x) => x.id === id);
+        if (row) Object.assign(row, data[0]);
+        fbDraft.delete(id);
+        f.closest('.fb-admin__item').dataset.status = status;
+        note(st, 'ok', 'Saved.');
+        paintFbBadge();
+      });
     }
 
     // ---- Admins: list with Remove, and Add admin (career-admin-invite emails the link)
@@ -1315,8 +1800,13 @@
       clearTimeout(refreshTimer);
       me = s ? { id: s.user.id, email: (s.user.email || '').toLowerCase() } : null;
       clients = [];
+      clientsReady = false;
       openId = null;
       tbody = null;
+      fbRows = null;
+      fbSig = '';
+      fbDraft.clear();
+      paintBadge(fbBadge, 0);
       chat.open(null);
       signedOut.hidden = !!s;
       who.hidden = !s;
@@ -1340,11 +1830,14 @@
       roleSw.hidden = false;
       tableBox.replaceChildren(el('p', 'account__hint', 'Loading accounts…'));
       adminsBox.replaceChildren(el('p', 'account__hint', 'Loading…'));
+      if (fbBox) { fbBox.replaceChildren(el('p', 'account__hint', 'Loading…')); fbCount.textContent = ''; }
       paintPane();
       paintConversations();
-      selectTab(tab(location.hash.slice(1)) || tab('clients'), false);
+      const start = tab(location.hash.slice(1)) || tab('clients');
+      selectTab(start, false);                     // the Feedback tab loads its list itself
       loadClients();
       loadAdmins();
+      if (start.dataset.tab !== 'feedback') loadFeedback();   // for the "new" count on its tab
       listen();
     }
     watchSession(enter);
@@ -1354,6 +1847,7 @@
       refreshSoon();
       chat.sync();
       chat.markReadSoon();
+      loadFeedback();
     });
   }
 

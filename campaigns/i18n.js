@@ -306,7 +306,17 @@
     'gen.res.failed': 'No picture for:', 'gen.res.stopped': 'Stopped; these products were not tried:',
     'gen.res.overlay': 'The name could not be written on these, so the AI picture is used:',
     'gen.showPrompt': 'Show prompt', 'gen.promptFor': 'Prompt for {name} (read-only)', 'gen.chars': '{n} characters',
-    'gen.copy': 'Copy', 'gen.copied': 'Prompt copied.', 'gen.copyFail': 'Could not copy. Select the text and copy it yourself.'
+    'gen.copy': 'Copy', 'gen.copied': 'Prompt copied.', 'gen.copyFail': 'Could not copy. Select the text and copy it yourself.',
+    // Switch-on window: edit a campaign, what it runs (ADS-19, 7 Nov 2026)
+    'ced.details': 'Details', 'ced.edit': 'Edit details', 'ced.save': 'Save changes', 'ced.saved': 'Saved.', 'ced.noChange': 'No changes to save.',
+    'ced.startHint': 'A new start date must be today or later.',
+    'ced.err.nameLong': 'The campaign name can have at most {max} characters.', 'ced.err.daily': 'Daily budget must be from {min} to {max}.',
+    'ced.err.days': 'Number of days must be a whole number from 1 to {max}.', 'ced.err.start': 'Choose a start date: today or later.',
+    'ced.err.status': 'Only a draft or paused campaign can be changed.', 'ced.err.gone': 'This campaign no longer exists.',
+    'ced.runs': 'What this campaign runs', 'ced.post': 'Post', 'ced.noPost': 'No post chosen.', 'ced.postGone': 'The chosen post no longer exists.',
+    'ced.openPost': 'Open post', 'ced.prods': 'Products in that post', 'ced.noProds': 'The post has no products.',
+    'ced.pics': 'Pictures', 'ced.noPics': 'No pictures.',
+    'ced.loading': 'Loading the post, products and pictures…', 'ced.loadFail': 'The post, products and pictures could not be loaded.'
   };
 
   var ka = {
@@ -607,7 +617,17 @@
     'gen.res.failed': 'სურათი ვერ შეიქმნა:', 'gen.res.stopped': 'პროცესი შეჩერდა; ამ პროდუქტებზე ცდა არ ყოფილა:',
     'gen.res.overlay': 'ამ სურათებზე სახელი ვერ დაიწერა, ამიტომ გამოყენებულია AI-ის სურათი:',
     'gen.showPrompt': 'პრომპტის ჩვენება', 'gen.promptFor': 'პრომპტი: {name} (მხოლოდ საკითხავად)', 'gen.chars': '{n} სიმბოლო',
-    'gen.copy': 'კოპირება', 'gen.copied': 'პრომპტი დაკოპირდა.', 'gen.copyFail': 'კოპირება ვერ მოხერხდა. მონიშნეთ ტექსტი და დააკოპირეთ ხელით.'
+    'gen.copy': 'კოპირება', 'gen.copied': 'პრომპტი დაკოპირდა.', 'gen.copyFail': 'კოპირება ვერ მოხერხდა. მონიშნეთ ტექსტი და დააკოპირეთ ხელით.',
+    // Switch-on window: edit a campaign, what it runs (ADS-19, 7 Nov 2026); machine-translated, not proofread
+    'ced.details': 'დეტალები', 'ced.edit': 'დეტალების რედაქტირება', 'ced.save': 'ცვლილებების შენახვა', 'ced.saved': 'შენახულია.', 'ced.noChange': 'შესანახი ცვლილებები არ არის.',
+    'ced.startHint': 'ახალი დაწყების თარიღი უნდა იყოს დღეს ან მოგვიანებით.',
+    'ced.err.nameLong': 'კამპანიის სახელი შეიძლება იყოს მაქსიმუმ {max} სიმბოლო.', 'ced.err.daily': 'დღიური ბიუჯეტი უნდა იყოს {min}-დან {max}-მდე.',
+    'ced.err.days': 'დღეების რაოდენობა უნდა იყოს მთელი რიცხვი 1-დან {max}-მდე.', 'ced.err.start': 'აირჩიეთ დაწყების თარიღი: დღეს ან მოგვიანებით.',
+    'ced.err.status': 'მხოლოდ დრაფტი ან შეჩერებული კამპანიის შეცვლაა შესაძლებელი.', 'ced.err.gone': 'ეს კამპანია აღარ არსებობს.',
+    'ced.runs': 'რას არეკლამებს ეს კამპანია', 'ced.post': 'პოსტი', 'ced.noPost': 'პოსტი არ არის არჩეული.', 'ced.postGone': 'არჩეული პოსტი აღარ არსებობს.',
+    'ced.openPost': 'პოსტის გახსნა', 'ced.prods': 'ამ პოსტის პროდუქტები', 'ced.noProds': 'პოსტში პროდუქტები არ არის.',
+    'ced.pics': 'სურათები', 'ced.noPics': 'სურათები არ არის.',
+    'ced.loading': 'იტვირთება პოსტი, პროდუქტები და სურათები…', 'ced.loadFail': 'პოსტის, პროდუქტებისა და სურათების ჩატვირთვა ვერ მოხერხდა.'
   };
 
   var dict = { en: en, ka: ka };

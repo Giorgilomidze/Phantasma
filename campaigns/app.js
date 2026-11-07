@@ -172,6 +172,8 @@
   // value, or null on Cancel / Esc / backdrop click.
   // o.onAction(value) (optional): runs first when an action is clicked; the dialog stays open
   // while its promise runs and closes only when it does not answer false (e.g. a failed save).
+  // An action's kind: 'danger', 'ghost' (secondary look) or primary (default).
+  // o.onOpen(dlg, btns, close) (optional): btns = action buttons by value; close(value) closes from inside.
   function openDialog(o) {
     return new Promise(function (resolve) {
       var prev = document.activeElement, closed = false;
@@ -182,7 +184,7 @@
         foot.appendChild(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { close(null); } }, t(o.cancelLabel || 'common.cancel')));
       }
       (o.actions || []).forEach(function (a) {
-        var b = h('button', { type: 'button', class: 'ads-btn ' + (a.kind === 'danger' ? 'ads-btn--danger' : 'ads-btn--primary'), disabled: !!a.disabled, onclick: function () {
+        var b = h('button', { type: 'button', class: 'ads-btn ' + (a.kind === 'danger' ? 'ads-btn--danger' : a.kind === 'ghost' ? 'ads-btn--ghost' : 'ads-btn--primary'), disabled: !!a.disabled, onclick: function () {
           if (!o.onAction) { close(a.value); return; }
           b.disabled = true;
           Promise.resolve(o.onAction(a.value)).then(function (ok) { b.disabled = false; if (ok !== false) close(a.value); },
@@ -210,7 +212,7 @@
       dlg.addEventListener('click', function (e) { if (e.target === dlg) close(null); });
       document.body.appendChild(dlg);
       dlg.showModal();
-      if (o.onOpen) o.onOpen(dlg, btns);
+      if (o.onOpen) o.onOpen(dlg, btns, close);
     });
   }
   // ---- live backend: plain-word dialogs for server answers ----
@@ -582,9 +584,10 @@
   }
 
   /* ---------------------------------------------------------------------
-     6. Campaigns: list, row actions, switch-on, results
+     6. Campaigns: list, row actions, switch-on (with Edit details), results
      --------------------------------------------------------------------- */
   var CAMP_STATUSES = ['draft', 'paused', 'in_review', 'active', 'rejected', 'ended'];
+  var RUN_PICS = 4, RUN_CAP = 80; // switch-on window: pictures shown before "+N", characters of the post caption
 
   function viewCampaigns(tok) {
     var body = h('div', {}, skeleton(4));
@@ -641,23 +644,205 @@
     function endIt(c) {
       confirmDialog({ title: t('end.title'), message: t('end.text', { name: c.name }), confirmLabel: t('act.end'), danger: true }).then(function (ok) { if (ok) move(c, 'ended'); });
     }
+    // Switch-on window (paused campaigns). Since 7 Nov 2026 (ADS-19, docs/specs/ads-campaign-edit-2026-11-07.md):
+    // Edit details turns name, daily budget, days and start date into fields (ad account and goal stay).
+    // Cancel goes back to the saved values, Save changes keeps them (api.updateCampaign checks again and
+    // logs campaign.edit), Switch on saves first. The amount to type and the button always use the
+    // current total. Below the details, read-only: the post, its products and the pictures it runs.
     function switchOn(c) {
-      var total = api.total(c), risks = api.findRisks(c.caption);
+      var L = settings.limits, maxName = api.campaignRules.maxName, risks = api.findRisks(c.caption);
+      var editing = false, busy = false, changed = false, draft = null, errs = {}, f = {}, btns = {}, closeDlg = null;
       var input = h('input', { type: 'text', inputmode: 'decimal', id: 'ads-confirm-amt', class: 'ads-input', autocomplete: 'off', 'aria-describedby': 'ads-confirm-hint' });
+      var typeLabel = h('label', { for: 'ads-confirm-amt', class: 'ads-label' }), typeHint = h('p', { class: 'ads-hint', id: 'ads-confirm-hint' });
+      var editBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: startEdit }, t('ced.edit'));
+      var detailBox = h('div', {}), saveStatus = h('p', { class: 'ads-hint ads-hint--warn ads-status', role: 'alert' });
+      var runsBox = h('div', {}, [h('p', { class: 'visually-hidden' }, t('ced.loading')), skeleton(2)]);
       var body = h('div', {}, [
         h('p', { class: 'ads-warn' }, t('on.warn')),
-        kv([[t('wiz.name'), c.name], [t('wiz.account'), accountName(c.accountId)], [t('wiz.daily'), money(c.dailyBudget)], [t('wiz.days'), String(c.days)], [t('wiz.start'), fmtDate(c.startDate, true)], [t('wiz.total'), h('strong', {}, money(total))]]),
+        h('section', { class: 'ads-ced', 'aria-labelledby': 'ads-ced-h' }, [
+          h('div', { class: 'ads-ced__head' }, [h('h3', { class: 'ads-h3', id: 'ads-ced-h' }, t('ced.details')), editBtn]), detailBox, saveStatus]),
+        h('section', { class: 'ads-ced', 'aria-labelledby': 'ads-runs-h' }, [h('h3', { class: 'ads-h3', id: 'ads-runs-h' }, t('ced.runs')), runsBox]),
         risks.length ? h('p', { class: 'ads-warn' }, t('on.risk', { words: risks.map(function (r) { return r.word; }).join(', ') })) : null,
-        h('label', { for: 'ads-confirm-amt', class: 'ads-label' }, t('on.type', { amount: String(total) })),
-        input, h('p', { class: 'ads-hint', id: 'ads-confirm-hint' }, t('on.hint', { amount: String(total) }))
+        typeLabel, input, typeHint
       ]);
+      drawDetails();
       openDialog({
-        title: t('on.title'), body: body, actions: [{ label: t('on.confirm', { total: money(total) }), value: true, disabled: true }],
-        onOpen: function (dlg, btns) {
-          input.addEventListener('input', function () { btns[true].disabled = parseFloat(input.value.replace(',', '.')) !== total; });
-          input.focus();
+        title: t('on.title'), body: body, noCancel: true,
+        actions: [{ label: t('common.cancel'), value: 'cancel', kind: 'ghost' }, { label: t('ced.save'), value: 'save', kind: 'ghost' },
+          { label: t('on.confirm', { total: money(api.total(c)) }), value: 'on', disabled: true }],
+        onOpen: function (dlg, b, close) {
+          btns = b; closeDlg = close; btns.save.hidden = true;
+          input.addEventListener('input', sync);
+          sync(); input.focus(); loadRuns();
+        },
+        onAction: function (v) {
+          if (busy) return false;
+          if (v === 'cancel') { if (!editing) return true; stopEdit(); return false; } // while editing: back to the saved values
+          if (v === 'on') return editing ? saveDraft() : true;                          // switching on saves first
+          var was = dirty();
+          return saveDraft().then(function (ok) { if (ok) { toast(t(was ? 'ced.saved' : 'ced.noChange')); stopEdit(); } return false; });
         }
-      }).then(function (ok) { if (ok) move(c, 'in_review'); });
+      }).then(function (v) {
+        if (v === 'on') move(c, 'in_review');
+        else if (changed) load(); // saved edits show in the list
+      });
+
+      function vals() { return editing ? draft : c; } // the values the window shows now
+      function curTotal() { var v = vals(); return isFinite(v.dailyBudget) && isFinite(v.days) ? api.total(v) : 0; }
+      function hasErrs() { return Object.keys(errs).length > 0; }
+      function dirty() {
+        return !!draft && (draft.name.trim() !== c.name || draft.dailyBudget !== c.dailyBudget || draft.days !== c.days || draft.startDate !== c.startDate);
+      }
+      // Inline checks while typing; api.updateCampaign checks the same again. A start date that is not
+      // changed may be in the past (the campaign ran before it was paused).
+      function check(d) {
+        var e = {}, nm = d.name.trim();
+        if (!nm) e.name = t('err.name');
+        else if (nm.length > maxName) e.name = t('ced.err.nameLong', { max: maxName });
+        if (!(d.dailyBudget >= L.minDailyBudget && d.dailyBudget <= L.maxDailyBudget)) e.daily = t('ced.err.daily', { min: money(L.minDailyBudget), max: money(L.maxDailyBudget) });
+        if (!(d.days >= 1 && d.days <= L.maxDays && d.days % 1 === 0)) e.days = t('ced.err.days', { max: L.maxDays });
+        if (!e.daily && !e.days && L.maxTotalBudget != null && api.total(d) > L.maxTotalBudget + 1e-9) e.total = t('err.total', { total: money(L.maxTotalBudget) });
+        if (d.startDate !== c.startDate && !(d.startDate && d.startDate >= dayKey(new Date()))) e.start = t('ced.err.start');
+        return e;
+      }
+      // Live regions announce a change once: text is only replaced when it differs.
+      function setText(el, s) { s = s || ''; if (el.textContent !== s) el.textContent = s; }
+      // Brings the window up to date: errors, total, the amount to type and the buttons.
+      function sync() {
+        var tot = curTotal();
+        errs = editing ? check(draft) : {};
+        if (editing) {
+          [['name', f.name], ['daily', f.daily], ['days', f.days], ['start', f.start]].forEach(function (x) {
+            setText(f[x[0] + 'Err'], errs[x[0]]);
+            if (errs[x[0]]) x[1].setAttribute('aria-invalid', 'true'); else x[1].removeAttribute('aria-invalid');
+          });
+          setText(f.totalErr, errs.total);
+          setText(f.total, money(tot));
+        }
+        setText(typeLabel, t('on.type', { amount: String(tot) }));
+        setText(typeHint, t('on.hint', { amount: String(tot) }));
+        if (!btns.on) return;
+        setText(btns.on, t('on.confirm', { total: money(tot) }));
+        btns.save.disabled = busy || hasErrs();
+        btns.on.disabled = busy || hasErrs() || parseFloat(input.value.replace(',', '.')) !== tot;
+      }
+      // View: the summary rows. Editing: name, daily budget, days and start date as fields; the ad account stays text.
+      function drawDetails() {
+        detailBox.innerHTML = ''; f = {};
+        editBtn.hidden = editing;
+        if (btns.save) btns.save.hidden = !editing;
+        if (!editing) {
+          detailBox.appendChild(kv([[t('wiz.name'), c.name], [t('wiz.account'), accountName(c.accountId)], [t('wiz.daily'), money(c.dailyBudget)],
+            [t('wiz.days'), String(c.days)], [t('wiz.start'), fmtDate(c.startDate, true)], [t('wiz.total'), h('strong', {}, money(api.total(c)))]]));
+          return;
+        }
+        f.name = h('input', { type: 'text', id: 'ads-ced-name', class: 'ads-input', value: draft.name, maxlength: String(maxName), autocomplete: 'off', 'aria-describedby': 'ads-ced-name-err' });
+        f.daily = h('input', { type: 'number', id: 'ads-ced-daily', class: 'ads-input', value: String(draft.dailyBudget), min: String(L.minDailyBudget), max: String(L.maxDailyBudget),
+          step: liveMode() ? '0.01' : '0.5', inputmode: 'decimal', 'aria-describedby': 'ads-ced-limits ads-ced-daily-err ads-ced-total-err' });
+        f.days = h('input', { type: 'number', id: 'ads-ced-days', class: 'ads-input', value: String(draft.days), min: '1', max: String(L.maxDays), step: '1', inputmode: 'numeric',
+          'aria-describedby': 'ads-ced-limits ads-ced-days-err ads-ced-total-err' });
+        f.start = h('input', { type: 'date', id: 'ads-ced-start', class: 'ads-input', value: draft.startDate, min: dayKey(new Date()), 'aria-describedby': 'ads-ced-start-hint ads-ced-start-err' });
+        ['name', 'daily', 'days', 'start', 'total'].forEach(function (k) { f[k + 'Err'] = h('p', { class: 'ads-hint ads-hint--warn ads-status', id: 'ads-ced-' + k + '-err', 'aria-live': 'polite' }); });
+        f.total = h('strong', {}, money(curTotal()));
+        f.name.addEventListener('input', function () { draft.name = f.name.value; sync(); });
+        f.daily.addEventListener('input', function () { draft.dailyBudget = parseFloat(f.daily.value); sync(); });
+        f.days.addEventListener('input', function () { draft.days = parseFloat(f.days.value); sync(); });
+        f.start.addEventListener('input', function () { draft.startDate = f.start.value; sync(); });
+        function withErr(el, err) { el.appendChild(err); return el; }
+        append(detailBox, [
+          withErr(field('wiz.name', f.name, null, 'ads-ced-name'), f.nameErr),
+          kv([[t('wiz.account'), accountName(c.accountId)]]),
+          h('p', { class: 'ads-note', id: 'ads-ced-limits' }, L.maxTotalBudget != null
+            ? t('wiz.limitsLive', { max: money(L.maxDailyBudget), total: money(L.maxTotalBudget), days: L.maxDays })
+            : t('wiz.limits', { min: money(L.minDailyBudget), max: money(L.maxDailyBudget), days: L.maxDays })),
+          h('div', { class: 'ads-row' }, [withErr(field('wiz.daily', f.daily, null, 'ads-ced-daily'), f.dailyErr), withErr(field('wiz.days', f.days, null, 'ads-ced-days'), f.daysErr)]),
+          withErr(field('wiz.start', f.start, t('ced.startHint'), 'ads-ced-start'), f.startErr),
+          h('p', { class: 'ads-total', 'aria-live': 'polite', 'aria-atomic': 'true' }, [t('wiz.total') + ': ', f.total]), f.totalErr
+        ]);
+      }
+      function startEdit() {
+        if (busy) return;
+        editing = true;
+        draft = { name: c.name, dailyBudget: c.dailyBudget, days: c.days, startDate: c.startDate };
+        saveStatus.textContent = '';
+        drawDetails(); sync();
+        f.name.focus();
+      }
+      // Leaves editing (Cancel or a save): the saved values show again.
+      function stopEdit() {
+        editing = false; draft = null;
+        drawDetails(); sync();
+        editBtn.focus();
+      }
+      // Saves the edited values. Resolves true when they are kept (also when nothing changed), else false.
+      function saveDraft() {
+        sync();
+        if (hasErrs()) return Promise.resolve(false);
+        if (!dirty()) return Promise.resolve(true);
+        busy = true; saveStatus.textContent = ''; sync();
+        return api.updateCampaign(c.id, { name: draft.name, dailyBudget: draft.dailyBudget, days: draft.days, startDate: draft.startDate }).then(function (r) {
+          c.name = r.name; c.dailyBudget = r.dailyBudget; c.days = r.days; c.startDate = r.startDate;
+          busy = false; changed = true;
+          return true;
+        }, function (e) {
+          busy = false; saveStatus.textContent = t('toast.failed') + ' ' + errText(e); sync();
+          return false;
+        });
+      }
+      // What this campaign runs (read-only): its post (caption, status, a way to open it), the post's
+      // products (photo, name, price, stock) and the campaign's own pictures.
+      function loadRuns() {
+        Promise.all([c.postId ? api.getPost(c.postId).catch(function () { return false; }) : null, api.listProducts(c.business), api.listImages(c.business)])
+          .then(function (r) { cacheImages(r[2]); drawRuns(r[0], r[1]); }, function () {
+            runsBox.innerHTML = '';
+            runsBox.appendChild(h('p', { class: 'ads-note' }, t('ced.loadFail')));
+          });
+      }
+      function drawRuns(post, products) {
+        var byId = {}, ids = c.imageIds || [], more = ids.length - RUN_PICS, dl = h('dl', { class: 'ads-runs' });
+        products.forEach(function (p) { byId[p.id] = p; });
+        dl.appendChild(h('dt', {}, t('ced.post')));
+        if (!post) dl.appendChild(h('dd', {}, t(post === false ? 'ced.postGone' : 'ced.noPost')));
+        else {
+          var pids = post.productIds || [];
+          append(dl, [
+            h('dd', { class: 'ads-runs__post' }, [
+              h('span', { class: 'ads-runs__cap' }, clip(post.caption || t('posts.noCaption'), RUN_CAP)),
+              chip(post.status),
+              h('a', { class: 'ads-btn ads-btn--ghost ads-btn--small', href: '#/posts/' + post.id, onclick: function (e) {
+                if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; // a new tab or window: this window stays
+                e.preventDefault(); closeDlg(null); go('#/posts/' + post.id);
+              } }, t('ced.openPost'))
+            ]),
+            h('dt', {}, t('ced.prods')),
+            h('dd', {}, pids.length ? h('ul', { class: 'ads-runs__prods' }, pids.map(function (pid) { return prodRow(byId[pid]); })) : t('ced.noProds'))
+          ]);
+        }
+        append(dl, [h('dt', {}, t('ced.pics')), h('dd', {}, ids.length ? h('div', { class: 'ads-imgrow' }, ids.slice(0, RUN_PICS).map(function (x) { return imageEl(x, 'ads-thumb ads-runs__thumb'); })
+          .concat(more > 0 ? h('span', { class: 'ads-runs__more' }, ['+' + more, h('span', { class: 'visually-hidden' }, ' ' + t('pp.img.more'))]) : [])) : t('ced.noPics'))]);
+        runsBox.innerHTML = '';
+        runsBox.appendChild(dl);
+      }
+      // First n characters and "…" (an emoji is not cut in half).
+      function clip(s, n) {
+        if (s.length <= n) return s;
+        var cut = n - 1, code = s.charCodeAt(cut - 1);
+        if (code >= 0xD800 && code <= 0xDBFF) cut--;
+        return s.slice(0, cut).trim() + '…';
+      }
+      // One product of the post: photo if any, name (display name first), price in lari, stock.
+      function prodRow(p) {
+        if (!p) return h('li', { class: 'ads-runs__prod' }, [h('span', { class: 'ads-runs__img', 'aria-hidden': 'true' }), h('span', { class: 'ads-runs__name' }, t('pp.unknown'))]);
+        var ph = photoOf(p), meta = [];
+        if (p.price != null) meta.push(gel(p.price));
+        if (p.quantity === 0) meta.push(pill(t('stock.out'), 'out'));
+        else if (p.quantity != null) meta.push(t('pp.qty', { n: qty(p.quantity) }));
+        return h('li', { class: 'ads-runs__prod' }, [
+          ph ? h('img', { class: 'ads-runs__img', src: imageUri(ph), alt: '', loading: 'lazy' }) : h('span', { class: 'ads-runs__img', 'aria-hidden': 'true' }),
+          h('span', { class: 'ads-runs__text' }, [h('span', { class: 'ads-runs__name' }, prodName(p)),
+            meta.length ? h('span', { class: 'ads-runs__meta' }, meta.reduce(function (a, m, k) { return a.concat(k ? [' · ', m] : [m]); }, [])) : null])
+        ]);
+      }
     }
     function showResults(c) {
       var body = h('div', {}, skeleton(3));

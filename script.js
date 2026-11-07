@@ -1497,6 +1497,17 @@
       return getClient().from('preferences').select('salary_min, salary_max, currency, answers').eq('user_id', session.user.id).maybeSingle();
     }
 
+    // Start matching (CAR-05, supabase/0030): the client's own requests,
+    // newest first (admins may read everyone's, hence the user filter), and
+    // the RPC that checks the rule again and queues one.
+    function loadMatching() {
+      return getClient().from('match_requests').select('id, status, created_at, started_at, finished_at')
+        .eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(10);
+    }
+    function requestMatching() {
+      return getClient().rpc('request_matching');
+    }
+
     // Upsert the whole row; `answers` is merged client-side before calling.
     function savePreferences(row) {
       return getClient().from('preferences').upsert(Object.assign({ user_id: session.user.id }, row), { onConflict: 'user_id' });
@@ -1551,15 +1562,23 @@
       'posted_at, deadline_at, description, source, url, ' +
       'companies ( name, name_ka, industry, description, website, linkedin_url, hq_city, size_band, founded_year, employees )';
 
+    // Shortlist rows also carry score (match %, CAR-18; empty until the
+    // pipeline fills it). Should that column ever be missing, the list
+    // loads again without it rather than not at all.
+    const SHORTLIST_COLS = 'id, week, rank, start_processing, client_decision, why_matches, salary_text, ' +
+                           'vacancies ( id, ' + VACANCY_DETAIL + ' )';
+    async function loadShortlists(sb) {
+      const q = (cols) => sb.from('shortlists').select(cols).order('week', { ascending: false }).order('rank');
+      const res = await q('score, ' + SHORTLIST_COLS);
+      return res.error ? q(SHORTLIST_COLS) : res;
+    }
+
     function loadStats() {
       const sb = getClient();
       return Promise.all([
         sb.rpc('get_my_stats'),
         sb.from('candidates').select('workbook_path, workbook_uploaded_at, linkedin_audit').maybeSingle(),
-        sb.from('shortlists')
-          .select('id, week, rank, start_processing, client_decision, why_matches, salary_text, ' +
-                  'vacancies ( id, ' + VACANCY_DETAIL + ' )')
-          .order('week', { ascending: false }).order('rank'),
+        loadShortlists(sb),
         sb.from('sends')
           .select('vacancy_id, sent_at, outcome, outcome_at, vacancies ( ' + VACANCY_DETAIL + ' )')
           .order('sent_at', { ascending: false }),
@@ -1618,6 +1637,8 @@
       workbookUrl,
       loadPreferences,
       savePreferences,
+      loadMatching,
+      requestMatching,
       signInWithGoogleToken,
       signInWithLinkedIn,
       linkLinkedIn,
@@ -2062,7 +2083,9 @@
       'taze technologies': './images/logos/taze.webp',
       'taze': './images/logos/taze.webp',
     };
-    function companyCell(name) {
+    // quiet: the logo is decoration (empty alt), for places where the name
+    // next to it is the whole label, e.g. inside the companies panel buttons.
+    function companyCell(name, quiet) {
       const wrap = document.createElement('span');
       wrap.className = 'company';
       const src = COMPANY_LOGOS[String(name).trim().toLowerCase()];
@@ -2071,7 +2094,7 @@
         mark = document.createElement('img');
         mark.className = 'company__logo';
         mark.src = src;
-        mark.alt = name;
+        mark.alt = quiet ? '' : name;
         mark.loading = 'lazy';
         mark.decoding = 'async';
       } else {
@@ -2267,6 +2290,8 @@
     pBody.addEventListener('click', (e) => {
       const tog = e.target.closest('.t-toggle__btn');
       if (tog) { toggleDetail(tog); return; }
+      const co = e.target.closest('.co__toggle');
+      if (co) { toggleCompany(co); return; }
       const more = e.target.closest('.t-detail__more');
       if (more) {
         const p = more.previousElementSibling;
@@ -2371,7 +2396,9 @@
         }
         cells(r).forEach((c) => {
           const td = tr.insertCell();
-          if (c && c.check) {
+          if (c instanceof Node) {
+            td.appendChild(c);               // a ready-made cell, e.g. a status label
+          } else if (c && c.check) {
             td.className = 't-send';
             const lab = document.createElement('label');
             lab.className = 'send-check';
@@ -2632,6 +2659,140 @@
         { cls: 'account-table--sends', detail: (r) => (r.vacancies && r.vacancies.title) || '' });
     }
 
+    // ---- Companies panel (7 Nov 2026, owner answer V-12): one row per
+    // company (logo + name, industry, number of matched vacancies), most
+    // matches first. Its arrow opens a compact table of that company's
+    // matched vacancies: Title, Announced (posted_at), Deadline, Match
+    // (shortlists.score as a whole %, "—" while empty: CAR-18), Status.
+    // A vacancy in several weekly lists counts once: chosen if any of its
+    // rows is ticked, with its best match %.
+    const VAC_STATUS = {
+      replied: 'Employer replied',
+      sent:    'Sent',
+      passed:  'Deadline passed',
+      chosen:  'Chosen — waiting to send',
+      none:    'Not chosen',
+    };
+    // "Employer replied" = a send whose outcome is an answer from the
+    // employer. Reply tracking (D-27) will feed this later; today no send
+    // carries such an outcome, so it does not show yet.
+    const REPLY_OUTCOMES = { interview: true, offer: true, rejected: true };
+    // Local midnight of a date column ('YYYY-MM-DD' is a local day, not UTC).
+    function dayStart(v) {
+      if (!v) return null;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v));
+      const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(v);
+      if (isNaN(d)) return null;
+      d.setHours(0, 0, 0, 0);
+      return d.getTime();
+    }
+    // Status, first that applies: Employer replied, Sent, Deadline passed
+    // (before today and not sent), Chosen — waiting to send, Not chosen.
+    function companyGroups(d) {
+      const sendOf = {};
+      d.sends.forEach((s) => { sendOf[String(s.vacancy_id)] = s; });
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const groups = {}, seen = {};
+      d.shortlists.forEach((r) => {
+        const v = r.vacancies || {};
+        const id = vacIdOf(r);
+        const k = id != null ? 'v' + id : 'r' + r.id;
+        let x = seen[k];
+        if (!x) {
+          const name = company(r.vacancies);
+          const g = groups[name] || (groups[name] = { name, industry: null, items: [] });
+          if (!g.industry && v.companies && v.companies.industry) g.industry = v.companies.industry;
+          x = seen[k] = { v, score: null, chosen: false, send: id != null ? sendOf[String(id)] || null : null };
+          g.items.push(x);
+        }
+        if (r.client_decision === 'interested') x.chosen = true;
+        const sc = numKey(r.score);
+        if (sc != null && !isNaN(sc) && (x.score == null || sc > x.score)) x.score = sc;
+      });
+      const list = Object.keys(groups).map((n) => groups[n]);
+      list.forEach((g) => {
+        g.items.forEach((x) => {
+          x.end = dayStart(x.v.deadline_at);
+          x.past = x.end != null && x.end < today.getTime();
+          x.status = x.send ? (REPLY_OUTCOMES[x.send.outcome] ? 'replied' : 'sent')
+            : x.past ? 'passed' : x.chosen ? 'chosen' : 'none';
+        });
+        // Best match first (empty last), then by deadline: open ones soonest
+        // first, then those without a deadline, then the passed ones.
+        g.items.sort((a, b) => compareValues(a.score, b.score, 'desc')
+          || (a.past - b.past)
+          || compareValues(a.end, b.end, 'asc')
+          || compareValues(a.v.title || null, b.v.title || null, 'asc'));
+      });
+      // Most matched vacancies first; vacancies without a company name last.
+      return list.sort((a, b) => ((a.name === '—') - (b.name === '—'))
+        || (b.items.length - a.items.length) || compareValues(a.name, b.name, 'asc'));
+    }
+
+    function companiesPanel(d) {
+      const groups = companyGroups(d);
+      if (!groups.length) return table([], [], () => []);   // "Nothing here yet."
+      const frag = document.createDocumentFragment();
+      const hint = document.createElement('p');
+      hint.className = 'account__hint co-hint';
+      hint.textContent = 'Open a company to see the vacancies we matched there.';
+      frag.appendChild(hint);
+      const list = document.createElement('ul');
+      list.className = 'co-list';
+      const span = (cls, text) => { const s = document.createElement('span'); s.className = cls; s.textContent = text; return s; };
+      groups.forEach((g) => {
+        const id = 'co-' + (++detailSeq);
+        const name = g.name === '—' ? 'Company not named' : g.name;
+        const li = document.createElement('li');
+        li.className = 'co';
+        const h = document.createElement('h3');
+        h.className = 'co__h';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'co__toggle';
+        btn.setAttribute('aria-expanded', 'false');
+        btn.setAttribute('aria-controls', id);
+        const arrow = span('co__arrow', '');
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.appendChild(span('t-toggle__chev', ''));
+        btn.appendChild(arrow);
+        btn.appendChild(companyCell(name, true));
+        if (g.industry) btn.appendChild(span('co__industry', g.industry));
+        const n = g.items.length;
+        btn.appendChild(span('co__count', n + ' matched ' + (n === 1 ? 'vacancy' : 'vacancies')));
+        h.appendChild(btn);
+        li.appendChild(h);
+
+        const body = document.createElement('div');
+        body.className = 'co__body';
+        body.id = id;
+        body.hidden = true;
+        const t = table(['Title', 'Announced', 'Deadline', 'Match', 'Status'], g.items, (x) => [
+          { href: x.v.url, text: x.v.title || '—' },
+          fmtDate(x.v.posted_at),
+          fmtDate(x.v.deadline_at),
+          x.score == null ? '—' : Math.round(Math.max(0, Math.min(100, x.score))) + '%',
+          (() => { const s = span('co-status', VAC_STATUS[x.status]); s.dataset.status = x.status; return s; })(),
+        ], { cls: 'account-table--co' });
+        const cap = t.createCaption();
+        cap.className = 'visually-hidden';
+        cap.textContent = 'Matched vacancies at ' + name;
+        body.appendChild(t);
+        li.appendChild(body);
+        list.appendChild(li);
+      });
+      frag.appendChild(list);
+      return frag;
+    }
+
+    function toggleCompany(btn) {
+      const body = document.getElementById(btn.getAttribute('aria-controls'));
+      if (!body) return;
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open));
+      body.hidden = !open;
+    }
+
     const PANELS = {
       weeks: {
         title: 'Weekly runs',
@@ -2642,16 +2803,8 @@
           return table(['Run', 'Date', 'Vacancies shortlisted'], rows, (r) => ['Run ' + r.n, fmtDate(r.week), r.count]);
         },
       },
+      companies:  { title: 'Companies reviewed', build: companiesPanel },
       processed:  { title: 'Vacancies processed', build: (d) => vacancyRows(d.shortlists, 'processed', sentIds(d)) },
-      companies:  {
-        title: 'Companies reviewed',
-        build: (d) => {
-          const by = {};
-          d.shortlists.forEach((r) => { const c = company(r.vacancies); by[c] = (by[c] || 0) + 1; });
-          const rows = Object.keys(by).sort((a, b) => by[b] - by[a]).map((c) => ({ c, n: by[c] }));
-          return table(['Company', 'Vacancies shortlisted'], rows, (r) => [r.c, r.n]);
-        },
-      },
       selected:   { title: 'Selected by you', build: (d) => vacancyRows(selectedRows(d), 'selected', sentIds(d)) },
       sent:       { title: 'Applications sent', build: (d) => sendRows(d.sends) },
       interviews: { title: 'Interviews', build: (d) => sendRows(d.sends.filter((r) => r.outcome === 'interview')) },
@@ -2744,14 +2897,16 @@
       inn.hidden = !session;
       if (who) who.hidden = !session;
       closePanel();
+      startMatch(session);                              // Start matching row: hidden until its data is in
       if (!session) { nameEl.hidden = true; return; }   // the name sits outside #account-who
       root.querySelector('#account-email').textContent = session.user.email;
       paintStatus(stLi, hasLinkedIn(session));
       Auth.loadProfile().then(({ data: p }) => {
         profile = p || {}; paintProfile();
         cvPath = (p && p.cv_path) || null; paintCv();
-      });
-      Auth.loadPreferences().then(({ data: pr }) => paintPrefs(prefsPct(pr)), () => paintPrefs(0));
+      }, () => matchSet({ cv: !!cvPath }));
+      Auth.loadPreferences().then(({ data: pr }) => { paintPrefs(prefsPct(pr)); matchSet({ need: missingPrefs(pr) }); },
+                                  () => { paintPrefs(0); matchSet({ need: missingPrefs(null) }); });
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
       workbookPath = data.workbook;
@@ -2870,14 +3025,157 @@
       stPrefs.setAttribute('aria-label', label);
       stPrefs.title = label;
     }
-    stLi.addEventListener('click', async () => {
-      if (stLi.dataset.state === 'on') { openProfile(); return; }
+    // Add LinkedIn to this login (also the "Connect LinkedIn" link under
+    // Start matching).
+    async function connectLinkedIn() {
       stNote.hidden = true;
       let error = null;
       try { ({ error } = await Auth.linkLinkedIn()); } catch (err) { error = err; }
       // Success leaves the page for LinkedIn; anything else means linking is off.
       if (error) { stNote.textContent = stNote.dataset.msgLinkedinOff; stNote.hidden = false; }
+    }
+    stLi.addEventListener('click', () => {
+      if (stLi.dataset.state === 'on') { openProfile(); return; }
+      connectLinkedIn();
     });
+
+    // ---- Start matching (7 Nov 2026, CAR-05; owner rule V-08): the row
+    // under the title row (#account-match). Enabled when ANY of: a CV
+    // (profiles.cv_path), LinkedIn connected (the same identity test as the
+    // status button), or the main preferences filled: salary from AND to
+    // (q1), target job titles (q5), languages (q20), email addresses (q22).
+    // Otherwise a line says what is missing, with links. A click calls
+    // request_matching(), which checks the same rule on the server and allows
+    // one open request at a time (supabase/0030). The newest own
+    // match_requests row decides the rest: queued / running = a status line
+    // instead of the button; done = "Last matching" + the button; failed = a
+    // short note + the button (so the client is never stuck). Until 0030 is
+    // run the table is missing and the whole row stays hidden.
+    const mBox  = root.querySelector('#account-match');
+    const mBtn  = root.querySelector('#match-start');
+    const mLine = root.querySelector('#match-line');
+    const mNeed = root.querySelector('#match-need');
+    const mMiss = root.querySelector('#match-missing');
+    // cv / need / reqs stay null until their data is in; the row shows only
+    // then, so it never flips from disabled to enabled while loading.
+    const mState = { uid: null, gen: 0, li: false, cv: null, need: null, reqs: null, missing: false, busy: false, note: null };
+    let PREF_LABELS = {};
+    try { PREF_LABELS = JSON.parse((mBox && mBox.dataset.prefLabels) || '{}'); } catch (_e) { /* the keys show instead */ }
+    const MATCH_PREFS = ['salary', 'q5', 'q20', 'q22'];
+    // Same test as pref_filled() in supabase/0030: text, or a non-empty list.
+    function prefFilled(v) {
+      if (typeof v === 'string') return v.trim() !== '';
+      if (Array.isArray(v)) return v.length > 0;
+      if (v && typeof v === 'object') return Object.keys(v).length > 0;
+      return typeof v === 'number';
+    }
+    function missingPrefs(p) {
+      const a = (p && p.answers) || {};
+      return MATCH_PREFS.filter((k) => (k === 'salary'
+        ? !(p && p.salary_min != null && p.salary_max != null)
+        : !prefFilled(a[k])));
+    }
+    // PostgREST's answer for a table / function that is not there yet.
+    const isMissing = (err) => !!err && (['42P01', '42883', 'PGRST202', 'PGRST205'].indexOf(err.code) !== -1
+      || /does not exist|schema cache|could not find/i.test(err.message || ''));
+    const isOpen = (r) => !!r && (r.status === 'queued' || r.status === 'running');
+    const fmtWhen = (v) => fmtDate(v) + ', ' + new Date(v).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    function paintMatch() {
+      if (!mBox) return;
+      const s = mState;
+      if (!s.uid || s.missing || s.cv == null || s.need == null || s.reqs == null) { mBox.hidden = true; return; }
+      const msg = mBox.dataset;
+      const latest = s.reqs[0] || null;
+      const open = isOpen(latest);
+      const done = s.reqs.find((r) => r.status === 'done') || null;
+      const ready = s.cv || s.li || !s.need.length;
+      let text = '', kind = '';
+      if (s.note) { text = s.note.text; kind = s.note.kind; }
+      else if (open) text = msg.msgStarted.replace('{when}', fmtWhen(latest.created_at));
+      else if (latest && latest.status === 'failed') { text = msg.msgFailed; kind = 'error'; }
+      else if (done) text = msg.msgDone.replace('{date}', fmtDate(done.finished_at || done.created_at));
+      mLine.textContent = text;
+      mLine.dataset.kind = kind;
+      mLine.hidden = !text;
+      mNeed.hidden = open || ready;
+      mMiss.textContent = mNeed.hidden ? '' : msg.msgMissing.replace('{list}', s.need.map((k) => PREF_LABELS[k] || k).join(', '));
+      // The button gives way to the status line while a request is open;
+      // keyboard focus moves with it instead of getting lost.
+      const hadFocus = document.activeElement === mBtn;
+      mBtn.hidden = open;
+      if (!ready || s.busy) mBtn.setAttribute('aria-disabled', 'true'); else mBtn.removeAttribute('aria-disabled');
+      if (s.busy) mBtn.setAttribute('aria-busy', 'true'); else mBtn.removeAttribute('aria-busy');
+      const desc = [mLine, mNeed].filter((p) => !p.hidden).map((p) => p.id).join(' ');
+      if (desc) mBtn.setAttribute('aria-describedby', desc); else mBtn.removeAttribute('aria-describedby');
+      mBox.hidden = false;
+      if (open && hadFocus) { mLine.tabIndex = -1; mLine.focus(); }
+    }
+    function matchSet(part) { Object.assign(mState, part); paintMatch(); }
+
+    // The newest own requests. A failed refresh keeps what is on screen.
+    function loadMatch() {
+      const g = mState.gen;
+      Auth.loadMatching().then(({ data, error }) => {
+        if (g !== mState.gen) return;
+        if (error) {
+          if (isMissing(error)) mState.missing = true;
+          else console.warn('account: match status failed', error.message);
+          matchSet({ reqs: mState.reqs || [] });
+          return;
+        }
+        matchSet({ missing: false, reqs: data || [], note: null });
+      }, () => { if (g === mState.gen) matchSet({ reqs: mState.reqs || [] }); });
+    }
+
+    // From render(): a new person starts from "unknown"; the same person
+    // (token refresh, profile update) keeps the row on screen while it reloads.
+    function startMatch(session) {
+      const uid = session ? session.user.id : null;
+      if (uid !== mState.uid) {
+        Object.assign(mState, { uid, gen: mState.gen + 1, cv: null, need: null, reqs: null, missing: false, busy: false, note: null });
+      }
+      mState.li = hasLinkedIn(session);
+      paintMatch();
+      if (uid && mBox) loadMatch();
+    }
+
+    if (mBox) {
+      mBtn.addEventListener('click', async () => {
+        const s = mState;
+        if (mBtn.getAttribute('aria-disabled') === 'true' || !s.uid) return;
+        const g = s.gen;
+        const msg = mBox.dataset;
+        matchSet({ busy: true, note: { text: msg.msgBusy, kind: 'busy' } });
+        let res;
+        try { res = await Auth.requestMatching(); } catch (err) { res = { error: err }; }
+        if (g !== s.gen) return;
+        const err = res.error;
+        const text = String((err && err.message) || '');
+        if (!err) {
+          const row = (Array.isArray(res.data) ? res.data[0] : res.data) || {};
+          s.reqs = [Object.assign({ status: 'queued', created_at: new Date().toISOString() }, row)].concat(s.reqs || []);
+          matchSet({ busy: false, note: null });
+        } else if (/already_open/.test(text)) {
+          // Opened elsewhere (another tab): show that request once it has loaded.
+          matchSet({ busy: false, note: { text: msg.msgOpen, kind: '' } });
+          loadMatch();
+        } else {
+          const key = /not_ready/.test(text) ? 'msgNotReady'
+            : /not_signed_in/.test(text) ? 'msgSignedOut'
+            : isMissing(err) ? 'msgUnavailable' : 'msgError';
+          matchSet({ busy: false, note: { text: msg[key], kind: 'error' } });
+        }
+      });
+      // The links in the "what is missing" line do what the status buttons do.
+      root.querySelector('#match-cv').addEventListener('click', () => (cvPath ? showCv() : cvFile.click()));
+      root.querySelector('#match-li').addEventListener('click', connectLinkedIn);
+      // Back on the tab while a request is open: has it finished meanwhile?
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && mState.reqs && isOpen(mState.reqs[0])) loadMatch();
+      });
+    }
+
     pfForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fields = {
@@ -2941,6 +3239,7 @@
     function paintCv() {
       cvBtn.textContent = cvPath ? cvBtn.dataset.labelReview : cvBtn.dataset.labelUpload;
       paintStatus(stCv, !!cvPath);
+      matchSet({ cv: !!cvPath });                    // a CV is enough for Start matching
     }
     async function showCv() {
       cvSay('', '');

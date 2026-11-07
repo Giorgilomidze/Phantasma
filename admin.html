@@ -63,7 +63,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105i" />
+  <link rel="stylesheet" href="./styles.css?v=20261107a" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -92,7 +92,8 @@
 
     <!-- Career-service admin panel (5 Nov 2026). Behaviour in career.js
          (bootAdminPanel); data from the career_admin_* and chat_* functions in
-         supabase/0024-career-admin-chat.sql. Each of them checks on the server
+         supabase/0024-career-admin-chat.sql, and (Feedback tab, 7 Nov 2026) the
+         feedback table in supabase/0030. Each of them checks on the server
          that the caller is an admin, so nobody else gets any data here. -->
     <section class="account page-grid" id="admin" aria-labelledby="admin-h">
       <div class="account__head">
@@ -135,6 +136,8 @@
                   aria-controls="admin-clients" aria-selected="true">Clients</button>
           <button class="admin-tab" type="button" role="tab" id="admin-tab-messages" data-tab="messages"
                   aria-controls="admin-messages" aria-selected="false" tabindex="-1">Messages <span class="chat-badge" id="admin-unread" hidden></span></button>
+          <button class="admin-tab" type="button" role="tab" id="admin-tab-feedback" data-tab="feedback"
+                  aria-controls="admin-feedback" aria-selected="false" tabindex="-1">Feedback <span class="chat-badge" id="admin-fb-new" hidden></span></button>
           <button class="admin-tab" type="button" role="tab" id="admin-tab-admins" data-tab="admins"
                   aria-controls="admin-admins" aria-selected="false" tabindex="-1">Admins</button>
         </div>
@@ -166,6 +169,26 @@
               <div class="admin-chat__body" id="admin-chat-body"></div>
             </div>
           </div>
+        </section>
+
+        <!-- Feedback (7 Nov 2026, D-30): what signed-in clients send from the Feedback
+             view of their chat window (table feedback, supabase/0030). Newest first; per
+             request a status, a note the client sees under their request, and Save.
+             The badge on the tab counts the "New" ones. Behaviour in career.js. -->
+        <section class="admin-tabpanel" id="admin-feedback" role="tabpanel" aria-labelledby="admin-tab-feedback" hidden>
+          <div class="admin-toolbar">
+            <label class="admin-filter__label" for="fb-filter">Show</label>
+            <select class="t-filter__select admin-filter" id="fb-filter">
+              <option value="all">All requests</option>
+              <option value="new">New</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="planned">Planned</option>
+              <option value="done">Done</option>
+              <option value="wont_do">Won't do</option>
+            </select>
+            <span class="admin-count" id="fb-count" aria-live="polite"></span>
+          </div>
+          <div id="fb-list"></div>
         </section>
 
         <!-- Admins: who can open this page -->
@@ -263,8 +286,8 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261105i"></script>
+  <script src="./script.js?v=20261107a"></script>
   <!-- Career service: admin panel + chat (after script.js) -->
-  <script src="./career.js?v=20261105j"></script>
+  <script src="./career.js?v=20261107a"></script>
 </body>
 </html>

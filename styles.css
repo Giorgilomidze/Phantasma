@@ -3664,6 +3664,52 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   color: var(--act);
 }
 .account-status__note[hidden] { display: none; }
+/* Start matching (7 Nov 2026, CAR-05): a row under the title row — status
+   line or what is missing, then the button; right-aligned under the status
+   controls from 768px. Disabled = aria-disabled (still focusable, with the
+   missing line as its description), drawn as a quiet grey button. */
+.account-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-3);
+}
+.account-match[hidden],
+.account-match__btn[hidden] { display: none; }
+.account-match__line,
+.account-match__need {
+  max-width: 72ch;
+  margin: 0;
+  font-size: var(--type-body-sm);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.account-match__line[data-kind="error"] { color: var(--act); }
+.account-match__line:focus { outline: none; }   /* focused by script only, when the button gives way to it */
+.account-match__link {
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ink) 35%, transparent);
+  text-underline-offset: 3px;
+  transition: color 150ms ease-out;
+}
+.account-match__link:hover { color: var(--accent-deep); text-decoration-color: currentColor; }
+.account-match__link:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; border-radius: 2px; }
+.account-match__btn { padding-block: var(--space-2); }
+.account-match__btn[aria-disabled="true"],
+.account-match__btn[aria-disabled="true"]:hover {
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  border-color: var(--rule);
+  transform: none;
+  cursor: not-allowed;
+}
+.account-match__btn[aria-busy="true"] { cursor: wait; }
+@media (min-width: 768px) {
+  .account-match { justify-content: flex-end; text-align: right; }
+}
 .account__panel {
   max-width: 640px;
   display: grid;
@@ -4018,11 +4064,11 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
    Deadline / Send sit next to the position instead of at the far right. */
 .account-table .t-week, .account-table .t-rank, .account-table .t-loc,
 .account-table .t-deadline, .account-table .t-send { white-space: nowrap; width: 1%; }
-.account-table:not(.account-table--vac):not(.account-table--sends) td:nth-child(3) { min-width: 120px; }
-.account-table:not(.account-table--vac):not(.account-table--sends) td:nth-child(4) { min-width: 200px; max-width: 320px; }
-.account-table:not(.account-table--vac):not(.account-table--sends) td:nth-child(5) { min-width: 200px; }
-.account-table:not(.account-table--vac):not(.account-table--sends) td:nth-child(6),
-.account-table:not(.account-table--vac):not(.account-table--sends) td:nth-child(7) { white-space: nowrap; width: 1%; }
+.account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(3) { min-width: 120px; }
+.account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(4) { min-width: 200px; max-width: 320px; }
+.account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(5) { min-width: 200px; }
+.account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(6),
+.account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(7) { white-space: nowrap; width: 1%; }
 /* Vacancy tables: arrow column first, so every column shifts by one. */
 .account-table--vac td:nth-child(2), .account-table--vac td:nth-child(3) { white-space: nowrap; width: 1%; }
 .account-table--vac td:nth-child(4) { min-width: 120px; }
@@ -4135,6 +4181,60 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
   line-height: 1;
 }
 .company__name { min-width: 0; overflow-wrap: anywhere; }
+
+/* Companies panel (7 Nov 2026, V-12): one row per company — arrow, logo +
+   name, industry, matched count — that opens a compact table of its matched
+   vacancies. Only that table scrolls sideways on phones (inside .co__body,
+   positioned so its hidden caption cannot widen the page); the company rows
+   always fit. */
+.co-hint { margin-bottom: var(--space-3); }
+.co-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.co { border-bottom: 1px solid var(--rule); }
+.co__h { margin: 0; font: inherit; }
+.co__toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-radius: var(--radius-sm);
+  font-size: var(--type-body-sm);
+  text-align: left;
+  color: var(--ink);
+  transition: background-color 150ms ease-out;
+}
+.co__toggle:hover { background: var(--surface); }
+.co__toggle:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: -2px; }
+.co__arrow { flex: none; width: 32px; height: 32px; display: grid; place-items: center; color: var(--ink-soft); }
+.co__toggle:hover .co__arrow,
+.co__toggle[aria-expanded="true"] .co__arrow { color: var(--ink); }
+.co__toggle[aria-expanded="true"] .t-toggle__chev { transform: rotate(45deg); }   /* points down */
+.co__toggle .company { font-weight: 500; }
+.co__industry { color: var(--ink-soft); }
+.co__count { margin-left: auto; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.co__body { position: relative; overflow-x: auto; padding: 0 0 var(--space-4); }
+.co__body[hidden] { display: none; }
+.account-table--co th,
+.account-table--co td { padding-right: var(--space-3); }
+.account-table--co td:first-child { min-width: 180px; max-width: 360px; }
+.account-table--co td:nth-child(n+2) { white-space: nowrap; width: 1%; }
+.account-table--co td:nth-child(4) { font-variant-numeric: tabular-nums; }
+.co-status { font-weight: 500; color: var(--ink-soft); }
+.co-status[data-status="chosen"] { color: var(--watch); }
+.co-status[data-status="sent"],
+.co-status[data-status="replied"] { color: var(--ok); }
+@media (min-width: 768px) {
+  .co__body { padding-left: calc(32px + var(--space-3)); }   /* under the logo, past the arrow */
+}
+@media (max-width: 767px) {
+  /* The count gets its own line under the name, past the arrow. */
+  .co__count { flex-basis: 100%; margin-left: 0; padding-left: calc(32px + var(--space-3)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .co__toggle { transition: none; }
+}
 
 /* Row disclosure: arrow column + full-width detail row (header, facts, descriptions) */
 .account-table .t-toggle { width: 1%; padding-right: var(--space-2); }
@@ -4515,6 +4615,11 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .admin-tab:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: -2px; border-radius: var(--radius-sm); }
 .admin-tabpanel { min-width: 0; }
 .admin-tabpanel[hidden] { display: none; }
+/* Four tabs since 7 Nov 2026 (Feedback): on phones they wrap instead of
+   scrolling, so "Admins" is never hidden past the edge. */
+@media (max-width: 599px) {
+  .admin-tabs { flex-wrap: wrap; overflow-x: visible; }
+}
 .admin-h:focus { outline: none; }
 
 .admin-toolbar {
@@ -4889,8 +4994,9 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .chat-panel.is-expanded { width: min(760px, calc(100vw - 2 * var(--chat-edge))); height: 85vh; }
 .chat-panel__head {
   display: flex;
+  flex-wrap: wrap;               /* second line: the Messages | Feedback switch */
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2) var(--space-1);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--rule);
   background: var(--surface);
@@ -4916,6 +5022,172 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .chat-panel__btn:hover { color: var(--ink); background: var(--surface-soft); }
 .chat-panel__btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: -2px; }
 .chat-panel__btn svg { width: 18px; height: 18px; }
+
+/* Messages | Feedback switch (7 Nov 2026, D-30): ARIA tabs on the second line
+   of the head, the segmented look of .role-switch. Emails / Support come later
+   as more buttons. One .chat-view at a time fills the rest of the window. */
+.chat-panel__tabs { flex-basis: 100%; min-width: 0; }
+.chat-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+.chat-switch__btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  font-size: var(--type-eyebrow);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  transition: color 150ms ease-out, background-color 150ms ease-out;
+}
+.chat-switch__btn:hover { color: var(--ink); }
+.chat-switch__btn[aria-selected="true"] { color: var(--on-accent); background: var(--accent); }
+.chat-switch__btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.chat-view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.chat-view[hidden] { display: none; }
+
+/* Feedback view (career.js createFeedback): types as checkbox chips, the
+   message with its counter, Send; then the person's own requests as chat
+   bubbles (.chat-msg) with a status pill and the team's note as a reply.
+   The whole view scrolls as one. */
+.fb {
+  position: relative;            /* keeps its .visually-hidden text inside the scroll box */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+.fb__off { margin: 0; font-size: var(--type-body-sm); color: var(--ink-soft); }
+.fb__form { display: grid; gap: var(--space-2); }
+.fb__off[hidden],
+.fb__form[hidden],
+.fb__h[hidden],
+.fb__empty[hidden],
+.fb__list[hidden] { display: none; }
+.fb__kinds { min-width: 0; margin: 0; padding: 0; border: 0; }
+.fb__legend { padding: 0; margin: 0 0 var(--space-2); font-size: var(--type-caption); color: var(--ink-soft); }
+.fb__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.fb-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: var(--type-caption);
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
+}
+.fb-kind:hover { border-color: var(--field-border); }
+.fb-kind:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+  background: color-mix(in oklch, var(--bg) 84%, var(--accent) 16%);
+}
+.fb-kind input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.fb-kind input:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.fb__label { margin-top: var(--space-1); font-size: var(--type-caption); color: var(--ink-soft); }
+.fb__text { min-height: 96px; resize: vertical; }
+.fb__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--type-caption);
+  color: var(--ink-soft);
+}
+.fb__counter { font-variant-numeric: tabular-nums; }
+.fb__counter.is-full { color: var(--act); }
+.fb__send { margin-left: auto; }
+.fb__send[aria-disabled="true"],
+.fb__send[aria-disabled="true"]:hover { opacity: 0.6; background: var(--accent); color: var(--on-accent); transform: none; cursor: not-allowed; }
+.fb__status { margin: 0; font-size: var(--type-caption); color: var(--ink-soft); }
+.fb__status[data-kind="error"] { color: var(--act); }
+.fb__status[data-kind="ok"] { color: var(--ok); }
+.fb__h {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-body);
+  font-size: var(--type-eyebrow);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.fb__empty { margin: 0; font-size: var(--type-body-sm); color: var(--ink-soft); }
+.fb__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.fb-item { display: flex; flex-direction: column; gap: var(--space-1); }
+.fb-item__kinds { margin: 0 0 var(--space-1); font-size: var(--type-caption); font-weight: 600; color: var(--ink); }
+.fb-status {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg);
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.fb-status[data-status="reviewed"] { color: var(--partner); }
+.fb-status[data-status="planned"]  { color: var(--watch); border-color: currentColor; }
+.fb-status[data-status="done"]     { color: var(--ok); border-color: currentColor; }
+
+/* Admin Feedback tab (7 Nov 2026, D-30): one card per request — who, when,
+   types and the text; then status, the note for the client and Save (to the
+   right from 768px). Cards, not a table, so nothing scrolls sideways. A "New"
+   request carries an accent bar on its left edge (its status says it too). */
+.admin-filter__label { font-size: var(--type-body-sm); color: var(--ink-soft); }
+.admin-filter { font-size: var(--type-body-sm); }
+.fb-admin { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.fb-admin__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+}
+.fb-admin__item[data-status="new"] { box-shadow: inset var(--space-1) 0 0 var(--accent); }
+.fb-admin__info { display: grid; gap: var(--space-1); min-width: 0; align-content: start; }
+.fb-admin__who { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); overflow-wrap: anywhere; }
+.fb-admin__email { font-size: var(--type-caption); color: var(--ink-soft); }
+.fb-admin__meta { margin: 0; font-size: var(--type-caption); color: var(--ink-soft); }
+.fb-admin__text {
+  margin: var(--space-1) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--type-body-sm);
+  line-height: 1.5;
+}
+.fb-admin__edit { display: grid; gap: var(--space-1); align-content: start; min-width: 0; }
+.fb-admin__label { font-size: var(--type-caption); font-weight: 500; }
+.fb-admin__label small { font-size: inherit; font-weight: 400; color: var(--ink-soft); }
+.fb-admin__select { justify-self: start; margin-bottom: var(--space-2); }
+.fb-admin__note { min-height: 64px; padding: var(--space-2) var(--space-3); font-size: var(--type-body-sm); resize: vertical; }
+.fb-admin__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-1); }
+.fb-admin__actions .btn[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
+@media (min-width: 768px) {
+  .fb-admin__item { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); }
+}
+
 /* Room under the footer so the round button never covers its last line. */
 body.has-chat .site-footer { padding-bottom: calc(var(--space-7) + var(--space-8)); }
 
@@ -4943,7 +5215,9 @@ body.has-chat .site-footer { padding-bottom: calc(var(--space-7) + var(--space-8
   .chat-msg__actions,
   .admin-tab,
   .conv,
-  .role-switch a { transition: none; }
+  .role-switch a,
+  .chat-switch__btn,
+  .fb-kind { transition: none; }
 }
 
 /* Admin: a client's preference answers — the Preferences % is a button (career.js, 0027);

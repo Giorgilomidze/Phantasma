@@ -63,7 +63,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261105i" />
+  <link rel="stylesheet" href="./styles.css?v=20261107a" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -135,6 +135,35 @@
           <p class="account-status__note" id="status-note" role="status" aria-live="polite" hidden
              data-msg-linkedin-off="Connecting LinkedIn is not switched on yet — please try again later."></p>
         </div>
+      </div>
+
+      <!-- Start matching (7 Nov 2026, CAR-05, owner answer V-08): under the title
+           row, right-aligned under the status controls from 768px. Painted by
+           bootAccountPage from the own match_requests rows (supabase/0030); stays
+           hidden until that table exists. Enabled with a CV, LinkedIn connected,
+           or the main preferences filled; otherwise #match-need says what is
+           missing. While a request is queued / running the button gives way to
+           the status line. Texts below ({when} / {date} / {list} filled in). -->
+      <div class="account-match" id="account-match" hidden
+           data-msg-started="Matching started on {when}. Your list appears here when it is ready (usually within a day)."
+           data-msg-done="Last matching: {date}"
+           data-msg-failed="Matching could not run — we are looking at it."
+           data-msg-busy="Starting…"
+           data-msg-open="Matching is already running — your list appears here when it is ready."
+           data-msg-not-ready="Please add your CV, connect LinkedIn or fill in the main preferences first."
+           data-msg-signed-out="Please log in again to start matching."
+           data-msg-unavailable="Start matching is not available yet — please try again later."
+           data-msg-error="Could not start matching — please try again."
+           data-msg-missing=" (missing: {list})"
+           data-pref-labels='{"salary":"salary from and to","q5":"target job titles","q20":"languages","q22":"email addresses"}'>
+        <p class="account-match__line" id="match-line" role="status" aria-live="polite" hidden></p>
+        <p class="account-match__need" id="match-need" hidden>
+          To start matching, add one of these:
+          <button class="account-match__link" type="button" id="match-cv">Upload CV</button>,
+          <button class="account-match__link" type="button" id="match-li">Connect LinkedIn</button> or
+          <a class="account-match__link" href="./preferences.html">Fill in preferences</a><span id="match-missing"></span>.
+        </p>
+        <button class="btn btn-primary btn-sm account-match__btn" type="button" id="match-start">Start matching</button>
       </div>
 
       <!-- Signed out -->
@@ -217,8 +246,9 @@
           <p class="eyebrow" id="stats-h">Your service so far</p>
           <div class="stat-grid" id="stat-grid" role="list">
             <button class="stat" type="button" role="listitem" data-panel="weeks" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Weekly runs</span><span class="stat__value"><span data-stat="weeks">0</span></span></button>
-            <button class="stat" type="button" role="listitem" data-panel="processed" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Vacancies processed</span><span class="stat__value"><span data-stat="processed">0</span></span></button>
+            <!-- Companies first (7 Nov 2026, V-12): its panel lists the companies, each opening its matched vacancies. -->
             <button class="stat" type="button" role="listitem" data-panel="companies" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Companies reviewed</span><span class="stat__value"><span data-stat="companies">0</span></span></button>
+            <button class="stat" type="button" role="listitem" data-panel="processed" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Vacancies processed</span><span class="stat__value"><span data-stat="processed">0</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="selected" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Selected by you</span><span class="stat__value"><span data-stat="selected">0</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="sent" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Applications sent</span><span class="stat__value"><span data-stat="sent">0</span></span></button>
             <button class="stat" type="button" role="listitem" data-panel="interviews" aria-expanded="false" aria-controls="stat-panel"><span class="stat__label">Interviews</span><span class="stat__value"><span data-stat="interviews">0</span></span></button>
@@ -428,8 +458,8 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261105i"></script>
+  <script src="./script.js?v=20261107a"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
-  <script src="./career.js?v=20261105j"></script>
+  <script src="./career.js?v=20261107a"></script>
 </body>
 </html>

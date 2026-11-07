@@ -23,6 +23,8 @@
    run those calls fail with the i18n key sty.err.db; nothing else breaks.
    Everything else (campaign lists, posts, numbers) is still mock data. A post
    holds up to 6 products (productIds) and up to 10 pictures (imageIds).
+   Campaign edits (updateCampaign, 7 Nov 2026) are mock in both modes too: the
+   campaigns are sample data; the Meta update comes with live campaigns.
    In mock mode, library uploads live in memory only (gone on reload) and the
    stock sits in the demo state in localStorage.
    No secrets belong in this file.
@@ -41,6 +43,7 @@
   var IMG_MAX_MB = 10, IMG_MAX_FILES = 20, IMG_MAX_TITLE = 200;
   var STOCK_BATCH = 1000; // rows per ads_import_stock call (server limit)
   var POST_MAX_PRODUCTS = 6, POST_MAX_IMAGES = 10; // per post (the composer enforces them too)
+  var CAMP_NAME_MAX = 80; // campaign name length (the wizard's and the edit window's fields stop there too)
   var PIC_ASPECTS = ['3:4', '4:5', '1:1', '9:16', '16:9', '4:3']; // the Edge Function's formats; 3:4 is the default
   var GROUP_KINDS = ['element', 'picture'];                         // how a group's reference pictures are stored
   var RESERVED_TOKENS = ['NAME', 'KA', 'TYPE', 'PRICE', 'TEXT', 'RULES']; // filled in by the platform
@@ -70,6 +73,7 @@
   var actorId = null;   // auth user id: live audit rows must carry it
   var client = null;    // supabase client, handed over by ads.js (same session as the gate)
   var uploads = [];     // mock-mode library uploads, newest first: in memory only (object URLs)
+  var limitsNow = null; // spending limits getSettings() last handed to the UI (live: the owner's caps)
 
   /* ---- small helpers ---- */
   function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -83,6 +87,8 @@
   function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
   function today() { var d = new Date(); d.setHours(0, 0, 0, 0); return d; }
   function parseKey(k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  // A real calendar day written as YYYY-MM-DD (2026-02-30 is not).
+  function isDayKey(k) { return typeof k === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(k) && dayKey(parseKey(k)) === k; }
   function newId(prefix) { return prefix + '_' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
   function lsGet() { try { return JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { return null; } }
   function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* private mode: keep in memory */ } }
@@ -326,6 +332,46 @@
       return wait(n);
     });
   }
+  // Edit a campaign that is not running (ADS-19, 7 Nov 2026). changes: any of { name, dailyBudget,
+  // days, startDate }; anything else (ad account, goal ...) stays. Checked again here, against the
+  // limits the UI shows (live: the owner's caps, incl. the total); a refusal carries an i18n key
+  // (e.key, e.vars). A start date that is not changed may lie in the past (the campaign ran before it
+  // was paused); a new one must be today or later. Mock path in both modes: campaigns are sample data.
+  // Resolves with the campaign (as getCampaign). A save with changes logs one campaign.edit entry
+  // listing old -> new for every changed field; a save without changes logs nothing.
+  function updateCampaign(id, changes) {
+    var d = changes || {};
+    return init().then(function () {
+      settleReviews();
+      var c = state.campaigns.filter(function (x) { return x.id === id; })[0];
+      if (!c) throw codeError('ced.err.gone');
+      if (c.status !== 'draft' && c.status !== 'paused') throw codeError('ced.err.status');
+      var L = limitsNow || fixed.settings.limits;
+      var n = {
+        name: d.name === undefined ? c.name : String(d.name == null ? '' : d.name).trim(),
+        dailyBudget: d.dailyBudget === undefined ? c.dailyBudget : Number(d.dailyBudget),
+        days: d.days === undefined ? c.days : Number(d.days),
+        startDate: d.startDate === undefined ? c.startDate : String(d.startDate == null ? '' : d.startDate)
+      };
+      if (!n.name) throw codeError('err.name');
+      if (n.name.length > CAMP_NAME_MAX) throw codeError('ced.err.nameLong', { max: CAMP_NAME_MAX });
+      if (!(n.dailyBudget >= L.minDailyBudget && n.dailyBudget <= L.maxDailyBudget)) throw codeError('ced.err.daily', { min: L.minDailyBudget, max: L.maxDailyBudget });
+      if (!(n.days >= 1 && n.days <= L.maxDays && n.days % 1 === 0)) throw codeError('ced.err.days', { max: L.maxDays });
+      if (L.maxTotalBudget != null && total(n) > L.maxTotalBudget + 1e-9) throw codeError('err.total', { total: L.maxTotalBudget });
+      if (n.startDate !== c.startDate && !(isDayKey(n.startDate) && n.startDate >= dayKey(today()))) throw codeError('ced.err.start');
+      var parts = [];
+      if (n.name !== c.name) parts.push('name: "' + c.name + '" -> "' + n.name + '"');
+      if (n.dailyBudget !== c.dailyBudget) parts.push('daily budget: ' + c.dailyBudget + ' -> ' + n.dailyBudget);
+      if (n.days !== c.days) parts.push('days: ' + c.days + ' -> ' + n.days);
+      if (n.startDate !== c.startDate) parts.push('start date: ' + c.startDate + ' -> ' + n.startDate);
+      if (!parts.length) return wait(c);
+      if (total(n) !== total(c)) parts.push('total: ' + total(c) + ' -> ' + total(n));
+      c.name = n.name; c.dailyBudget = n.dailyBudget; c.days = n.days; c.startDate = n.startDate;
+      audit('campaign.edit', 'campaign', c.id, parts.join(' | ') + ' | (' + c.status + ')');
+      save();
+      return wait(c);
+    });
+  }
 
   /* ---- fake insights: deterministic per campaign + day ---- */
   function noise(id, i) {
@@ -474,11 +520,12 @@
   /* ---- fixed lists ---- */
   function getSettings() {
     return init().then(function () {
-      if (!isLive()) return wait(fixed.settings);
+      if (!isLive()) { limitsNow = fixed.settings.limits; return wait(fixed.settings); }
       return loadLive().then(function (live) {
         var s = clone(fixed.settings); // locations, forbidden words, caption limit stay from the mock file
         s.live = true; s.businesses = live.businesses; s.currency = live.currency;
         Object.keys(live.limits).forEach(function (k) { s.limits[k] = live.limits[k]; });
+        limitsNow = clone(s.limits); // updateCampaign checks against the same caps the UI shows
         return s;
       });
     });
@@ -982,6 +1029,8 @@
     setProductDetails: setProductDetails,
     listStyleGroups: listStyleGroups, saveStyleGroup: saveStyleGroup, deleteStyleGroup: deleteStyleGroup,
     listStyles: listStyles, saveStyle: saveStyle, deleteStyle: deleteStyle,
-    getPictureSettings: getPictureSettings, savePictureSettings: savePictureSettings
+    getPictureSettings: getPictureSettings, savePictureSettings: savePictureSettings,
+    // Edit a campaign that is not running (ADS-19, 7 Nov 2026; mock in both modes)
+    campaignRules: { maxName: CAMP_NAME_MAX }, updateCampaign: updateCampaign
   };
 })();

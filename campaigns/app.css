@@ -152,6 +152,7 @@
   color: var(--ink); background: var(--surface-raised); border: 1px solid var(--field-border); border-radius: var(--radius-sm);
 }
 .ads-input:disabled { background: var(--surface); color: var(--ink-soft); cursor: not-allowed; }
+.ads-input[aria-invalid="true"] { border-color: var(--act); box-shadow: 0 0 0 1px var(--act); }
 .ads-textarea { min-height: 120px; resize: vertical; line-height: 1.45; }
 .ads-textarea--short { min-height: 80px; }
 .ads-color { width: 64px; min-height: 44px; padding: 2px; border: 1px solid var(--field-border); border-radius: var(--radius-sm); background: var(--surface-raised); cursor: pointer; }
@@ -406,6 +407,25 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-toast { pointer-events: auto; max-width: 480px; background: var(--ink); color: var(--bg); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); font-size: var(--type-body-sm); box-shadow: var(--shadow-lightbox); border-left: 6px solid var(--ok); }
 .ads-toast--act { background: var(--act); border-left-color: #fff; }
 .ads-toast--info { border-left-color: var(--accent); }
+/* Switch-on window (7 Nov 2026): details with Edit details, then what the campaign runs (read-only) */
+.ads-ced { margin: 0 0 var(--space-4); min-width: 0; }
+.ads-ced > .ads-h3 { margin: 0 0 var(--space-2); }
+.ads-ced__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-2); }
+.ads-ced__head .ads-h3 { margin: 0; }
+.ads-runs { margin: 0; font-size: var(--type-body-sm); }
+.ads-runs dt { font-weight: 500; margin: var(--space-3) 0 var(--space-1); }
+.ads-runs dt:first-child { margin-top: 0; }
+.ads-runs dd { margin: 0; min-width: 0; }
+.ads-runs__post { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ads-runs__cap { flex: 1 1 100%; overflow-wrap: anywhere; }
+.ads-runs__prods { display: flex; flex-direction: column; gap: var(--space-2); }
+.ads-runs__prod { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.ads-runs__img { width: 40px; height: 40px; flex: none; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface); }
+.ads-runs__text { display: flex; flex-direction: column; min-width: 0; }
+.ads-runs__name { overflow-wrap: anywhere; }
+.ads-runs__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-1); color: var(--ink-soft); font-size: var(--type-caption); }
+.ads-thumb.ads-runs__thumb { width: 56px; height: 42px; }
+.ads-runs__more { display: inline-grid; place-items: center; min-width: 56px; height: 42px; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink-soft); font-weight: 500; }
 
 /* -------------------------------------------------------------------------
    10. Image Library, Products and stock, Settings
