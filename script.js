@@ -1519,6 +1519,24 @@
       return getClient().rpc('request_matching');
     }
 
+    // CV reading (8 Nov 2026, CAR-03): the Edge Function career-read-cv.
+    // functions.invoke sends the login's token and the publishable key, as
+    // for career-admin-invite. { check: true } only asks whether reading is
+    // switched on (no AI call); { text } is the CV text, names and contact
+    // details already removed in the browser (CvRead below).
+    function checkCvReading() {
+      return getClient().functions.invoke('career-read-cv', { body: { check: true } });
+    }
+    function readCv(text) {
+      return getClient().functions.invoke('career-read-cv', { body: { text } });
+    }
+    // The saved reading (cv_extracts, one row per client) or none. An error
+    // (e.g. the table not there yet) counts as none, quietly.
+    function loadCvExtract() {
+      return getClient().from('cv_extracts').select('cv_path, model, data, chars, read_at')
+        .eq('user_id', session.user.id).maybeSingle();
+    }
+
     // Upsert the whole row; `answers` is merged client-side before calling.
     function savePreferences(row) {
       return getClient().from('preferences').upsert(Object.assign({ user_id: session.user.id }, row), { onConflict: 'user_id' });
@@ -1651,6 +1669,9 @@
       savePreferences,
       loadMatching,
       requestMatching,
+      checkCvReading,
+      readCv,
+      loadCvExtract,
       signInWithGoogleToken,
       signInWithLinkedIn,
       linkLinkedIn,
@@ -1658,6 +1679,193 @@
       loadStats,
       db,
     };
+  })();
+
+  // ---------------------------------------------------------------------------
+  // CV reading in the browser (8 Nov 2026, CAR-03, docs/specs/cv-reading-ai-2026-11-08.md).
+  // account.html only: the text is taken out of the client's own PDF (pdf.js,
+  // loaded on first use) and the name and contact details are removed BEFORE
+  // the text leaves the computer; career-read-cv removes them again and has
+  // Claude AI sort the rest. The CV text is never logged or kept here.
+  // ---------------------------------------------------------------------------
+  const CvRead = (() => {
+    // ---- removing personal details: a plain-JS copy of the block of the same
+    // name in supabase/functions/career-read-cv/index.ts — same regexes, same
+    // order. Change one, change both (the server runs it again).
+    const MARKER_RE = /\[(?:name|email|phone|link|address|removed)\]/gi;
+    const MONTHS = new Set(['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+      'september', 'october', 'november', 'december']);
+
+    function escapeRe(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function str(v) {
+      return typeof v === 'string' ? v.trim() : '';
+    }
+
+    // Full names and name parts of the person: profile, login metadata, linked identities.
+    function callerNames(user, profile) {
+      const raw = [];
+      if (profile) {
+        raw.push(str(profile.full_name));
+        raw.push([str(profile.first_name), str(profile.middle_name), str(profile.last_name)].filter(Boolean).join(' '));
+        raw.push([str(profile.first_name), str(profile.last_name)].filter(Boolean).join(' '));
+      }
+      const bags = [(user && user.user_metadata) || {}];
+      ((user && user.identities) || []).forEach((id) => bags.push((id && id.identity_data) || {}));
+      bags.forEach((b) => {
+        raw.push(str(b.full_name), str(b.name), [str(b.given_name), str(b.family_name)].filter(Boolean).join(' '));
+      });
+      const full = new Set();
+      const parts = new Set();
+      raw.forEach((r) => {
+        if (!r || r.includes('@')) return;
+        const words = r.split(/[\s,]+/).filter(Boolean);
+        if (words.length >= 2) full.add(words.join(' '));
+        r.split(/[\s,.\-]+/).forEach((w) => {
+          if (w.length >= 2 && /\p{L}/u.test(w)) parts.add(w);
+        });
+      });
+      return { full: Array.from(full), parts: Array.from(parts) };
+    }
+
+    function isDateLike(s) {
+      const t = s.trim();
+      const year = '(?:19|20)\\d{2}';
+      const d1 = '(?:\\d{1,2}[.\\-/])?' + year;                     // 2020, 03.2020, 03-2020
+      const d2 = '\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]' + year;          // 01.03.2020
+      return new RegExp('^(?:' + d2 + '|' + d1 + ')(?:\\s*[-–—]\\s*(?:' + d2 + '|' + d1 + '))?$').test(t) ||
+        new RegExp('^(?:' + year + '[\\s.\\-–—]*)+$').test(t);   // a run of years from jumbled columns
+    }
+
+    function phoneOrId(m) {
+      let t = m.trim();
+      // cut an unclosed "(" at the end, e.g. "2018 - 2021 (3" from "2018 - 2021 (3 years)"
+      const open = t.lastIndexOf('('), close = t.lastIndexOf(')');
+      if (open > close && open > 0) t = t.slice(0, open).trim();
+      const digits = t.replace(/\D/g, '').length;
+      if (digits > 15 || isDateLike(t)) return false;
+      return digits >= 8 || (digits >= 7 && /^[+(0]/.test(t));
+    }
+
+    const LABEL_RE = new RegExp(
+      '^([ \\t]*(?:home\\s+)?(?:address|addr\\.?|date\\s+of\\s+birth|birth\\s*date|born|d\\.?o\\.?b\\.?|' +
+        'personal\\s+(?:number|no\\.?|id|code)|id\\s+(?:number|no\\.?|card)|passport(?:\\s+(?:number|no\\.?))?|' +
+        'phone|tel\\.?|telephone|mobile|cell|e-?mail|skype|telegram|whats\\s?app|viber|marital\\s+status|' +
+        'gender|sex|age|nationality|citizenship|მისამართი|დაბადების\\s+თარიღი|ტელეფონი|მობილური|' +
+        'ელ\\.?\\s*ფოსტა|პირადი\\s+ნომერი|ასაკი|სქესი|მოქალაქეობა|ოჯახური\\s+მდგომარეობა)' +
+        '[ \\t]*[:\\-–][ \\t]*)(\\S.*)$',
+      'gimu',
+    );
+    const STREET_RE = /\b(?:street|str\.|avenue|ave\.|blvd\.?|boulevard|apt\.?|apartment|zip\s*code|postal\s*code|postcode)(?![\p{L}])|ქუჩა|ქუჩის|გამზირი|გამზ\.|კორპუსი|კორპ\./iu;
+    const HEADING_RE = /^(?:cv|c\.v\.|resume|résumé|curriculum\s+vitae|რეზიუმე|ავტობიოგრაფია|პირადი\s+მონაცემები|personal\s+(?:details|information|data)|contacts?|contact\s+details|profile|summary|about\s+me)$/iu;
+
+    function looksLikeName(line) {
+      const t = line.trim();
+      if (!t || t.length > 60 || /\d/.test(t) || /[@:|•·,;/()]/.test(t) || /\[[a-z]+\]/i.test(t)) return false;
+      const words = t.split(/\s+/);
+      if (words.length < 2 || words.length > 4) return false;
+      if (/^[Ⴀ-ჿ\s\-]+$/u.test(t)) return true; // Georgian letters only
+      return words.every((w) => /^\p{Lu}[\p{L}'’\-]*\.?$/u.test(w));
+    }
+
+    function redact(input, names) {
+      let t = input.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ');
+      t = t.replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g, '[email]');
+      t = t.replace(/\b(?:https?:\/\/|www\.)[^\s<>()]+/gi, '[link]');
+      t = t.replace(/\b(?:[a-z0-9\-]+\.)*(?:linkedin|github|gitlab|facebook|fb|instagram|behance|dribbble|medium|twitter|x|t|wa|youtube|tiktok)\.(?:com|me|io|ge|net|org)(?:\/[^\s<>()]*)?/gi, '[link]');
+      t = t.replace(/\b[a-z0-9\-]+(?:\.[a-z0-9\-]+)+\/[^\s<>()]*/gi, '[link]'); // any other domain with a path
+      t = t.replace(LABEL_RE, '$1[removed]');
+      t = t.split('\n').map((line) => (line.length <= 120 && /\d/.test(line) && STREET_RE.test(line) ? '[address]' : line)).join('\n');
+      t = t.replace(/\+?\(?\d[\d\s().\-]{5,}\d/g, (m) => (phoneOrId(m) ? '[phone]' : m));
+      names.full.forEach((f) => {
+        const re = new RegExp('(?<![\\p{L}\\p{N}])' + f.split(' ').map(escapeRe).join('\\s+') + '(?![\\p{L}\\p{N}])', 'giu');
+        t = t.replace(re, '[name]');
+      });
+      names.parts.forEach((p) => {
+        if (MONTHS.has(p.toLowerCase())) return; // keep "May 2020"; the full name above still goes
+        const variants = new Set([p, p.charAt(0).toUpperCase() + p.slice(1), p.toUpperCase()]);
+        variants.forEach((v) => {
+          t = t.replace(new RegExp('(?<![\\p{L}\\p{N}])' + escapeRe(v) + '(?![\\p{L}\\p{N}])', 'gu'), '[name]');
+        });
+      });
+      // The first line that is not a heading like "CV" is almost always the name.
+      const lines = t.split('\n');
+      for (let i = 0, seen = 0; i < lines.length && seen < 3; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        seen++;
+        if (HEADING_RE.test(line)) continue;
+        if (looksLikeName(line)) lines[i] = '[name]';
+        break;
+      }
+      return lines.join('\n').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    // ---- end of removing personal details
+
+    // pdf.js 3.11.174 from cdnjs, on first use only (as SheetJS in
+    // campaigns/stock-import.js): the worker file first — it sets
+    // globalThis.pdfjsWorker, so pdf.js then works in the page itself (no Web
+    // Worker, no workerSrc) and both files keep their SRI check.
+    const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+    const PDFJS_WORKER_SRI = 'sha512-BbrZ76UNZq5BhH7LL7pn9A4TKQpQeNCHOo65/akfelcIBbcVvYWOFQKPXIrykE3qZxYjmDX573oa4Ywsc7rpTw==';
+    const PDFJS_LIB_SRI = 'sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==';
+    const MAX_PAGES = 15, MAX_CHARS = 60000, MIN_CHARS = 200;   // as in the function
+    let pdfjsLoading = null;
+    function addScript(src, sri) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src; s.integrity = sri; s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = () => { s.remove(); reject(new Error('pdfjs')); };
+        document.head.appendChild(s);
+      });
+    }
+    const pdfjsReady = () => !!(window.pdfjsWorker && window.pdfjsLib && window.pdfjsLib.getDocument);
+    function loadPdfJs() {
+      if (pdfjsReady()) return Promise.resolve(window.pdfjsLib);
+      if (!pdfjsLoading) {
+        pdfjsLoading = (window.pdfjsWorker ? Promise.resolve() : addScript(PDFJS + 'pdf.worker.min.js', PDFJS_WORKER_SRI))
+          .then(() => (window.pdfjsLib ? null : addScript(PDFJS + 'pdf.min.js', PDFJS_LIB_SRI)))
+          .then(() => { if (!pdfjsReady()) throw new Error('pdfjs'); return window.pdfjsLib; })
+          .catch((err) => { pdfjsLoading = null; throw err; });    // the next try loads it again
+      }
+      return pdfjsLoading;
+    }
+
+    // The PDF's text: at most 15 pages; the items' text, a new line where
+    // pdf.js marks a line end, a blank line between pages. A PDF pdf.js
+    // cannot open (damaged, password) gives '' (= no readable text).
+    async function pdfText(bytes) {
+      const lib = await loadPdfJs();                 // a failed load throws (= try again later)
+      let doc;
+      try {
+        doc = await lib.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false, disableFontFace: true, verbosity: 0 }).promise;
+      } catch (_e) { return ''; }
+      const pages = [];
+      try {
+        const n = Math.min(doc.numPages, MAX_PAGES);
+        for (let i = 1; i <= n; i++) {
+          const page = await doc.getPage(i);
+          const content = await page.getTextContent();
+          pages.push(content.items.map((it) => (typeof it.str === 'string' ? it.str : '') + (it.hasEOL ? '\n' : '')).join(''));
+          page.cleanup();
+        }
+      } catch (_e) { /* keep the pages read so far */ }
+      doc.destroy();
+      return pages.join('\n\n');
+    }
+
+    // The text to send: names and contact details removed, at most 60,000
+    // characters; '' when fewer than 200 are left (markers and spaces not
+    // counted), e.g. a scanned CV.
+    async function prepare(bytes, user, profile) {
+      const text = redact(await pdfText(bytes), callerNames(user, profile)).slice(0, MAX_CHARS);
+      return text.replace(MARKER_RE, '').replace(/\s+/g, '').length < MIN_CHARS ? '' : text;
+    }
+
+    return { prepare };
   })();
 
   // Shared focus trap for the modal dialogs (auth, pay, profile, CV, booking).
@@ -2912,7 +3120,7 @@
       current = session;                                // Profile details + My simple CV read it
       startMatch(session);                              // Start matching: its place is kept until its data is in
       if (!session) {                                   // the name sits outside #account-who
-        nameEl.hidden = true; prefsRow = null; cand = null;
+        nameEl.hidden = true; prefsRow = null; cand = null; cvx = null; cvxNext = null;
         if (titleEl) titleEl.textContent = 'Your account';
         return;
       }
@@ -2931,6 +3139,10 @@
       Auth.loadCandidate().then(({ data: c, error }) => {
         if (error) console.warn('account: candidate read failed', error.message);
         cand = (!error && c) || null; fillCv();
+      }, () => {});
+      const uid = session.user.id;                      // the saved CV reading (CAR-03); none / an error = none
+      Auth.loadCvExtract().then(({ data: x, error }) => {
+        if (current && current.user.id === uid) setCvx(error ? null : x);
       }, () => {});
       data = await Auth.loadStats();
       if (data.errors.length) console.warn('account: query failed', data.errors.map((e) => e.message));
@@ -3143,6 +3355,73 @@
       pfCvReadH.hidden = !any;
       pfCvRead.hidden = !any;
       pfCvNone.hidden = any;
+      fillCvx();
+    }
+
+    // Read automatically (8 Nov 2026, CAR-03): the own cv_extracts row, made
+    // by career-read-cv (see readCvNow below). One line per role / school /
+    // certificate / language; empty rows hidden. The Read button shows when a
+    // CV exists: "Read my CV" while that file has no reading, else "Read again".
+    let cvx = null;            // the own cv_extracts row (null = none)
+    let cvxRun = null;         // { path } while a reading runs
+    let cvxNext = null;        // { file, path, where }: a newer upload, read when the current one ends
+    const pfCvx      = document.getElementById('pf-cvx');
+    const pfCvxH     = document.getElementById('pf-cvx-h');
+    const pfCvxFacts = document.getElementById('pf-cvx-facts');
+    const pfCvxEmpty = document.getElementById('pf-cvx-empty');
+    const pfCvxAct   = document.getElementById('pf-cvx-act');
+    const pfCvxBtn   = document.getElementById('pf-cvx-btn');
+    const pfCvxOld   = document.getElementById('pf-cvx-old');
+    const pfCvxNote  = document.getElementById('pf-cvx-status');
+    const CVX_H = pfCvxH ? pfCvxH.textContent : '';
+    const span = (a, b) => [a, b].filter(Boolean).join(' – ');
+    // cv_extracts.data as clean lists (every field may be missing; the text
+    // comes from a model, so it only ever goes in via textContent).
+    function cvxData(row) {
+      const d = row && row.data && typeof row.data === 'object' ? row.data : {};
+      const s = (v) => (typeof v === 'string' ? v.trim() : '');
+      const objs = (v) => (Array.isArray(v) ? v.filter((o) => o && typeof o === 'object') : []);
+      return {
+        headline: s(d.headline),
+        summary: s(d.summary),
+        experience: objs(d.experience).map((e) => ({ title: s(e.title), company: s(e.company), start: s(e.start), end: s(e.end),
+          location: s(e.location), bullets: (Array.isArray(e.bullets) ? e.bullets : []).map(s).filter(Boolean) }))
+          .filter((e) => e.title || e.company),
+        education: objs(d.education).map((e) => ({ school: s(e.school), degree: s(e.degree), field: s(e.field), start: s(e.start), end: s(e.end) }))
+          .filter((e) => e.school || e.degree || e.field),
+        certifications: objs(d.certifications).map((c) => ({ name: s(c.name), issuer: s(c.issuer), year: s(c.year) })).filter((c) => c.name),
+        skills: (Array.isArray(d.skills) ? d.skills : []).map(s).filter(Boolean),
+        languages: objs(d.languages).map((l) => ({ name: s(l.name), level: s(l.level) })).filter((l) => l.name),
+      };
+    }
+    function fillCvx() {
+      if (!pfCvx) return;
+      const d = cvx ? cvxData(cvx) : null;
+      pfCvx.hidden = !d;
+      if (d) {
+        pfCvxH.textContent = cvx.read_at ? fillIn(pfCvxH.dataset.fmt, { date: fmtDate(cvx.read_at) }) : CVX_H;
+        const rows = {
+          headline: d.headline,
+          summary: d.summary,
+          experience: d.experience.map((e) => [e.title, e.company].filter(Boolean).join(' — ') + (span(e.start, e.end) ? ' · ' + span(e.start, e.end) : '')).join('\n'),
+          education: d.education.map((e) => [e.school, [e.degree, e.field].filter(Boolean).join(', '), span(e.start, e.end)].filter(Boolean).join(' · ')).join('\n'),
+          certifications: d.certifications.map((c) => [c.name, c.issuer, c.year].filter(Boolean).join(' · ')).join('\n'),
+          skills: d.skills.join(', '),
+          languages: d.languages.map((l) => (l.level ? l.name + ' — ' + l.level : l.name)).join('\n'),
+        };
+        let any = false;
+        pfCvxFacts.querySelectorAll('[data-cvx]').forEach((row) => { if (setRow(row, rows[row.dataset.cvx])) any = true; });
+        const sum = pfCvxFacts.querySelector('[data-cvx="summary"] dd');
+        if (sum) sum.title = d.summary;                  // clamped to 3 lines; the whole text here
+        pfCvxEmpty.hidden = any;
+      }
+      const old = !!cvx && cvx.cv_path !== cvPath;
+      pfCvxBtn.hidden = !cvPath;
+      pfCvxBtn.textContent = !cvx || old ? pfCvxBtn.dataset.labelRead : pfCvxBtn.dataset.labelAgain;
+      if (cvxRun) { pfCvxBtn.setAttribute('aria-disabled', 'true'); pfCvxBtn.setAttribute('aria-busy', 'true'); }
+      else { pfCvxBtn.removeAttribute('aria-disabled'); pfCvxBtn.removeAttribute('aria-busy'); }
+      pfCvxOld.hidden = !old;
+      pfCvxAct.hidden = pfCvxBtn.hidden && pfCvxOld.hidden;
     }
 
     // From your preferences: salary range, q5 / q20 / q22 and the count.
@@ -3512,6 +3791,7 @@
       paintCv();
       await showCv();
       cvSay('ok', cvModalEl.dataset.msgUploaded);
+      readCvNow(file, 'upload');                     // read it right away (CAR-03); the upload counts as done
     });
     document.getElementById('account-cv-remove').addEventListener('click', async () => {
       if (!window.confirm(cvModalEl.dataset.confirmRemove)) return;
@@ -3522,6 +3802,106 @@
       paintCv();
       cvModal.close();
     });
+
+    // ---- CV reading (8 Nov 2026, CAR-03): after every upload (status in
+    // this dialog) and from the Read button in Profile details (status under
+    // it; while any reading runs that line says so too, so the greyed-out
+    // button explains itself). Steps: is reading switched on ({ check }) →
+    // the PDF's text (the File in hand, or the stored CV via its signed URL)
+    // → names and contact details removed (CvRead) → career-read-cv → the
+    // saved row goes into Profile details and My simple CV.
+    let cvxSeen = false;       // the function has answered once: a later network error is a real error
+    const cvxMsg = (k) => cvModalEl.dataset[k] || '';
+    const pfAiSay = (kind, text) => { pfCvxNote.textContent = text; pfCvxNote.dataset.kind = kind; pfCvxNote.hidden = !text; };
+    // The extract arrived (page start or a reading): repaint what shows it.
+    function setCvx(row) {
+      cvx = row && row.data && typeof row.data === 'object' ? row : null;
+      fillCv();
+      if (scvModal.isOpen) paintSimpleCv();
+    }
+    // A failed call → the line to show. Missing function (404, or a network
+    // error before it ever answered) and not_ready → calm "not switched on
+    // yet"; limits / no text / too long → the server's own words.
+    async function cvxFailure(error, data) {
+      let code = '', message = '', status = 0;
+      if (data && data.error) { code = clean(data.error.code); message = clean(data.error.message); }
+      const ctx = error && error.context;
+      if (ctx && typeof ctx.status === 'number') {
+        status = ctx.status;
+        try {
+          const body = typeof ctx.json === 'function' ? await ctx.json() : null;
+          if (body && body.error) { code = clean(body.error.code); message = clean(body.error.message); }
+        } catch (_e) { /* not JSON: the status says enough */ }
+      }
+      if (code) cvxSeen = true;
+      const network = !!error && !status;
+      if (status === 404 || code === 'not_ready' || (network && !cvxSeen)) return { kind: 'ok', text: cvxMsg('msgNotOn') };
+      if (['user_limit', 'total_limit', 'no_text', 'too_long'].indexOf(code) !== -1 && message) return { kind: 'error', text: message };
+      return { kind: 'error', text: cvxMsg('msgReadError') };
+    }
+    async function cvxAsk(call) {
+      let res;
+      try { res = await call(); } catch (err) { res = { data: null, error: err }; }
+      const data = res && res.data, error = res && res.error;
+      if (!error && data && data.ok) { cvxSeen = true; return { data }; }
+      return { fail: await cvxFailure(error, data) };
+    }
+    async function cvxSteps(file, path) {
+      const chk = await cvxAsk(() => Auth.checkCvReading());
+      if (chk.fail) return chk;
+      if (!chk.data.ready) return { fail: { kind: 'ok', text: cvxMsg('msgNotOn') } };
+      let bytes;
+      if (file) bytes = await file.arrayBuffer();
+      else {
+        const { data, error } = await Auth.cvUrl(path);
+        if (error || !data) throw new Error('cv url');
+        const r = await fetch(data.signedUrl);
+        if (!r.ok) throw new Error('cv fetch');
+        bytes = await r.arrayBuffer();
+      }
+      const text = await CvRead.prepare(bytes, current.user, profile);
+      if (!text) return { fail: { kind: 'error', text: cvxMsg('msgNoText') } };
+      if (cvPath !== path) return {};                // replaced meanwhile: the newer file is read next
+      const res = await cvxAsk(() => Auth.readCv(text));
+      if (res.fail) return res;
+      return res.data.extract ? { extract: res.data.extract } : { fail: { kind: 'error', text: cvxMsg('msgReadError') } };
+    }
+    function cvxCounts(row) {
+      const d = cvxData(row);
+      return fillIn(cvxMsg('msgRead'), { jobs: d.experience.length, skills: d.skills.length, schools: d.education.length })
+        .replace(/\b1 (job|skill|school)s\b/g, '1 $1');
+    }
+    async function readCvNow(file, where) {
+      if (!current || !current.user || !cvPath) return;            // nothing runs signed out
+      const uid = current.user.id;
+      const path = cvPath;
+      const say = (kind, text, done) => {
+        if (cvPath !== path || !current || current.user.id !== uid) return;   // a newer file / person: quiet
+        pfAiSay(kind, text);
+        if (where === 'upload') cvSay(kind, cvxMsg('msgUploaded') + ' ' + text + (done ? ' ' + cvxMsg('msgReadSee') : ''));
+      };
+      if (cvxRun) { cvxNext = { file, path, where }; say('busy', cvxMsg('msgReading')); return; }
+      cvxRun = { path };
+      fillCvx();
+      say('busy', cvxMsg('msgReading'));
+      let out;
+      try { out = await cvxSteps(file, path); } catch (_e) { out = { fail: { kind: 'error', text: cvxMsg('msgReadError') } }; }
+      cvxRun = null;
+      const mine = !!current && current.user.id === uid;
+      if (mine && out.extract) setCvx(out.extract);
+      if (out.fail) say(out.fail.kind, out.fail.text);
+      else if (out.extract) say('ok', cvxCounts(out.extract), true);
+      fillCvx();
+      const next = cvxNext;
+      cvxNext = null;
+      if (mine && next && next.path === cvPath) readCvNow(next.file, next.where);
+    }
+    if (pfCvxBtn) {
+      pfCvxBtn.addEventListener('click', () => {
+        if (pfCvxBtn.getAttribute('aria-disabled') === 'true') return;
+        readCvNow(null, 'button');
+      });
+    }
 
     // ---- My simple CV (8 Nov 2026): a CV made only from what Profile
     // details shows — the names and LinkedIn link as typed there now, the
@@ -3546,6 +3926,11 @@
                     'Your uploaded CV will be added once it is read automatically.',
       noteLinkedinUndated: 'Made from your LinkedIn profile and your profile details. ' +
                            'Your uploaded CV will be added once it is read automatically.',
+      // With the CV reading (CAR-03): "Made from your uploaded CV (read on …),
+      // your LinkedIn profile (copied on …) and your profile details."
+      noteSources: 'Made from {sources} and your profile details.',
+      srcCv: 'your uploaded CV (read on {date})', srcCvUndated: 'your uploaded CV',
+      srcLinkedin: 'your LinkedIn profile (copied on {date})', srcLinkedinUndated: 'your LinkedIn profile',
     };
     const scvWord = (k) => scvEl.dataset[k] || SCV_WORDS[k];
     let scvModel = null;
@@ -3793,18 +4178,43 @@
     }
 
     // Languages: the preferences first (q20 asks "the level we should list"),
-    // e.g. "Georgian native, English C1", then LinkedIn's languages not named there.
-    function languagePairs(q20, liLangs) {
+    // e.g. "Georgian native, English C1", then the CV reading's languages not
+    // named there, then LinkedIn's not named. from.cv / from.li: which added any.
+    function languagePairs(q20, cvLangs, liLangs, from) {
       const key = (s) => s.toLowerCase().split(/[\s(:–—-]/)[0];
       const pairs = [];
       String(q20 || '').split(/\s*[,;\n]\s*/).map(clean).filter(Boolean).forEach((item) => {
         const m = item.match(/^(\p{L}+)\s*[:–—-]?\s*(.*)$/u);
         pairs.push(m ? [m[1], clean(m[2]).replace(/^\((.*)\)$/, '$1')] : [item, '']);
       });
-      (liLangs || []).forEach((l) => {
-        if (!pairs.some((p) => key(p[0]) === key(l.name))) pairs.push([l.name, l.level]);
-      });
+      [[cvLangs, 'cv'], [liLangs, 'li']].forEach(([list, src]) => (list || []).forEach((l) => {
+        if (pairs.some((p) => key(p[0]) === key(l.name))) return;
+        pairs.push([l.name, l.level]);
+        if (from) from[src] = true;
+      }));
       return pairs;
+    }
+
+    // The CV reading (cv_extracts) in the LinkedIn copy's shapes, for My
+    // simple CV. Used only when it was read from the CV on file now.
+    function readCvx(row) {
+      const d = cvxData(row);
+      const x = {
+        headline: liCut(liTidy(d.headline), 220),
+        summary: liCut(liTidy(d.summary), 700),
+        roles: d.experience.map((e) => ({ title: e.title, company: e.company, dates: span(e.start, e.end), place: e.location,
+          lines: e.bullets.slice(0, 3).map((b) => liCut(liTidy(b), 220)) })),
+        schools: d.education.map((e) => {
+          const what = [e.degree, e.field].filter(Boolean).join(', ');
+          return { school: e.school || what, degree: e.school ? what : '', dates: span(e.start, e.end) };
+        }),
+        certs: d.certifications,
+        skills: d.skills,
+        languages: d.languages,
+        read: clean(row && row.read_at),
+      };
+      x.has = !!(x.summary || x.roles.length || x.schools.length || x.certs.length || x.skills.length);
+      return x;
     }
 
     // The model. Sections come in five kinds: text, rows (label / value),
@@ -3824,26 +4234,53 @@
       if (slug) contact.push({ text: 'linkedin.com/in/' + safeDecode(slug), href: 'https://www.linkedin.com/in/' + slug + '/' });
       const sections = [];
       const langs = answerText(a.q20) || clean(c.work_language);
-      if (li.has) {
-        // Where the person works now: the place of the latest role that has one.
-        const place = li.roles.map((r) => r.place.replace(/\s*[·•]\s*(?:hybrid|remote|on-site|onsite)$/i, ''))
-          .find((p) => p && !LI_MODE.test(p));
+      // The CV reading (CAR-03), when it belongs to the CV on file now.
+      const x = cvx && cvPath && cvx.cv_path === cvPath ? readCvx(cvx) : { has: false };
+      const from = { cv: false, li: false };          // which sources the CV is made from (the note)
+      if (x.has || li.has) {
+        // Per section the first source with content wins: the CV reading,
+        // then LinkedIn (counted only with its own content, as before).
+        const L = li.has ? li : { summary: '', roles: [], schools: [], certs: [], skills: [], languages: [] };
+        const take = (cvVal, liVal) => {
+          if (cvVal && cvVal.length) { from.cv = true; return cvVal; }
+          if (liVal && liVal.length) { from.li = true; return liVal; }
+          return null;
+        };
+        const noMode = (p) => clean(p).replace(/\s*(?:[·•,;(–—-]\s*)?(?:hybrid|remote|on-site|onsite)\)?$/i, '');
+        // Where the person works now: the newest CV role's place, else the
+        // place of LinkedIn's latest role that has one.
+        const place = take(x.has && x.roles.length ? noMode(x.roles[0].place) : '',
+          L.roles.map((r) => r.place.replace(/\s*[·•]\s*(?:hybrid|remote|on-site|onsite)$/i, '')).find((p) => p && !LI_MODE.test(p)) || '');
         if (place) contact.push({ text: place });
-        if (li.summary) sections.push({ title: scvWord('hSummary'), text: li.summary });
-        if (li.roles.length) {
-          sections.push({ title: scvWord('hExperience'), entries: li.roles.map((r) =>
-            ({ side: r.dates, main: r.title, org: r.company, sub: r.place, lines: r.lines })) });
+        const summary = take(x.has ? x.summary : '', L.summary);
+        if (summary) sections.push({ title: scvWord('hSummary'), text: summary });
+        const roles = take(x.has ? x.roles : [], L.roles);    // never a mix of the two lists
+        if (roles) {
+          sections.push({ title: scvWord('hExperience'), entries: roles.map((r) =>
+            ({ side: r.dates, main: r.title || r.company, org: r.title ? r.company : '', sub: r.place, lines: r.lines })) });
         }
-        if (li.schools.length) {
-          sections.push({ title: scvWord('hEducation'), entries: li.schools.map((s) =>
+        const schools = take(x.has ? x.schools : [], L.schools);
+        if (schools) {
+          sections.push({ title: scvWord('hEducation'), entries: schools.map((s) =>
             ({ side: s.dates, main: s.school, org: '', sub: s.degree, lines: [] })) });
         }
-        if (li.certs.length) {
-          sections.push({ title: scvWord('hCertificates'), entries: li.certs.map((x) =>
-            ({ side: x.year, main: x.name, org: '', sub: x.issuer, lines: [] })) });
+        const certs = take(x.has ? x.certs : [], L.certs);
+        if (certs) {
+          sections.push({ title: scvWord('hCertificates'), entries: certs.map((z) =>
+            ({ side: z.year, main: z.name, org: '', sub: z.issuer, lines: [] })) });
         }
-        if (li.skills.length) sections.push({ title: scvWord('hSkills'), chips: li.skills });
-        const pairs = languagePairs(langs, li.languages);
+        // Skills: the CV's first, then LinkedIn's not listed yet; at most 15.
+        const skills = [];
+        const seen = new Set();
+        [[x.has ? x.skills : [], 'cv'], [L.skills, 'li']].forEach(([list, src]) => list.forEach((t) => {
+          const k = t.toLowerCase();
+          if (skills.length >= 15 || seen.has(k)) return;
+          seen.add(k);
+          skills.push(t);
+          from[src] = true;
+        }));
+        if (skills.length) sections.push({ title: scvWord('hSkills'), chips: skills });
+        const pairs = languagePairs(langs, x.has ? x.languages : [], L.languages, from);
         if (pairs.length) sections.push({ title: h.hLanguages, pairs });
       } else {
         // No LinkedIn copy: the short version, as before.
@@ -3854,12 +4291,16 @@
         if (clean(c.locations)) sections.push({ title: h.hLocations, text: clean(c.locations) });
         if (langs) sections.push({ title: h.hLanguages, text: langs });
       }
+      const headline = (x.has && x.headline) || (li.has && li.headline) || clean(c.headline) || targets[0] || '';
+      if (li.has && li.headline && !(x.has && x.headline)) from.li = true;
       return {
         name: [typed('first_name'), typed('middle_name'), typed('last_name')].filter(Boolean).join(' '),
-        headline: (li.has && li.headline) || clean(c.headline) || targets[0] || '',
+        headline,
         contact,
         sections,
-        copied: li.has ? li.copied : null,           // null = not made from LinkedIn
+        // null = not made from that source (scvSources names only the ones used)
+        copied: li.has && (from.li || !x.has) ? li.copied : null,
+        read: x.has && from.cv ? x.read : null,
       };
     }
 
@@ -3947,13 +4388,25 @@
     // Opens on top of Profile details. The print copy waits, hidden, in
     // <body> while the dialog is open, so Download PDF (or Ctrl+P) prints the
     // CV alone; closing the dialog removes it again (see scvModal above).
+    // The note under the title names only the sources used. Without the CV
+    // reading: as before (LinkedIn note, or the plain one).
+    function scvSources(m) {
+      if (m.read == null && m.copied == null) return SCV_SUB;
+      const liDay = m.copied ? dayOf(m.copied) : '';
+      if (m.read == null) return liDay ? fillIn(scvWord('noteLinkedin'), { date: liDay }) : scvWord('noteLinkedinUndated');
+      const cvDay = m.read ? dayOf(m.read) : '';
+      const parts = [cvDay ? fillIn(scvWord('srcCv'), { date: cvDay }) : scvWord('srcCvUndated')];
+      if (m.copied != null) parts.push(liDay ? fillIn(scvWord('srcLinkedin'), { date: liDay }) : scvWord('srcLinkedinUndated'));
+      return fillIn(scvWord('noteSources'), { sources: parts.join(', ') });
+    }
     function openSimpleCv() {
+      paintSimpleCv();
+      scvModal.open('#scv-pdf');
+    }
+    // Also when the CV reading arrives while the dialog is open.
+    function paintSimpleCv() {
       scvModel = cvModel();
-      if (scvSub) {                                   // the note says what the CV is made from
-        const day = scvModel.copied ? dayOf(scvModel.copied) : '';
-        scvSub.textContent = scvModel.copied == null ? SCV_SUB
-          : day ? fillIn(scvWord('noteLinkedin'), { date: day }) : scvWord('noteLinkedinUndated');
-      }
+      if (scvSub) scvSub.textContent = scvSources(scvModel);   // the note says what the CV is made from
       scvPage.textContent = '';
       scvPage.appendChild(buildSheet(scvModel, false));
       if (scvPrint) scvPrint.remove();
@@ -3963,7 +4416,6 @@
       document.body.appendChild(scvPrint);
       document.body.classList.add('is-printing-cv');
       scvSay('', scvModel.name ? '' : scvEl.dataset.msgNoName);
-      scvModal.open('#scv-pdf');
     }
     document.getElementById('pf-simple-cv').addEventListener('click', openSimpleCv);
 

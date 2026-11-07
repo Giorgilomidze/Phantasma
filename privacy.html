@@ -65,7 +65,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261108d" />
+  <link rel="stylesheet" href="./styles.css?v=20261108e" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -144,11 +144,13 @@
         <li>Google provides sign-in (if you choose it; its sign-in button loads from Google when you open the login window) and, with your consent, advertising and measurement.</li>
         <li>LinkedIn provides sign-in if you choose it: you log in on LinkedIn's own page, and it shares your name, email address and profile photo with us.</li>
         <li>Google Calendar (appointment scheduling) handles call booking.</li>
+        <li>Anthropic (Claude AI) reads the text of the CV you upload, after your name and contact details are removed (see section 5).</li>
       </ul>
       <p>We do not sell your data.</p>
-      <h2>5. Use of AI tools</h2>
-      <!-- OWNER: confirm with a lawyer: whether this wording is enough. -->
+      <h2 id="ai">5. Use of AI tools</h2>
+      <!-- OWNER: confirm with a lawyer: whether this wording is enough. The CV-reading paragraph was added 8 Nov 2026 with the automatic CV reading (CAR-03). -->
       <p>We may use AI tools to help with drafting. Only anonymised text is processed by them: names and contact details are removed first. A person reviews all AI-assisted work before you see it.</p>
+      <p>One exception: the CV you upload is read automatically. Our site takes the text out of the file and first removes your name and contact details (email address, phone numbers, links, street address); Anthropic's Claude AI then sorts the rest into experience, education, skills and languages, and you see that result in your account straight away. We keep only that result, not the text.</p>
       <h2>6. Your approval</h2>
       <p>We never send an application in your name unless you approve it first.</p>
       <h2>7. How long we keep it</h2>
@@ -243,6 +245,6 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
-  <script src="./script.js?v=20261108d" defer></script>
+  <script src="./script.js?v=20261108e" defer></script>
 </body>
 </html>

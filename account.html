@@ -66,7 +66,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261108d" />
+  <link rel="stylesheet" href="./styles.css?v=20261108e" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -450,6 +450,28 @@
               <button class="btn btn-sm account__quiet" type="button" id="pf-cv-btn"
                       data-label-upload="Upload CV" data-label-review="Review my CV">Upload CV</button>
             </div>
+            <!-- Read automatically (8 Nov 2026, CAR-03): the own cv_extracts row,
+                 written by the Edge Function career-read-cv. Filled by fillCvx(). -->
+            <div class="profile-cvx" id="pf-cvx" hidden>
+              <h4 class="profile-src__sub" id="pf-cvx-h" data-fmt="Read automatically on {date}">Read automatically</h4>
+              <p class="profile-src__meta">Names and contact details were removed before reading.</p>
+              <dl class="profile-facts" id="pf-cvx-facts">
+                <div data-cvx="headline"><dt>Headline</dt><dd></dd></div>
+                <div data-cvx="summary"><dt>Summary</dt><dd class="profile-facts__clamp"></dd></div>
+                <div data-cvx="experience"><dt>Experience</dt><dd></dd></div>
+                <div data-cvx="education"><dt>Education</dt><dd></dd></div>
+                <div data-cvx="certifications"><dt>Certifications</dt><dd></dd></div>
+                <div data-cvx="skills"><dt>Skills</dt><dd></dd></div>
+                <div data-cvx="languages"><dt>Languages</dt><dd></dd></div>
+              </dl>
+              <p class="profile-src__none" id="pf-cvx-empty" hidden>Nothing usable was found in it.</p>
+            </div>
+            <p class="profile-cvx__act" id="pf-cvx-act" hidden>
+              <button class="btn btn-sm account__quiet" type="button" id="pf-cvx-btn"
+                      data-label-read="Read my CV" data-label-again="Read again">Read my CV</button>
+              <span class="profile-src__meta" id="pf-cvx-old" hidden>This was read from your previous CV.</span>
+            </p>
+            <p class="account-form__status" id="pf-cvx-status" role="status" aria-live="polite" hidden></p>
             <!-- From the own candidates row (written by the pipeline). -->
             <h4 class="profile-src__sub" id="pf-cv-read-h" hidden>What we read from your CV</h4>
             <dl class="profile-facts" id="pf-cv-read" hidden>
@@ -504,7 +526,12 @@
   <div class="auth-modal" id="cv-modal" role="dialog" aria-modal="true" aria-labelledby="cv-title" hidden
        data-msg-uploading="Uploading…" data-msg-uploaded="CV uploaded." data-msg-type="PDF only, please."
        data-msg-size="The file must be 5 MB or smaller." data-msg-error="Could not upload the CV — please try again."
-       data-confirm-remove="Remove your CV?">
+       data-confirm-remove="Remove your CV?"
+       data-msg-reading="Reading your CV… (this can take up to a minute)"
+       data-msg-read="Read: {jobs} jobs, {skills} skills, {schools} schools." data-msg-read-see="See Profile details."
+       data-msg-not-on="Automatic reading is not switched on yet."
+       data-msg-no-text="This PDF has no readable text (it may be a scan), so it can't be read automatically."
+       data-msg-read-error="Could not read your CV — please try again later.">
     <div class="auth-modal__backdrop" data-close></div>
     <div class="auth-modal__panel auth-modal__panel--wide">
       <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
@@ -512,6 +539,8 @@
         <div>
           <h2 class="auth-modal__title" id="cv-title">Your CV</h2>
           <p class="account__hint">PDF format, maximum 5 MB. Uploading a new one replaces the old.</p>
+          <p class="account__hint account-cv__ai">Your CV is read automatically when you upload it: we remove your name and contact details first, then Claude AI sorts the rest.
+            <a class="link-quiet" href="./privacy.html#ai" target="_blank" rel="noopener">How we use AI<span class="visually-hidden"> (opens in a new tab)</span></a></p>
         </div>
         <div class="account__actions account-cv__actions">
           <a class="btn btn-sm account__quiet" id="account-cv-download" href="#" target="_blank" rel="noopener">Download</a>
@@ -625,7 +654,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261108d"></script>
+  <script src="./script.js?v=20261108e"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
   <script src="./career.js?v=20261107a"></script>
 </body>
