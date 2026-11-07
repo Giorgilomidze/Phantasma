@@ -3634,11 +3634,17 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   .scv-panel { padding: var(--space-6) var(--space-4) var(--space-4); }
 }
 
-/* My simple CV (8 Nov 2026). The preview sheet is white, A4-shaped, and sized
-   in em of one base that is 10 pt on a 210 mm page (1.68% of its width), so
-   the preview, the print copy and the JPG that script.js draws (cvJpeg) share
-   one layout: margins 18 mm (5.1em), name 2.6em, headline 1.3em, headings
-   0.85em, text 1.05em. Change a size here, change it in cvJpeg too. */
+/* My simple CV (8 Nov 2026; LinkedIn content and this look later that day,
+   docs/specs/simple-cv-linkedin-2026-11-08.md). The preview sheet is white,
+   at least A4-shaped (a longer CV grows), and sized in em of one base that is
+   10 pt on a 210 mm page (1.68% of its width), so the preview, the print copy
+   and the JPG that script.js draws (cvDraw) share one layout: side margins
+   18 mm (5.1em); a header band (padding 3.6em / 2.2em) with the name 2.6em,
+   headline 1.25em, contact 0.95em; headings 0.85em; text 1.05em; entries =
+   a 9.4em date column + 1.4em gap, title 1.05em, sub line 0.92em, bullets
+   0.95em; skill chips 0.88em. Change a size here, change it in cvDraw too.
+   Orange only for the rule under the band and the bullet dots; everything
+   reads in black and white too. */
 .scv-panel { width: min(760px, 100%); }
 .scv-hint { margin: 0 0 var(--space-3); }
 .scv-status { margin: 0 0 var(--space-3); }
@@ -3654,8 +3660,8 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .scv-page { container-type: inline-size; width: min(100%, 620px); margin-inline: auto; }
 .scv {
   box-sizing: border-box;
-  aspect-ratio: 210 / 297;
-  padding: 5.1em;
+  aspect-ratio: 210 / 297;              /* at least one A4 page */
+  padding: 0 5.1em 5.1em;
   background: #fff;
   color: var(--ink);
   font-family: "General Sans", "Noto Sans Georgian", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -3665,6 +3671,15 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   overflow-wrap: anywhere;
   box-shadow: 0 1px 2px rgb(20 33 61 / 0.08), 0 12px 32px -16px rgb(20 33 61 / 0.25);
 }
+/* The header band runs to the sheet's edges; print-color-adjust keeps it
+   (and the dots and chips) when the print window drops backgrounds. */
+.scv__head {
+  margin: 0 -5.1em;
+  padding: 3.6em 5.1em 2.2em;
+  background: var(--surface);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 .scv__head > * { margin: 0; }
 .scv__name {
   font-family: "Fraunces", "Noto Sans Georgian", "Iowan Old Style", Georgia, serif;
@@ -3672,37 +3687,94 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   font-weight: 500;
   line-height: 1.15;
 }
-.scv__headline { font-size: 1.3em; font-weight: 500; line-height: 1.35; color: var(--ink-soft); }
+.scv__headline { font-size: 1.25em; font-weight: 500; line-height: 1.35; color: var(--ink-soft); }
 .scv__head > * + .scv__headline { margin-top: 0.35em; }
-.scv__contact { display: flex; flex-wrap: wrap; gap: 0 1.6em; }
-.scv__head > * + .scv__contact { margin-top: 0.8em; }
-.scv__rule { width: 3.4em; margin-top: 1.3em; border-top: 0.25em solid var(--accent); }
+.scv__contact { display: flex; flex-wrap: wrap; gap: 0 1.6em; font-size: 0.95em; }
+.scv__head > * + .scv__contact { margin-top: 0.9em; }
+.scv__rule { width: 3.4em; border-top: 0.25em solid var(--accent); }
 .scv__sec { margin-top: 1.9em; }
 .scv__h {
-  margin: 0 0 0.6em;
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  margin: 0 0 0.7em;
   font-family: inherit;
   font-size: 0.85em;
   font-weight: 500;
   line-height: 1.4;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
+.scv__h::after { content: ""; flex: 1 1 auto; border-top: 1px solid var(--rule); }
 .scv__text { margin: 0; font-size: 1.05em; white-space: pre-line; }
 .scv__facts { margin: 0; display: grid; gap: 0.3em; font-size: 1.05em; }
 .scv__facts > div { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); column-gap: 1em; }
 .scv__facts dt { color: var(--ink-soft); }
 .scv__facts dd { margin: 0; }
+/* Experience, education, certificates: dates in the left column, then the
+   title — company, the place / degree / issuer, and up to three bullets. */
+.scv__entry {
+  display: grid;
+  grid-template-columns: 9.4em minmax(0, 1fr);
+  column-gap: 1.4em;
+  align-items: baseline;
+}
+.scv__entry + .scv__entry { margin-top: 1.05em; }
+.scv__side { margin: 0; font-size: 0.9em; line-height: 1.45; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.scv__main { min-width: 0; }
+.scv__title { margin: 0; font-size: 1.05em; line-height: 1.35; }
+.scv__what { font-weight: 500; }
+.scv__sub { margin: 0.1em 0 0; font-size: 0.92em; line-height: 1.45; color: var(--ink-soft); }
+.scv__list { margin-top: 0.35em; font-size: 0.95em; line-height: 1.45; }
+.scv__list li { position: relative; padding-left: 1.1em; }
+.scv__list li + li { margin-top: 0.15em; }
+.scv__list li::before {
+  content: "";
+  position: absolute;
+  left: 0.3em;
+  top: 0.565em;                         /* centred on the first line (1.45em) */
+  width: 0.32em;
+  height: 0.32em;
+  border-radius: 50%;
+  background: var(--accent);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.scv__chips { display: flex; flex-wrap: wrap; gap: 0.45em; }
+.scv__chips li {
+  padding: 0.2em 0.7em;
+  font-size: 0.88em;
+  line-height: 1.35;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.scv__pairs { font-size: 1.05em; }
+.scv__pairs li + li { margin-top: 0.2em; }
+.scv__pair { font-weight: 500; }
+.scv__level { color: var(--ink-soft); }
 /* Download PDF: while the dialog is open, <body> carries .is-printing-cv and a
-   hidden .scv-print copy of the CV; printing shows that copy alone on an A4
-   page without margins (the CV has its own), so "Save as PDF" gives the CV. */
+   hidden .scv-print copy of the CV; printing shows that copy alone on A4
+   pages, so "Save as PDF" gives the CV. Side margins come from the CV itself
+   (its band runs to the edges); top and bottom from @page, except the first
+   page's top, where the band starts. A role, a school, a certificate or a
+   language never splits across pages, and a heading stays with what follows. */
 .scv-print { display: none; }
 @media print {
-  @page simple-cv { size: A4; margin: 0; }
+  @page simple-cv { size: A4; margin: 18mm 0; }
+  @page simple-cv:first { margin-top: 0; }
   body.is-printing-cv { overflow: visible !important; background: #fff; }
   body.is-printing-cv > :not(.scv-print) { display: none !important; }
   body.is-printing-cv > .scv-print { display: block; page: simple-cv; }
-  .scv-print .scv { aspect-ratio: auto; font-size: 10pt; box-shadow: none; }
+  .scv-print .scv { aspect-ratio: auto; padding: 0 5.1em; font-size: 10pt; box-shadow: none; }
+  .scv-print .scv__head,
+  .scv-print .scv__entry,
+  .scv-print .scv__facts > div,
+  .scv-print .scv__pairs li { break-inside: avoid; }
+  .scv-print .scv__h { break-after: avoid; }
 }
 .account-newpass {
   display: grid;

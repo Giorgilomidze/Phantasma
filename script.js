@@ -1463,10 +1463,12 @@
     // Profile details, "What we read from your CV" (8 Nov 2026): the client's
     // own candidates row, written by the pipeline (RLS: account_id = auth.uid();
     // the filter keeps it one row should admins ever read more). No row yet = null.
+    // Also linkedin_audit, the LinkedIn copy My simple CV is made from (8 Nov
+    // 2026); should that column ever be unreadable, the row loads without it.
+    const CANDIDATE_COLS = 'headline, company_current, function, seniority, target_titles, locations, work_language, profile_url';
     function loadCandidate() {
-      return getClient().from('candidates')
-        .select('headline, company_current, function, seniority, target_titles, locations, work_language, profile_url')
-        .eq('account_id', session.user.id).maybeSingle();
+      const q = (cols) => getClient().from('candidates').select(cols).eq('account_id', session.user.id).maybeSingle();
+      return q(CANDIDATE_COLS + ', linkedin_audit').then((res) => (res.error ? q(CANDIDATE_COLS) : res));
     }
 
     // CV: upload the new file first, then delete the old one, then point the
@@ -3521,16 +3523,31 @@
       cvModal.close();
     });
 
-    // ---- My simple CV (8 Nov 2026): a one-page CV made only from what
-    // Profile details shows — the names and LinkedIn link as typed there now,
-    // the login email, the candidates row and the preferences. Missing pieces
-    // are left out; nothing is made up. One model feeds the preview, the
-    // print copy (Download PDF) and the canvas (Download JPG), so they match.
+    // ---- My simple CV (8 Nov 2026): a CV made only from what Profile
+    // details shows — the names and LinkedIn link as typed there now, the
+    // login email, the candidates row and the preferences — and, since later
+    // that day, the person's LinkedIn copy (candidates.linkedin_audit, see
+    // readLinkedIn below). Missing pieces are left out; nothing is made up.
+    // One model feeds the preview, the print copy (Download PDF) and the
+    // canvas (Download JPG), so they match.
     const scvEl   = document.getElementById('scv-modal');
     const scvPage = document.getElementById('scv-page');
     const scvNote = document.getElementById('scv-status');
     const scvJpg  = document.getElementById('scv-jpg');
+    const scvSub  = document.getElementById('scv-sub');
+    const SCV_SUB = scvSub ? scvSub.textContent : '';      // the note under the title without a LinkedIn copy
     const scvSay  = (kind, text) => { scvNote.textContent = text; scvNote.dataset.kind = kind; scvNote.hidden = !text; };
+    // The words of the LinkedIn version (account.html is English only). A
+    // data-* of the same name on #scv-modal wins, like data-h-languages there.
+    const SCV_WORDS = {
+      hSummary: 'Summary', hExperience: 'Experience', hEducation: 'Education',
+      hCertificates: 'Certifications', hSkills: 'Skills',
+      noteLinkedin: 'Made from your LinkedIn profile (copied on {date}) and your profile details. ' +
+                    'Your uploaded CV will be added once it is read automatically.',
+      noteLinkedinUndated: 'Made from your LinkedIn profile and your profile details. ' +
+                           'Your uploaded CV will be added once it is read automatically.',
+    };
+    const scvWord = (k) => scvEl.dataset[k] || SCV_WORDS[k];
     let scvModel = null;
     let scvPrint = null;          // the hidden print copy, there while the dialog is open
     let scvTitle = '';            // the page title while the PDF's name stands in for it
@@ -3543,30 +3560,306 @@
     const listOf = (t) => clean(t).split(/\s*[\n;,]\s*/).filter(Boolean);
     const safeDecode = (s) => { try { return decodeURIComponent(s); } catch (_e) { return s; } };
 
+    // ---- The LinkedIn copy (8 Nov 2026, docs/specs/simple-cv-linkedin-2026-11-08.md).
+    // candidates.linkedin_audit = { profile_url, retrieved_at, sections: [{ section, text }] }:
+    // the text of the person's LinkedIn page, one block per section, as
+    // sync_local.py copied it. readLinkedIn() picks out what a CV needs:
+    // headline, About, roles, schools, certificates, skills, languages. Pure
+    // (text in, plain objects out). Whatever it does not recognise is left
+    // out, never shown as raw text.
+    const LI_MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
+    const LI_WHEN  = '(?:' + LI_MONTH + '\\s+)?(?:19|20)\\d{2}';
+    const LI_TYPES = '(?:full-time|part-time|contract|self-employed|freelance|internship|apprenticeship|seasonal|permanent|temporary)';
+    // A date line: "Feb 2023 - Present · 3 yrs 8 mos", "Nov 2018 - Oct 2021",
+    // "2010 – 2014", "Jul 2026". [1] = the dates, the part before " · ".
+    const LI_DATES = new RegExp('^(' + LI_WHEN + '(?:\\s*[-–—]\\s*(?:' + LI_WHEN + '|present|now))?)(?:\\s*[·•]\\s*\\S.*)?$', 'i');
+    // A company with several roles under it: its second line is a total, "Full-time · 5 yrs 11 mos".
+    const LI_TOTAL = new RegExp('^(?:' + LI_TYPES + '\\s*[·•]\\s*)?\\d+\\s+(?:yrs?|mos?)(?:\\s+\\d+\\s+mos?)?$', 'i');
+    const LI_TYPE  = new RegExp('^' + LI_TYPES + '$', 'i');                 // "Full-time" alone
+    const LI_CO    = new RegExp('\\s*[·•]\\s*' + LI_TYPES + '$', 'i');      // "Eco Hydroline · Contract" → the company
+    const LI_MODE  = /^(?:hybrid|remote|on-site|onsite)$/i;
+    const LI_FILE  = /\.(?:pdf|png|jpe?g|gif|webp|docx?|pptx?)$/i;          // an attached file's name
+    const LI_MORE  = /^(?:(?:…|\.\.\.)\s*)?see more$|^show (?:all|more)\b/i;
+    // Small words a place name may keep in lower case ("Frankfurt am Main").
+    const LI_SMALL = /^(?:am|an|and|da|das|de|del|der|di|do|dos|du|en|et|im|la|le|of|on|sur|the|upon|van|von|y)$/i;
+
+    const liTidy  = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    const liLines = (t) => String(t || '').replace(/\r\n?/g, '\n').split('\n');
+    // Blocks of raw lines (leading spaces kept), split at blank lines.
+    function liBlocks(t) {
+      const out = [[]];
+      liLines(t).forEach((raw) => {
+        if (raw.trim()) out[out.length - 1].push(raw);
+        else if (out[out.length - 1].length) out.push([]);
+      });
+      return out.filter((b) => b.length);
+    }
+    // At most n characters: up to the last sentence end that fits, else
+    // whole words + "…".
+    function liCut(t, n) {
+      if (t.length <= n) return t;
+      const re = /[.!?](?=\s)/g;
+      const head = t.slice(0, n + 1);
+      let end = -1;
+      let m;
+      while ((m = re.exec(head))) end = m.index;
+      if (end >= n * 0.4) return t.slice(0, end + 1).trim();
+      return t.slice(0, n).replace(/\s+\S*$/, '').replace(/[\s,;:–—-]+$/, '') + '…';
+    }
+    // "Berlin, Germany", "Georgia", "Frankfurt am Main": short, letters only, capitalised words.
+    function liIsPlace(t) {
+      if (!t || t.length > 80 || !/^[\p{L}\p{M}\s.,'’-]+$/u.test(t)) return false;
+      const parts = t.split(',').map(liTidy);
+      const words = t.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+      return parts.length <= 4 && parts.every(Boolean) && words.length <= 8 &&
+        words.every((w, i) => /^[\p{Lu}ა-ჿ]/u.test(w) || (i > 0 && LI_SMALL.test(w)));
+    }
+    // A role's location line: a place, a work mode, or "Berlin, Germany · Hybrid".
+    function liIsLocation(t) {
+      const m = /^(.*?)\s*[·•]\s*(?:hybrid|remote|on-site|onsite)$/i.exec(t || '');
+      return m ? (!m[1] || liIsPlace(m[1])) : (LI_MODE.test(t || '') || liIsPlace(t));
+    }
+
+    // Up to 3 description lines of a role, ≤ 220 characters each. Left out:
+    // LinkedIn's skills rows ("Skills: …", " A, B and +4 skills", and a lone
+    // " Employee Training": the row starts with the space its icon leaves and
+    // is always last), sub-headings ending in ":" ("Duties:", "1. ERP:"),
+    // "Company, City, Country" lines naming the role's place, "…see more".
+    function liRoleLines(raw, place) {
+      const where = liTidy(place).replace(/\s*[·•].*$/, '').toLowerCase()
+        .split(/\s*,\s*/).filter((p) => p && !LI_MODE.test(p));
+      const out = [];
+      raw.forEach((r, i) => {
+        let t = liTidy(r);
+        if (out.length >= 3 || !t || LI_MORE.test(t)) return;
+        if (/^skills\s*:/i.test(t) || /\+\s?\d+\s+skills?$/i.test(t)) return;
+        if (/^\s/.test(r) && i === raw.length - 1 && t.length <= 120 && !/[.:;!?]$/.test(t)) return;
+        t = t.replace(/^(?:[•●▪◦·]\s*|[-–—*>]\s+|\d{1,2}[.)]\s+)/, '');       // bullet marks, "1."
+        if (!t || (/:$/.test(t) && t.length <= 60)) return;
+        const low = t.toLowerCase();
+        if (t.length <= 60 && !/[.!?]$/.test(t) && where.some((p) => low.indexOf(', ' + p) !== -1)) return;
+        out.push(liCut(t.replace(/[\s,;:]+$/, ''), 220));
+      });
+      return out;
+    }
+
+    // Experience, in the order given. Two shapes, blocks split at blank lines:
+    // a company with several roles (company / "Full-time · 5 yrs 11 mos", then
+    // blocks of title / dates / location / …) and a single role (title /
+    // "Company · Contract" / dates / location / description).
+    function liRoles(text) {
+      const roles = [];
+      let group = null;                                      // { company, place } of the roles that follow
+      liBlocks(text).forEach((block) => {
+        let raw = block;
+        let L = raw.map(liTidy);
+        if (L.length >= 2 && LI_TOTAL.test(L[1])) {
+          group = { company: L[0], place: '' };
+          let k = 2;
+          if (L[k] && liIsLocation(L[k]) && !(L[k + 1] && LI_DATES.test(L[k + 1]))) group.place = L[k++];
+          raw = raw.slice(k);
+          L = L.slice(k);
+        }
+        let at = -1;
+        let company = '';
+        if (L.length >= 2 && LI_DATES.test(L[1])) {          // title / dates: a role of the company above
+          at = 1;
+          company = group ? group.company : '';
+        } else if (L.length >= 3 && LI_DATES.test(L[2])) {
+          at = 2;
+          if (LI_TYPE.test(L[1])) company = group ? group.company : '';    // "Full-time" alone: still that company
+          else { company = L[1].replace(LI_CO, ''); group = null; }
+        }
+        if (at < 0 || LI_DATES.test(L[0])) return;           // not a role
+        const role = { title: L[0], company, dates: LI_DATES.exec(L[at])[1], place: '', lines: [] };
+        let k = at + 1;
+        if (L[k] && liIsLocation(L[k])) {
+          role.place = L[k++];
+          if (L[k] && LI_MODE.test(L[k]) && liIsPlace(role.place)) role.place += ' · ' + L[k++];
+        }
+        if (!role.place && group) role.place = group.place;
+        role.lines = liRoleLines(raw.slice(k), role.place);
+        roles.push(role);
+      });
+      return roles;
+    }
+
+    // Education: school, then degree / field when there, then the years.
+    function liSchools(text) {
+      const out = [];
+      liBlocks(text).forEach((block) => {
+        const L = block.map(liTidy);
+        const e = { school: L[0], degree: '', dates: '' };
+        if (LI_DATES.test(e.school) || LI_FILE.test(e.school) || /^(?:grade|activities|skills)\b/i.test(e.school)) return;
+        for (let i = 1; i <= 2 && i < L.length; i++) {
+          if (LI_DATES.test(L[i])) { e.dates = LI_DATES.exec(L[i])[1]; break; }
+          if (i === 1 && L[i].length <= 120 && !/[.:]$/.test(L[i]) && !/^(?:grade|activities|skills)\b/i.test(L[i])) e.degree = L[i];
+        }
+        out.push(e);
+      });
+      return out;
+    }
+
+    // Licenses & certifications (max 6): name and issuer are the two lines
+    // before the first detail line ("Issued Nov 2022", "Credential ID …",
+    // "Skills: …"); the year comes from "Issued". Blank lines are no help
+    // here: LinkedIn puts them before the attached files' names.
+    function liCerts(text) {
+      const L = liLines(text).map(liTidy);
+      const META = /^(?:issued\b|expire[sd]\b|credential id\b|skills\s*:|show credential\b)/i;
+      const plain = (t) => !!t && !META.test(t) && !LI_FILE.test(t) && !/:$/.test(t) && !/^[-–—•●▪*]\s/.test(t);
+      const out = [];
+      for (let i = 2; i < L.length && out.length < 6; i++) {
+        if (!META.test(L[i]) || !plain(L[i - 1]) || !plain(L[i - 2])) continue;
+        let year = '';
+        for (let j = i; j < L.length && META.test(L[j]) && !year; j++) {
+          const m = /^issued\s+(?:[a-z]{3,9}\.?\s+)?((?:19|20)\d{2})\b/i.exec(L[j]);
+          if (m) year = m[1];
+        }
+        out.push({ name: L[i - 2], issuer: L[i - 1], year });
+      }
+      return out;
+    }
+
+    // Skills (max 15, in the given order): the names only. Left out: "X at
+    // Y" / "3 experiences at …" lines, endorsements, "Passed LinkedIn Skill
+    // Assessment", "Show all …", and lines naming a certificate or school
+    // (known) — LinkedIn shows those under the skill they back.
+    function liSkills(text, known) {
+      const seen = new Set();
+      const out = [];
+      liLines(text).map(liTidy).forEach((t) => {
+        const k = t.toLowerCase();
+        if (!t || out.length >= 15 || seen.has(k) || known.has(k) || t.length > 80) return;
+        if (/\sat\s/i.test(t) || /^endorsed by\b/i.test(t) || /^\d+\s+endorsements?$/i.test(t) ||
+            /^passed linkedin skill assessment$/i.test(t) || LI_MORE.test(t)) return;
+        seen.add(k);
+        out.push(t);
+      });
+      return out;
+    }
+
+    // Languages: name, then its level ("Elementary proficiency", "Native or
+    // bilingual proficiency"); "Duolingo Score …" and date lines left out.
+    function liLanguages(text) {
+      const out = [];
+      liLines(text).map(liTidy).forEach((t) => {
+        if (!t || /^duolingo\b/i.test(t) || LI_DATES.test(t) || LI_MORE.test(t)) return;
+        if (/\bproficiency$/i.test(t)) {
+          const last = out[out.length - 1];
+          if (last && !last.level) last.level = t;
+          return;
+        }
+        if (t.length <= 40 && !out.some((l) => l.name.toLowerCase() === t.toLowerCase())) out.push({ name: t, level: '' });
+      });
+      return out;
+    }
+
+    function readLinkedIn(audit) {
+      const secs = audit && Array.isArray(audit.sections) ? audit.sections : [];
+      const text = (re) => {
+        const s = secs.find((x) => x && re.test(liTidy(x.section)));
+        return s && typeof s.text === 'string' ? s.text : '';
+      };
+      const certs = liCerts(text(/^(?:licen[cs]es?\s*(?:&|and)\s*)?certifications$/i));
+      const schools = liSchools(text(/^education$/i));
+      const known = new Set(certs.map((x) => x.name.toLowerCase()).concat(schools.map((x) => x.school.toLowerCase())));
+      const about = liLines(text(/^about$/i)).map(liTidy).filter((t) => t && !LI_MORE.test(t)).join('\n');
+      const li = {
+        headline: liCut(liTidy(liLines(text(/^headline$/i)).find((t) => t.trim()) || ''), 220),
+        summary: liCut(about, 700),
+        roles: liRoles(text(/^experience$/i)),
+        schools,
+        certs,
+        skills: liSkills(text(/^skills$/i), known),
+        languages: liLanguages(text(/^languages$/i)),
+        url: clean(audit && audit.profile_url),
+        copied: clean(audit && audit.retrieved_at),
+      };
+      li.has = !!(li.summary || li.roles.length || li.schools.length || li.certs.length || li.skills.length);
+      return li;
+    }
+    // ---- end of the LinkedIn copy
+
+    // "20 Sept 2026" for the dialog's note; a bare date is read as that day
+    // everywhere (no time zone shift).
+    function dayOf(v) {
+      const s = clean(v);
+      const bare = /^\d{4}-\d{2}-\d{2}$/.test(s);
+      const d = new Date(bare ? s + 'T00:00:00Z' : s);
+      if (!s || isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('en-GB', bare ? { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }
+                                                : { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    // Languages: the preferences first (q20 asks "the level we should list"),
+    // e.g. "Georgian native, English C1", then LinkedIn's languages not named there.
+    function languagePairs(q20, liLangs) {
+      const key = (s) => s.toLowerCase().split(/[\s(:–—-]/)[0];
+      const pairs = [];
+      String(q20 || '').split(/\s*[,;\n]\s*/).map(clean).filter(Boolean).forEach((item) => {
+        const m = item.match(/^(\p{L}+)\s*[:–—-]?\s*(.*)$/u);
+        pairs.push(m ? [m[1], clean(m[2]).replace(/^\((.*)\)$/, '$1')] : [item, '']);
+      });
+      (liLangs || []).forEach((l) => {
+        if (!pairs.some((p) => key(p[0]) === key(l.name))) pairs.push([l.name, l.level]);
+      });
+      return pairs;
+    }
+
+    // The model. Sections come in five kinds: text, rows (label / value),
+    // entries (side = dates in the left column, main — org, sub, lines as
+    // bullets), chips (skills) and pairs (language — level).
     function cvModel() {
       const h = scvEl.dataset;
       const typed = (k) => clean(pfForm[k].value);
       const c = cand || {};
       const a = (prefsRow && prefsRow.answers) || {};
+      const li = readLinkedIn(c.linkedin_audit);
       const targets = listOf(answerText(a.q5) || c.target_titles);   // preferences first, else what we read
       const contact = [];
       const email = clean(current && current.user && current.user.email);
       if (email) contact.push({ text: email, href: 'mailto:' + email });
-      const slug = slugOf(typed('linkedin_url')) || slugOf(c.profile_url);
+      const slug = slugOf(typed('linkedin_url')) || slugOf(c.profile_url) || slugOf(li.url);
       if (slug) contact.push({ text: 'linkedin.com/in/' + safeDecode(slug), href: 'https://www.linkedin.com/in/' + slug + '/' });
       const sections = [];
-      const role = [[h.lCompany, clean(c.company_current)], [h.lFunction, clean(c.function)], [h.lSeniority, clean(c.seniority)]]
-        .filter((r) => r[1]);
-      if (role.length) sections.push({ title: h.hCurrent, rows: role });
-      if (targets.length) sections.push({ title: h.hTargets, text: targets.join(', ') });
-      if (clean(c.locations)) sections.push({ title: h.hLocations, text: clean(c.locations) });
       const langs = answerText(a.q20) || clean(c.work_language);
-      if (langs) sections.push({ title: h.hLanguages, text: langs });
+      if (li.has) {
+        // Where the person works now: the place of the latest role that has one.
+        const place = li.roles.map((r) => r.place.replace(/\s*[·•]\s*(?:hybrid|remote|on-site|onsite)$/i, ''))
+          .find((p) => p && !LI_MODE.test(p));
+        if (place) contact.push({ text: place });
+        if (li.summary) sections.push({ title: scvWord('hSummary'), text: li.summary });
+        if (li.roles.length) {
+          sections.push({ title: scvWord('hExperience'), entries: li.roles.map((r) =>
+            ({ side: r.dates, main: r.title, org: r.company, sub: r.place, lines: r.lines })) });
+        }
+        if (li.schools.length) {
+          sections.push({ title: scvWord('hEducation'), entries: li.schools.map((s) =>
+            ({ side: s.dates, main: s.school, org: '', sub: s.degree, lines: [] })) });
+        }
+        if (li.certs.length) {
+          sections.push({ title: scvWord('hCertificates'), entries: li.certs.map((x) =>
+            ({ side: x.year, main: x.name, org: '', sub: x.issuer, lines: [] })) });
+        }
+        if (li.skills.length) sections.push({ title: scvWord('hSkills'), chips: li.skills });
+        const pairs = languagePairs(langs, li.languages);
+        if (pairs.length) sections.push({ title: h.hLanguages, pairs });
+      } else {
+        // No LinkedIn copy: the short version, as before.
+        const role = [[h.lCompany, clean(c.company_current)], [h.lFunction, clean(c.function)], [h.lSeniority, clean(c.seniority)]]
+          .filter((r) => r[1]);
+        if (role.length) sections.push({ title: h.hCurrent, rows: role });
+        if (targets.length) sections.push({ title: h.hTargets, text: targets.join(', ') });
+        if (clean(c.locations)) sections.push({ title: h.hLocations, text: clean(c.locations) });
+        if (langs) sections.push({ title: h.hLanguages, text: langs });
+      }
       return {
         name: [typed('first_name'), typed('middle_name'), typed('last_name')].filter(Boolean).join(' '),
-        headline: clean(c.headline) || targets[0] || '',
+        headline: (li.has && li.headline) || clean(c.headline) || targets[0] || '',
         contact,
         sections,
+        copied: li.has ? li.copied : null,           // null = not made from LinkedIn
       };
     }
 
@@ -3579,6 +3872,13 @@
         if (text != null) n.textContent = text;
         return n;
       };
+      // "Title — Company" / "German — Elementary proficiency": two spans, one line.
+      const pairOf = (tag, cls, a, aCls, b, bCls) => {
+        const p = el(tag, cls);
+        p.appendChild(el('span', aCls, a));
+        if (b) { p.appendChild(document.createTextNode(' ')); p.appendChild(el('span', bCls, '— ' + b)); }
+        return p;
+      };
       const sheet = el('article', 'scv');
       const head = el('header', 'scv__head');
       if (m.name) head.appendChild(el('p', 'scv__name', m.name));
@@ -3586,8 +3886,8 @@
       if (m.contact.length) {
         const p = el('p', 'scv__contact');
         m.contact.forEach((c) => {
-          const item = el(links ? 'a' : 'span', null, c.text);
-          if (links) item.href = c.href;
+          const item = el(links && c.href ? 'a' : 'span', null, c.text);
+          if (links && c.href) item.href = c.href;
           p.appendChild(item);
         });
         head.appendChild(p);
@@ -3606,6 +3906,30 @@
             dl.appendChild(row);
           });
           sec.appendChild(dl);
+        } else if (s.entries) {
+          s.entries.forEach((e) => {
+            const box = el('div', 'scv__entry');
+            // No break inside "Nov 2018", so a long range breaks after its dash.
+            box.appendChild(el('p', 'scv__side', clean(e.side).replace(/([^\s–—-]) (?=[^\s–—-])/g, '$1 ')));
+            const main = el('div', 'scv__main');
+            main.appendChild(pairOf('p', 'scv__title', e.main, 'scv__what', e.org, null));
+            if (e.sub) main.appendChild(el('p', 'scv__sub', e.sub));
+            if (e.lines.length) {
+              const ul = el('ul', 'scv__list');
+              e.lines.forEach((t) => ul.appendChild(el('li', null, t)));
+              main.appendChild(ul);
+            }
+            box.appendChild(main);
+            sec.appendChild(box);
+          });
+        } else if (s.chips) {
+          const ul = el('ul', 'scv__chips');
+          s.chips.forEach((t) => ul.appendChild(el('li', null, t)));
+          sec.appendChild(ul);
+        } else if (s.pairs) {
+          const ul = el('ul', 'scv__pairs');
+          s.pairs.forEach((p) => ul.appendChild(pairOf('li', null, p[0], 'scv__pair', p[1], 'scv__level')));
+          sec.appendChild(ul);
         } else {
           sec.appendChild(el('p', 'scv__text', s.text));
         }
@@ -3625,6 +3949,11 @@
     // CV alone; closing the dialog removes it again (see scvModal above).
     function openSimpleCv() {
       scvModel = cvModel();
+      if (scvSub) {                                   // the note says what the CV is made from
+        const day = scvModel.copied ? dayOf(scvModel.copied) : '';
+        scvSub.textContent = scvModel.copied == null ? SCV_SUB
+          : day ? fillIn(scvWord('noteLinkedin'), { date: day }) : scvWord('noteLinkedinUndated');
+      }
       scvPage.textContent = '';
       scvPage.appendChild(buildSheet(scvModel, false));
       if (scvPrint) scvPrint.remove();
@@ -3652,25 +3981,37 @@
       window.print();
     });
 
-    // Download JPG: the sheet drawn again on a canvas, A4 at 150 dpi
-    // (1240 × 1754, white), with the sizes of .scv in styles.css section 26:
-    // base 10 pt, margins 18 mm, everything else in em of that base.
-    const CV_W = 1240, CV_H = 1754;
+    // Download JPG: the sheet drawn again on a canvas, A4 width at 150 dpi
+    // (1240 px, white). The height follows the content: at least one A4 page
+    // (1754 px), more for a longer CV, as one tall picture. Sizes as .scv in
+    // styles.css section 26: base 10 pt, side margins 18 mm, the rest in em.
+    const CV_W = 1240, CV_H = 1754, CV_MAX_H = 30000;
     const CV_B = 10 * 150 / 72;                    // 10 pt at 150 dpi, in px
     const CV_M = 18 * CV_W / 210;                  // 18 mm
     const CV_INK = '#14213d', CV_SOFT = '#4a5568', CV_ACCENT = '#f26b1d';   // --ink, --ink-soft, --accent
+    const CV_BAND = '#efece6', CV_RULE = '#ddd8cf';                          // --surface, --rule
     const CV_SANS = '"General Sans", "Noto Sans Georgian", Arial, sans-serif';
     const CV_SERIF = '"Fraunces", "Noto Sans Georgian", Georgia, serif';
+
+    // Every text of the model, for the font loading below.
+    function cvText(m) {
+      const out = [m.name, m.headline].concat(m.contact.map((c) => c.text));
+      m.sections.forEach((s) => {
+        out.push(s.title, s.text);
+        (s.rows || []).forEach((r) => out.push(r[0], r[1]));
+        (s.entries || []).forEach((e) => out.push(e.side, e.main, e.org, e.sub, e.lines.join(' ')));
+        (s.pairs || []).forEach((p) => out.push(p[0], p[1]));
+        if (s.chips) out.push(s.chips.join(' '));
+      });
+      return out.filter(Boolean).join(' ');
+    }
 
     // The fonts the drawing uses, loaded first (Georgian letters come from
     // Noto Sans Georgian). Never waits more than 4 s; then the fallbacks draw.
     function cvFonts(m) {
       const fonts = document.fonts;
       if (!fonts || !fonts.load) return Promise.resolve();
-      const text = [m.name, m.headline].concat(
-        m.contact.map((c) => c.text),
-        m.sections.map((s) => s.title + ' ' + (s.rows ? s.rows.map((r) => r.join(' ')).join(' ') : s.text))
-      ).join(' ');
+      const text = cvText(m);
       const jobs = ['500 54px "Fraunces"', '400 22px "General Sans"', '500 22px "General Sans"'].map((f) => fonts.load(f, text));
       if (GEORGIAN.test(text)) jobs.push(fonts.load('400 22px "Noto Sans Georgian"', text), fonts.load('500 22px "Noto Sans Georgian"', text));
       return Promise.race([Promise.all(jobs).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
@@ -3700,76 +4041,206 @@
       return out;
     }
 
+    // The date column: whole when it fits, else broken after the dash
+    // ("Nov 2018 -" / "Oct 2021"), as the preview breaks it.
+    function sideLines(ctx, text, maxW) {
+      if (ctx.measureText(text).width <= maxW) return [text];
+      const m = /^(.*?\S)\s*([-–—])\s*(\S.*)$/.exec(text);
+      if (m && ctx.measureText(m[1] + ' ' + m[2]).width <= maxW && ctx.measureText(m[3]).width <= maxW) return [m[1] + ' ' + m[2], m[3]];
+      return wrapLines(ctx, text, maxW);
+    }
+
+    // A pill (the skill chips); ctx.roundRect where there is one.
+    function pill(ctx, x, y, w, h) {
+      const r = h / 2;
+      ctx.beginPath();
+      if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); return; }
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    // The CV on a canvas. paint = null measures only and returns { h, band }
+    // (the height and the header band's height); called again with those, it
+    // paints, the band first. Every size mirrors .scv in styles.css.
+    function cvDraw(ctx, m, paint) {
+      const B = CV_B, X = CV_M, W = CV_W - 2 * CV_M;
+      const font = (size, weight, family) => weight + ' ' + size.toFixed(2) + 'px ' + (family || CV_SANS);
+      const track = (px) => { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; };
+      const fill = (color, text, x, y, maxW) => {
+        if (!paint) return;
+        ctx.fillStyle = color;
+        if (maxW) ctx.fillText(text, x, y, maxW); else ctx.fillText(text, x, y);
+      };
+      // Wrapped text from y down; returns the y under it.
+      function put(text, y, o) {
+        ctx.font = font(o.size, o.weight, o.family);
+        const lh = o.size * o.lh;
+        const lines = (o.side ? sideLines : wrapLines)(ctx, text, o.w);
+        lines.forEach((ln, i) => fill(o.color, ln, o.x, y + i * lh + lh / 2));
+        return y + lines.length * lh;
+      }
+      // Two weights / colours on shared wrapped lines: "Title — Company".
+      function putRuns(runs, y, o) {
+        const lh = o.size * o.lh;
+        const lines = [[]];
+        let x = 0;
+        runs.forEach((r) => {
+          const f = font(o.size, r.weight);
+          ctx.font = f;
+          const space = ctx.measureText(' ').width;
+          String(r.text).split(/\s+/).filter(Boolean).forEach((word) => {
+            const ww = ctx.measureText(word).width;
+            let gap = lines[lines.length - 1].length ? space : 0;
+            if (gap && x + gap + ww > o.w) { lines.push([]); x = 0; gap = 0; }
+            lines[lines.length - 1].push({ word, f, color: r.color, x: x + gap });
+            x += gap + ww;
+          });
+        });
+        lines.forEach((line, i) => line.forEach((p) => {
+          ctx.font = p.f;
+          fill(p.color, p.word, o.x + p.x, y + i * lh + lh / 2, Math.max(1, o.w - p.x));   // too long: squeezed
+        }));
+        return y + lines.length * lh;
+      }
+
+      // The header band (.scv__head): name, headline, contact line.
+      if (paint) { ctx.fillStyle = CV_BAND; ctx.fillRect(0, 0, CV_W, paint.band); }
+      let y = 3.6 * B;
+      let first = true;
+      if (m.name) {
+        y = put(m.name, y, { size: 2.6 * B, weight: 500, family: CV_SERIF, color: CV_INK, lh: 1.15, x: X, w: W });
+        first = false;
+      }
+      if (m.headline) {
+        const hs = 1.25 * B;
+        if (!first) y += 0.35 * hs;
+        y = put(m.headline, y, { size: hs, weight: 500, color: CV_SOFT, lh: 1.35, x: X, w: W });
+        first = false;
+      }
+      if (m.contact.length) {
+        const cs = 0.95 * B, lh = 1.5 * cs;
+        if (!first) y += 0.9 * cs;
+        ctx.font = font(cs, 400);
+        let x = X;
+        m.contact.forEach((c) => {
+          const w = Math.min(ctx.measureText(c.text).width, W);
+          if (x > X && x + w > X + W) { x = X; y += lh; }
+          fill(CV_INK, c.text, x, y + lh / 2, X + W - x);    // a too-long item is squeezed, not cut off
+          x += w + 1.6 * cs;
+        });
+        y += lh;
+      }
+      y += 2.2 * B;
+      const band = y;
+      if (paint) { ctx.fillStyle = CV_ACCENT; ctx.fillRect(X, y, 3.4 * B, 0.25 * B); }    // .scv__rule under the band
+      y += 0.25 * B;
+
+      const SIDE = 9.4 * B, GAP = 1.4 * B, MX = X + SIDE + GAP, MW = W - SIDE - GAP;     // .scv__entry columns
+      m.sections.forEach((s) => {
+        y += 1.9 * B;
+        // Heading: spaced capitals, then a hairline to the right edge.
+        const hs = 0.85 * B, hlh = 1.4 * hs;
+        ctx.font = font(hs, 500);
+        track(0.14 * hs);
+        const label = s.title.toUpperCase();
+        const tw = ctx.measureText(label).width;
+        fill(CV_INK, label, X, y + hlh / 2);
+        track(0);
+        if (paint) { ctx.fillStyle = CV_RULE; ctx.fillRect(X + tw + 0.9 * hs, Math.round(y + hlh / 2), Math.max(0, W - tw - 0.9 * hs), 1.5); }
+        y += hlh + 0.7 * hs;
+        if (s.rows) {
+          const ts = 1.05 * B, lab = 7.5 * ts, gap = ts;
+          s.rows.forEach((r, i) => {
+            if (i) y += 0.3 * ts;
+            const y1 = put(r[0], y, { size: ts, weight: 400, color: CV_SOFT, lh: 1.5, x: X, w: lab });
+            const y2 = put(r[1], y, { size: ts, weight: 400, color: CV_INK, lh: 1.5, x: X + lab + gap, w: W - lab - gap });
+            y = Math.max(y1, y2);
+          });
+        } else if (s.entries) {
+          s.entries.forEach((e, i) => {
+            if (i) y += 1.05 * B;
+            const ts = 1.05 * B, top = y;
+            const runs = [{ text: e.main, weight: 500, color: CV_INK }];
+            if (e.org) runs.push({ text: '— ' + e.org, weight: 400, color: CV_INK });
+            let yy = putRuns(runs, y, { size: ts, lh: 1.35, x: MX, w: MW });
+            if (e.sub) {
+              const ss = 0.92 * B;
+              yy = put(e.sub, yy + 0.1 * ss, { size: ss, weight: 400, color: CV_SOFT, lh: 1.45, x: MX, w: MW });
+            }
+            if (e.lines.length) {
+              const bs = 0.95 * B, blh = 1.45 * bs;
+              yy += 0.35 * bs;
+              e.lines.forEach((ln, j) => {
+                if (j) yy += 0.15 * bs;
+                if (paint) {                                 // the bullet: a small orange dot
+                  ctx.fillStyle = CV_ACCENT;
+                  ctx.beginPath();
+                  ctx.arc(MX + 0.46 * bs, yy + blh / 2, 0.16 * bs, 0, 2 * Math.PI);
+                  ctx.fill();
+                }
+                yy = put(ln, yy, { size: bs, weight: 400, color: CV_INK, lh: 1.45, x: MX + 1.1 * bs, w: MW - 1.1 * bs });
+              });
+            }
+            let ys = top;
+            if (e.side) {                                    // dates, the first line level with the title's
+              const ss = 0.9 * B;
+              ys = put(e.side, top + (1.35 * ts - 1.45 * ss) / 2, { size: ss, weight: 400, color: CV_SOFT, lh: 1.45, x: X, w: SIDE, side: true });
+            }
+            y = Math.max(yy, ys);
+          });
+        } else if (s.chips) {
+          const cs = 0.88 * B, padX = 0.7 * cs, ch = 1.35 * cs + 0.4 * cs, gap = 0.45 * B;
+          let x = X;
+          s.chips.forEach((t) => {
+            ctx.font = font(cs, 400);
+            const tw = Math.min(ctx.measureText(t).width, W - 2 * padX);
+            const cw = tw + 2 * padX;
+            if (x > X && x + cw > X + W) { x = X; y += ch + gap; }
+            if (paint) {
+              pill(ctx, x, y, cw, ch);
+              ctx.fillStyle = CV_BAND;
+              ctx.fill();
+              ctx.lineWidth = 1.5;
+              ctx.strokeStyle = CV_RULE;
+              ctx.stroke();
+            }
+            fill(CV_INK, t, x + padX, y + ch / 2, tw);
+            x += cw + gap;
+          });
+          y += ch;
+        } else if (s.pairs) {
+          const ps = 1.05 * B;
+          s.pairs.forEach((p, i) => {
+            if (i) y += 0.2 * ps;
+            const runs = [{ text: p[0], weight: 500, color: CV_INK }];
+            if (p[1]) runs.push({ text: '— ' + p[1], weight: 400, color: CV_SOFT });
+            y = putRuns(runs, y, { size: ps, lh: 1.5, x: X, w: W });
+          });
+        } else {
+          y = put(s.text, y, { size: 1.05 * B, weight: 400, color: CV_INK, lh: 1.5, x: X, w: W });
+        }
+      });
+      return { h: y + CV_M, band };
+    }
+
     function cvJpeg(m) {
       return cvFonts(m).then(() => {
         const canvas = document.createElement('canvas');
         canvas.width = CV_W;
         canvas.height = CV_H;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, CV_W, CV_H);
+        let ctx = canvas.getContext('2d');
         ctx.textBaseline = 'middle';
-        const B = CV_B, X = CV_M, W = CV_W - 2 * CV_M, BOTTOM = CV_H - CV_M;
-        const track = (px) => { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; };
-        // Wrapped text from y down (nothing below the bottom margin); returns the y under it.
-        function put(text, y, o) {
-          ctx.font = o.weight + ' ' + o.size.toFixed(2) + 'px ' + o.family;
-          ctx.fillStyle = o.color;
-          track(o.spacing || 0);
-          const lh = o.size * o.lh;
-          wrapLines(ctx, o.caps ? text.toUpperCase() : text, o.w).forEach((ln) => {
-            if (y + lh <= BOTTOM) ctx.fillText(ln, o.x, y + lh / 2);
-            y += lh;
-          });
-          track(0);
-          return y;
-        }
-        let y = X;
-        let first = true;
-        if (m.name) {
-          y = put(m.name, y, { size: 2.6 * B, weight: 500, family: CV_SERIF, color: CV_INK, lh: 1.15, x: X, w: W });
-          first = false;
-        }
-        if (m.headline) {
-          if (!first) y += 0.35 * 1.3 * B;
-          y = put(m.headline, y, { size: 1.3 * B, weight: 500, family: CV_SANS, color: CV_SOFT, lh: 1.35, x: X, w: W });
-          first = false;
-        }
-        if (m.contact.length) {
-          if (!first) y += 0.8 * B;
-          ctx.font = '400 ' + B.toFixed(2) + 'px ' + CV_SANS;
-          ctx.fillStyle = CV_INK;
-          const lh = 1.5 * B;
-          let x = X;
-          m.contact.forEach((c) => {
-            const w = Math.min(ctx.measureText(c.text).width, W);
-            if (x > X && x + w > X + W) { x = X; y += lh; }
-            ctx.fillText(c.text, x, y + lh / 2, X + W - x);   // a too-long item is squeezed, not cut off
-            x += w + 1.6 * B;
-          });
-          y += lh;
-        }
-        y += 1.3 * B;                                         // .scv__rule: a short orange bar
-        ctx.fillStyle = CV_ACCENT;
-        ctx.fillRect(X, y, 3.4 * B, 0.25 * B);
-        y += 0.25 * B;
-        m.sections.forEach((s) => {
-          const hs = 0.85 * B, ts = 1.05 * B;
-          y += 1.9 * B;
-          y = put(s.title, y, { size: hs, weight: 500, family: CV_SANS, color: CV_SOFT, lh: 1.4, x: X, w: W, caps: true, spacing: 0.12 * hs });
-          y += 0.6 * hs;
-          if (s.rows) {
-            const lab = 7.5 * ts, gap = ts;
-            s.rows.forEach((r, i) => {
-              if (i) y += 0.3 * ts;
-              const y1 = put(r[0], y, { size: ts, weight: 400, family: CV_SANS, color: CV_SOFT, lh: 1.5, x: X, w: lab });
-              const y2 = put(r[1], y, { size: ts, weight: 400, family: CV_SANS, color: CV_INK, lh: 1.5, x: X + lab + gap, w: W - lab - gap });
-              y = Math.max(y1, y2);
-            });
-          } else {
-            y = put(s.text, y, { size: ts, weight: 400, family: CV_SANS, color: CV_INK, lh: 1.5, x: X, w: W });
-          }
-        });
+        const size = cvDraw(ctx, m, null);                       // measure first
+        canvas.height = Math.min(CV_MAX_H, Math.max(CV_H, Math.ceil(size.h)));   // (this resets the context)
+        ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, CV_W, canvas.height);
+        ctx.textBaseline = 'middle';
+        cvDraw(ctx, m, size);
         return new Promise((resolve, reject) => {
           canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('no picture'))), 'image/jpeg', 0.92);
         });
