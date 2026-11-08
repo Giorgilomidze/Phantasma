@@ -3849,6 +3849,27 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   min-width: 0;
 }
 .account__title .role-switch { margin-top: 0; align-self: center; }
+/* Tier next to the greeting (9 Nov 2026, owner): small grey text on the
+   title's baseline. A button, so keyboard and touch reach its tooltip
+   (#account-tier-tip: the .account-tip look; --lines keeps the line breaks). */
+.account-tier {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--type-caption);
+  line-height: 1.4;
+  color: var(--ink-soft);
+  cursor: help;
+}
+.account-tier[hidden] { display: none; }
+.account-tier:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 3px; border-radius: 2px; }
+.account-tip--lines { white-space: pre-line; }
+/* account.html footer (9 Nov 2026, owner): a smaller gap under the line —
+   the footer's row gap only (24px) instead of the rule's 48px + 24px. */
+.site-footer--account .rule--footer { margin-bottom: 0; }
 .account__head--row .account__identity:not([hidden]) {   /* [hidden] must still win */
   display: flex;
   flex-wrap: wrap;

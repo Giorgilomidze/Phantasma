@@ -1611,14 +1611,26 @@
         sb.from('sends')
           .select('vacancy_id, sent_at, outcome, outcome_at, vacancies ( ' + VACANCY_DETAIL + ' )')
           .order('sent_at', { ascending: false }),
-      ]).then(([stats, cand, shortlists, sends]) => ({
+        // The newest paid plan, for the tier next to the greeting (9 Nov 2026).
+        // Paid = started (flitt-callback sets started_at / ends_at); pending
+        // (Pay now not finished) and cancelled (refunded) rows do not count.
+        sb.from('subscriptions')
+          .select('plan_code, status, started_at, ends_at, plans ( name )')
+          .in('status', ['active', 'expired'])
+          .not('started_at', 'is', null)
+          .order('started_at', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(1),
+      ]).then(([stats, cand, shortlists, sends, sub]) => ({
         stats: (stats.data && stats.data[0]) || null,
         workbook: (cand.data && cand.data.workbook_path) || null,
         audit: (cand.data && cand.data.linkedin_audit) || null,
         shortlists: shortlists.data || [],
         sends: sends.data || [],
         weeks: new Set((shortlists.data || []).map((r) => r.week)).size,
-        errors: [stats.error, shortlists.error, sends.error].filter(Boolean),
+        plan: (sub.data && sub.data[0]) || null,   // null = no paid plan
+        planKnown: !sub.error && !shortlists.error, // false: plan or runs unread, no tier shown
+        errors: [stats.error, shortlists.error, sends.error, sub.error].filter(Boolean),
       }));
     }
 
@@ -3122,6 +3134,7 @@
       if (!session) {                                   // the name sits outside #account-who
         nameEl.hidden = true; prefsRow = null; cand = null; cvx = null; cvxNext = null;
         if (titleEl) titleEl.textContent = 'Your account';
+        paintTier(null);                                // so does the tier
         return;
       }
       paintLogin(session);                              // login icon (8 Nov 2026; the email text is gone)
@@ -3150,6 +3163,7 @@
       wb.hidden = !workbookPath;
       paintAudit(data.audit);
       renderStats(data);
+      paintTier(data);
     }
 
     grid.addEventListener('click', (e) => {
@@ -3254,6 +3268,44 @@
     function paintProfile() {
       nameEl.hidden = true;                             // the name now sits in the heading
       greet();
+    }
+
+    // ---- Tier next to the greeting (owner, 9 Nov 2026): "Tier: Detective" in
+    // small grey text; its tooltip says how many runs the plan has had and how
+    // many are left. One payment = four weeks = four runs, one a week
+    // (flitt-callback: ends_at = started_at + 28 days; the page says "Four
+    // weeks, one run a week"). A run = one shortlist date (shortlists.week), as
+    // in the Weekly runs tile; the plan's runs are the dates from started_at up
+    // to, not including, ends_at. Current = active and ends_at after today (UTC),
+    // the same test flitt-create-order uses. No paid plan: "No plan yet" and
+    // the runs so far. d = Auth.loadStats(); null hides it (signed out).
+    const RUNS_PER_PLAN = 4;
+    const tierBtn = root.querySelector('#account-tier');
+    const tierTip = root.querySelector('#account-tier-tip');
+    function paintTier(d) {
+      if (!tierBtn || !tierTip) return;
+      if (!d || !d.planKnown) { tierBtn.hidden = true; tierTip.hidden = true; return; }
+      const ds = tierBtn.dataset;
+      const runs = Array.from(new Set(d.shortlists.map((r) => r.week).filter(Boolean)));
+      const p = d.plan;
+      let label;
+      let tip;
+      if (p) {
+        const today = new Date().toISOString().slice(0, 10);
+        const made = Math.min(RUNS_PER_PLAN,
+          runs.filter((w) => w >= p.started_at && (!p.ends_at || w < p.ends_at)).length);
+        const ended = p.status !== 'active' || !p.ends_at || p.ends_at <= today;
+        const vals = { plan: (p.plans && p.plans.name) || p.plan_code, made, total: RUNS_PER_PLAN,
+                       left: RUNS_PER_PLAN - made, date: fmtDate(p.ends_at) };
+        label = fillIn(ended ? ds.labelEnded : ds.label, vals);
+        tip = fillIn(ended ? ds.tipEnded : ds.tip, vals);
+      } else {
+        label = ds.labelNone;
+        tip = fillIn(ds.tipNone, { made: runs.length });
+      }
+      tierBtn.textContent = label;
+      tierTip.textContent = tip.split('|').join('\n');
+      tierBtn.hidden = false;
     }
     function openProfile() {
       ['first_name', 'middle_name', 'last_name', 'linkedin_url'].forEach((k) => { pfForm[k].value = profile[k] || ''; });
@@ -4878,6 +4930,10 @@
       return { show, hide };
     }
     if (stLogin && stLoginTip) hoverTip(stLogin, stLoginTip);
+    if (tierBtn && tierTip) {                            // the tier (9 Nov 2026): a tap shows it too
+      const tierHover = hoverTip(tierBtn, tierTip);
+      tierBtn.addEventListener('click', () => tierHover.show());
+    }
     if (mChip && mChipTip) {
       const chipTip = hoverTip(mChip, mChipTip);
       mChip.addEventListener('click', () => chipTip.show());

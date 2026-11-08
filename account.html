@@ -66,7 +66,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261108e" />
+  <link rel="stylesheet" href="./styles.css?v=20261109a" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -108,6 +108,17 @@
       <div class="account__head account__head--row">
         <div class="account__title">
           <h1 class="project-hero__title" id="account-h">Your account</h1>
+          <!-- Tier (9 Nov 2026, owner): the client's plan in small grey text next to
+               the greeting; hover, keyboard focus or a tap shows the runs made and
+               left in that plan (#account-tier-tip, lines split at "|"). Painted by
+               bootAccountPage (paintTier) from the newest paid subscription; hidden
+               while signed out or when the plan could not be read. -->
+          <button class="account-tier" type="button" id="account-tier" aria-describedby="account-tier-tip" hidden
+                  data-label="Tier: {plan}" data-label-ended="Tier: {plan} (ended)" data-label-none="No plan yet"
+                  data-tip="Runs made: {made} of {total}|Runs left: {left}|Plan ends {date}"
+                  data-tip-ended="Runs made: {made} of {total}|Runs left: {left}|Plan ended {date}"
+                  data-tip-none="Runs made so far: {made}|Runs left: 0"></button>
+          <p class="account-tip account-tip--lines" id="account-tier-tip" role="tooltip" hidden></p>
           <p class="account__name" id="account-name" hidden></p>
           <!-- Client | Admin switch: shown only to career-service admins, after
                login (career.js asks is_career_admin()). admin.html has the same. -->
@@ -309,7 +320,7 @@
           </p>
           <p class="account__hint">
             Not on a plan yet? See the tiers on the
-            <a href="./projects.html" class="link-quiet">Personal Career Strategist</a> page.
+            <a href="./projects.html" class="link-quiet">Plans page</a>.
           </p>
         </div>
         </div><!-- /.account-main -->
@@ -319,13 +330,13 @@
 
   </main>
 
-  <!-- Footer -->
-  <footer class="site-footer">
+  <!-- Footer. On this page (9 Nov 2026, owner): no "Book a discovery call"
+       link and a smaller gap under the line (.site-footer--account, styles §26). -->
+  <footer class="site-footer site-footer--account">
     <div class="page-grid site-footer__inner">
       <hr class="rule rule--footer" />
       <div class="site-footer__row">
         <a href="./index.html" class="wordmark wordmark--footer">Phantasma</a>
-        <a href="./index.html#contact" class="link-quiet">Book a discovery call →</a>
       </div>
       <address class="site-footer__contact" aria-label="Contact">
         <span>Georgia, Tbilisi, Jiuli Shartava 5</span>
@@ -654,7 +665,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261108e"></script>
+  <script src="./script.js?v=20261109a"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
   <script src="./career.js?v=20261107a"></script>
 </body>
