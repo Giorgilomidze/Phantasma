@@ -3597,6 +3597,7 @@
     const mBtn  = root.querySelector('#match-start');
     const mChip = root.querySelector('#match-chip');
     const mChipTip = root.querySelector('#match-chip-tip');
+    const mBtnTip = root.querySelector('#match-start-tip');   // what a click does (hover / focus, 9 Nov 2026)
     const mLine = root.querySelector('#match-line');
     const mNeed = root.querySelector('#match-need');
     const mMiss = root.querySelector('#match-missing');
@@ -3638,6 +3639,7 @@
         mBtn.classList.toggle('is-pending', wait);
         mChip.hidden = true;
         mChipTip.hidden = true;
+        if (mBtnTip) { mBtnTip.textContent = ''; mBtnTip.hidden = true; }
         mBox.hidden = true;
         return;
       }
@@ -3667,7 +3669,13 @@
       if (!open) mChipTip.hidden = true;
       if (!ready || s.busy) mBtn.setAttribute('aria-disabled', 'true'); else mBtn.removeAttribute('aria-disabled');
       if (s.busy) mBtn.setAttribute('aria-busy', 'true'); else mBtn.removeAttribute('aria-busy');
-      const desc = [mLine, mNeed].filter((p) => !p.hidden).map((p) => p.id).join(' ');
+      // Its tooltip: what a click does, plus what is needed first while it cannot start.
+      if (mBtnTip) {                                 // empty (so never shown) while it starts or runs
+        mBtnTip.textContent = open || s.busy ? ''
+          : String(mBtn.dataset.tip || '').split('|').join('\n') + (ready ? '' : '\n' + msg.msgNotReady);
+        if (open || s.busy) mBtnTip.hidden = true;
+      }
+      const desc = (mBtnTip ? ['match-start-tip'] : []).concat([mLine, mNeed].filter((p) => !p.hidden).map((p) => p.id)).join(' ');
       if (desc) mBtn.setAttribute('aria-describedby', desc); else mBtn.removeAttribute('aria-describedby');
       mBox.hidden = mLine.hidden && mNeed.hidden;    // nothing to say: no line, no space
       if (open && onBtn) mChip.focus();
@@ -3706,6 +3714,7 @@
       mBtn.addEventListener('click', async () => {
         const s = mState;
         if (mBtn.getAttribute('aria-disabled') === 'true' || !s.uid) return;
+        if (mBtnTip) mBtnTip.hidden = true;          // the click answered it
         const g = s.gen;
         const msg = mBox.dataset;
         matchSet({ busy: true, note: null });        // the button itself reads "Starting…"
@@ -4938,6 +4947,9 @@
       const chipTip = hoverTip(mChip, mChipTip);
       mChip.addEventListener('click', () => chipTip.show());
     }
+    // Start matching: hover or keyboard focus says what a click does (9 Nov 2026,
+    // owner). A tap on a phone starts it, so phones get no tooltip here.
+    if (mBtn && mBtnTip) hoverTip(mBtn, mBtnTip);
 
     document.addEventListener('phantasma:auth', (e) => render(e.detail.session));
   }

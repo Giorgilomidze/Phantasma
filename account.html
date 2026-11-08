@@ -160,8 +160,12 @@
           </div>
           <!-- Start matching (7 Nov 2026, CAR-05, owner answer V-08; in this row
                since 8 Nov 2026). Its place is kept (invisible) while the data
-               loads; hidden for good until supabase/0030 exists. -->
-          <button class="btn btn-primary btn-sm account-match__btn" type="button" id="match-start" hidden>Start matching</button>
+               loads; hidden for good until supabase/0030 exists. Hover / keyboard
+               focus shows what a click does (#match-start-tip, 9 Nov 2026, owner;
+               lines split at "|"; while it cannot start yet, data-msg-not-ready of
+               #account-match is added). -->
+          <button class="btn btn-primary btn-sm account-match__btn" type="button" id="match-start" hidden
+                  data-tip="Starts a new search for you: we go through the current vacancies and pick the ones that fit your CV, LinkedIn and preferences.|Your new list appears in Vacancy lists, usually within a day.|Nothing is sent to employers: we apply only where you tick Send.">Start matching</button>
           <button class="account-match__chip" type="button" id="match-chip" aria-describedby="match-chip-tip" hidden>
             <span class="account-match__dot" aria-hidden="true"></span>Matching in progress
           </button>
@@ -169,6 +173,7 @@
                login one repeats the button's name, so it is hidden from screen readers. -->
           <p class="account-tip" id="status-login-tip" aria-hidden="true" hidden></p>
           <p class="account-tip" id="match-chip-tip" role="tooltip" hidden></p>
+          <p class="account-tip account-tip--lines" id="match-start-tip" role="tooltip" hidden></p>
           <p class="account-status__note" id="status-note" role="status" aria-live="polite" hidden
              data-msg-linkedin-off="Connecting LinkedIn is not switched on yet — please try again later."></p>
         </div>
@@ -665,7 +670,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261109b"></script>
+  <script src="./script.js?v=20261109c"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
   <script src="./career.js?v=20261109a"></script>
 </body>
