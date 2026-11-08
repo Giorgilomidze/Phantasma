@@ -1740,17 +1740,16 @@
   }
 
   /* ---------------------------------------------------------------------
-     9. Image Library (9 Nov 2026, owner request; supabase/0033). Pictures sit in folders that open
-        on a click: Uploads, Elements (Price Tag / Picture Frame / Picture Background), AI Generated,
-        Products, Archive. The shortcut row shows all folders or one; the tag filter sits on its
-        right. Edit ticks pictures to archive, restore or delete them (no Delete button on a card);
+     9. Image Library (9 Nov 2026, owner request; supabase/0033). Pictures sit in folders, shown as
+        tiles (the newest picture as the cover, name, number of pictures, size): Uploads, Elements
+        (tiles for Price Tag / Picture Frame / Picture Background), AI Generated, Products, Archive.
+        A tile or a shortcut button opens the folder; the tag filter sits right of the shortcuts. Edit ticks pictures to archive, restore or delete them (no Delete button on a card);
         a click on a picture opens its details (facts + tags). Each person may store up to 50 MB.
      --------------------------------------------------------------------- */
   var LIB_FOLDERS = ['uploads', 'elements', 'ai', 'products', 'archive']; // shortcut row + folder list, in order
   var LIB_AI_ROOM = 1.5 * 1048576; // free storage an AI picture needs (they are 0.3-0.7 MB, a post picture twice)
   var libFolder = 'all';  // shortcut: 'all' or one of LIB_FOLDERS
-  var libOpen = {};       // folders / element types the user opened: { uploads: true, 'el:frame': true }
-  var libTagShut = {};    // while a tag filter is on, folders with matches open by themselves; the ones closed
+  var libSub = null;      // inside Elements: the element type on screen ('price_tag' ... 'none'), else null
   var libTags = [];       // tag filter: a picture shows when it has all of these
   var libEdit = false;    // Edit mode
   var libSel = {};        // ticked picture ids (Edit mode), kept across folders
@@ -1774,10 +1773,10 @@
   // The day an archived picture is deleted for good.
   function purgeDay(im) { return new Date(Date.parse(im.archivedAt) + api.libraryRules.archiveDays * 86400000).toISOString(); }
   function countText(n) { return t(n === 1 ? 'lf.count1' : 'lf.count', { n: num(n) }); }
-  // Small folder / archive-box icon (inline SVG, hidden from screen readers).
-  function folderIcon(archive) {
+  // Folder / archive-box icon (inline SVG, hidden from screen readers); size in px, 20 by default.
+  function folderIcon(archive, size) {
     var ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'), p = document.createElementNS(ns, 'path');
-    [['viewBox', '0 0 24 24'], ['width', '20'], ['height', '20'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'ads-folder__icon']]
+    [['viewBox', '0 0 24 24'], ['width', String(size || 20)], ['height', String(size || 20)], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'ads-ficon']]
       .forEach(function (a) { svg.setAttribute(a[0], a[1]); });
     p.setAttribute('d', archive ? 'M3 4.5h18v4H3zM5 8.5h14V20H5zM10 12h4'
       : 'M3 7a1.5 1.5 0 0 1 1.5-1.5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z');
@@ -1883,6 +1882,7 @@
       ui.row.hidden = !all.length;
       ui.tags.redraw();
       ui.tags.label();
+      syncChips(); // an upload may have opened another folder meanwhile
       fillFolders();
       ui.samples.innerHTML = '';
       if (samples.length) {
@@ -1894,17 +1894,18 @@
       }
     }
     function build() {
-      var shortcuts = h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('lf.show') }, ['all'].concat(LIB_FOLDERS).map(function (k) {
-        return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === libFolder), onclick: function (e) {
-          var me = e.currentTarget;
-          libFolder = k;
-          [].forEach.call(me.parentNode.children, function (b) { b.setAttribute('aria-pressed', String(b === me)); });
+      // The shortcut buttons stay in place (and keep focus); only the box below them is redrawn.
+      var chips = ['all'].concat(LIB_FOLDERS).map(function (k) {
+        return h('button', { type: 'button', class: 'ads-filter', 'data-key': k, 'aria-pressed': String(k === libFolder), onclick: function () {
+          libFolder = k; libSub = null;
+          syncChips();
           fillFolders();
         } }, k === 'all' ? t('common.all') : t('lf.f.' + k));
-      }));
+      });
       var tags = tagFilter();
       ui = {
-        row: h('div', { class: 'ads-libbar' }, [shortcuts, tags.el]),
+        row: h('div', { class: 'ads-libbar' }, [h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('lf.show') }, chips), tags.el]),
+        chips: chips,
         tags: tags,
         active: h('div', { class: 'ads-libtags', hidden: true }),
         bar: editBar(),
@@ -1920,73 +1921,98 @@
       if (!libTags.length) return list;
       return list.filter(function (im) { return libTags.every(function (tag) { return im.tags.indexOf(tag) !== -1; }); });
     }
-    function fillFolders() {
+    // The box shows the folder tiles (All), the element-type tiles (Elements) or the pictures of one
+    // folder / element type. focus: 'head' = the folder heading, 'tile:<key>' = that tile.
+    function fillFolders(focus) {
       var box = ui.box;
       box.innerHTML = '';
       ui.none.hidden = true;
       drawActive();
-      ui.bar.update();
       if (!all.length) {
         box.appendChild(emptyState('lib.emptyTitle', 'lib.emptyText', null, { mb: rules.maxMb, max: rules.maxFiles }));
-        return;
+      } else {
+        var shown = matches(all);
+        if (libFolder === 'all') drawTiles(shown);
+        else drawFolder(inFolder(shown, libFolder));
       }
-      var shown = matches(all), any = false;
-      (libFolder === 'all' ? LIB_FOLDERS : [libFolder]).forEach(function (key) {
-        var items = shown.filter(function (im) { return libPlace(im) === key; });
-        if (key === 'archive') items.sort(function (a, b) { return Date.parse(b.archivedAt) - Date.parse(a.archivedAt); });
-        if (libTags.length && !items.length) return; // a tag filter hides folders without a match
-        any = true;
-        box.appendChild(folderFor(key, items));
-      });
-      ui.none.hidden = any;
+      ui.bar.update();
+      var el = focus === 'head' ? $('.ads-fhead__title', box) : focus ? $('.ads-ftile[data-key="' + focus.slice(5) + '"]', box) : null;
+      if (el) el.focus();
     }
-    function isOpen(key) {
-      if (libFolder === key) return true; // the shortcut shows this folder opened
-      if (libTags.length) return libTagShut[key] !== true;
-      return !!libOpen[key];
+    // A folder's pictures, newest first (the Archive: the last archived first).
+    function inFolder(list, key) {
+      var out = list.filter(function (im) { return libPlace(im) === key; });
+      if (key === 'archive') out.sort(function (a, b) { return Date.parse(b.archivedAt) - Date.parse(a.archivedAt); });
+      return out;
     }
-    function setOpen(key, on) { if (libTags.length) libTagShut[key] = !on; else libOpen[key] = on; }
     function metaText(items) {
       var bytes = items.reduce(function (s, im) { return s + (im.bytes || 0); }, 0);
       return countText(items.length) + (bytes ? ' · ' + fmtBytes(bytes) : '');
     }
-    // One folder (level 1) or element type (level 2): a header button that opens / closes it; the
-    // content is built when it opens first.
-    function section(key, title, items, level, content) {
-      var id = 'ads-fold-' + key.replace(/[^a-z_]/g, '-'), open = isOpen(key);
-      var inner = h('div', { class: 'ads-folder__body', id: id, hidden: !open });
-      var sec = h('section', { class: 'ads-folder ads-folder--l' + level + (open ? ' is-open' : '') });
-      var btn = h('button', { type: 'button', class: 'ads-folder__btn', 'aria-expanded': String(open), 'aria-controls': id, onclick: function () {
-        var now = btn.getAttribute('aria-expanded') !== 'true';
-        setOpen(key, now);
-        btn.setAttribute('aria-expanded', String(now));
-        sec.classList.toggle('is-open', now);
-        if (now && !inner.firstChild) append(inner, content());
-        inner.hidden = !now;
-      } }, [folderIcon(key === 'archive'), h('span', { class: 'ads-folder__name' }, title),
-        h('span', { class: 'ads-folder__meta' }, metaText(items)), h('span', { class: 'ads-folder__chev', 'aria-hidden': 'true' })]);
-      append(sec, [h(level === 1 ? 'h2' : 'h3', { class: 'ads-folder__h' }, btn), inner]);
-      if (open) append(inner, content());
-      return sec;
+    // All: one tile per folder. A tag filter shows only the folders with a match (counting the matches).
+    function drawTiles(shown) {
+      var list = LIB_FOLDERS.map(function (k) { return { key: k, title: t('lf.f.' + k), items: inFolder(shown, k), archive: k === 'archive' }; })
+        .filter(function (f) { return !libTags.length || f.items.length; });
+      if (!list.length) { ui.none.hidden = false; return; }
+      ui.box.appendChild(tiles(list, function (f) { go(f.key, null); }));
     }
-    function folderFor(key, items) {
-      if (key === 'elements') {
+    // One folder: a way back, its heading, then its pictures (Elements: a tile per element type first).
+    function drawFolder(items) {
+      var box = ui.box, archive = libFolder === 'archive';
+      box.appendChild(backBtn());
+      if (libFolder === 'elements' && !libSub) {
+        box.appendChild(folderHead(t('lf.f.elements'), items, false));
         var types = lr.elementTypes.concat(items.some(function (im) { return !im.elementType; }) ? ['none'] : []);
-        return section(key, t('lf.f.elements'), items, 1, function () {
-          return types.map(function (ty) {
-            var sub = items.filter(function (im) { return (im.elementType || 'none') === ty; });
-            if (libTags.length && !sub.length) return null;
-            return section('el:' + ty, t('lf.el.' + ty), sub, 2, function () { return grid(sub, 'lf.empty.type', { type: t('lf.el.' + ty) }); });
-          });
-        });
+        var list = types.map(function (ty) {
+          return { key: 'el:' + ty, type: ty, title: t('lf.el.' + ty), items: items.filter(function (im) { return (im.elementType || 'none') === ty; }) };
+        }).filter(function (f) { return !libTags.length || f.items.length; });
+        if (!list.length) { ui.none.hidden = false; return; }
+        box.appendChild(tiles(list, function (f) { go('elements', f.type); }));
+        return;
       }
-      return section(key, t('lf.f.' + key), items, 1, function () {
-        return [key === 'archive' && items.length ? h('p', { class: 'ads-hint ads-folder__note' }, t('lf.archiveNote', { days: lr.archiveDays })) : null,
-          grid(items, 'lf.empty.' + key, { days: lr.archiveDays })];
-      });
+      var pics = libSub ? items.filter(function (im) { return (im.elementType || 'none') === libSub; }) : items;
+      box.appendChild(folderHead(libSub ? t('lf.el.' + libSub) : t('lf.f.' + libFolder), pics, archive));
+      if (archive && pics.length) box.appendChild(h('p', { class: 'ads-hint ads-fnote' }, t('lf.archiveNote', { days: lr.archiveDays })));
+      if (libTags.length && !pics.length) { ui.none.hidden = false; return; }
+      box.appendChild(libSub ? grid(pics, 'lf.empty.type', { type: t('lf.el.' + libSub) }) : grid(pics, 'lf.empty.' + libFolder, { days: lr.archiveDays }));
     }
+    // Folder tiles: the newest picture as the cover, then the name, how many pictures and their size.
+    function tiles(list, open) {
+      return h('ul', { class: 'ads-ftiles' }, list.map(function (f) {
+        var newest = f.items[0], cover = newest ? imageEl(newest.id, 'ads-ftile__img') : null;
+        if (cover && cover.tagName === 'IMG') cover.alt = '';
+        else cover = h('span', { class: 'ads-ftile__empty' }, [folderIcon(f.archive, 40), f.items.length ? null : h('span', {}, t('lf.emptyFolder'))]);
+        return h('li', {}, h('button', { type: 'button', class: 'ads-ftile', 'data-key': f.key, onclick: function () { open(f); } }, [
+          h('span', { class: 'ads-ftile__cover' }, cover),
+          h('span', { class: 'ads-ftile__body' }, [
+            h('span', { class: 'ads-ftile__name' }, [folderIcon(f.archive), f.title]),
+            h('span', { class: 'ads-ftile__meta' }, metaText(f.items))
+          ])
+        ]));
+      }));
+    }
+    function folderHead(title, items, archive) {
+      return h('div', { class: 'ads-fhead' }, [
+        h('h2', { class: 'ads-fhead__title', tabindex: '-1' }, [folderIcon(archive, 24), title]),
+        h('span', { class: 'ads-fhead__meta' }, metaText(items))
+      ]);
+    }
+    // "← All folders" (inside an element type: "← Elements"); focus goes back to the tile we came from.
+    function backBtn() {
+      var up = libSub ? 'elements' : 'all', from = libSub ? 'el:' + libSub : libFolder;
+      var name = up === 'all' ? t('lf.allFolders') : t('lf.f.elements');
+      return h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost ads-fback', 'aria-label': t('lf.backTo', { name: name }),
+        onclick: function () { go(up, null, 'tile:' + from); } }, [h('span', { 'aria-hidden': 'true' }, '← '), name]);
+    }
+    // Opens a folder (or an element type, or All) as if its shortcut had been pressed.
+    function go(folder, sub, focus) {
+      libFolder = folder; libSub = sub || null;
+      syncChips();
+      fillFolders(focus || 'head');
+    }
+    function syncChips() { ui.chips.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-key') === libFolder)); }); }
     function grid(items, emptyKey, vars) {
-      if (!items.length) return h('p', { class: 'ads-note ads-folder__empty' }, t(emptyKey, vars));
+      if (!items.length) return h('p', { class: 'ads-note ads-fnote' }, t(emptyKey, vars));
       return h('ul', { class: 'ads-libgrid' }, items.map(function (im) { return card(im); }));
     }
     // A picture: name on two lines at most (the whole name on hover and in the details). Edit mode:
@@ -2026,7 +2052,7 @@
         show(btn.getAttribute('aria-expanded') !== 'true');
       } });
       var list = h('div', { class: 'ads-tagfilter__list' });
-      var clear = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () { libTags = []; libTagShut = {}; redraw(); changed(); btn.focus(); } }, t('lf.tags.clear'));
+      var clear = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () { libTags = []; redraw(); changed(); btn.focus(); } }, t('lf.tags.clear'));
       var panel = h('div', { class: 'ads-tagfilter__panel', id: panelId, role: 'group', 'aria-label': t('lf.tags.filter'), hidden: true },
         [h('p', { class: 'ads-hint' }, t('lf.tags.hint')), list, clear]);
       var wrap = h('div', { class: 'ads-tagfilter' }, [btn, panel]);
@@ -2045,7 +2071,6 @@
           var cb = h('input', { type: 'checkbox', id: id, checked: libTags.indexOf(tag) !== -1 });
           cb.addEventListener('change', function () {
             libTags = cb.checked ? libTags.concat(tag) : libTags.filter(function (x) { return x !== tag; });
-            libTagShut = {};
             clear.hidden = !libTags.length;
             changed();
           });
@@ -2074,7 +2099,6 @@
       append(row, [h('span', { class: 'ads-sub' }, t('lf.tags.active'))].concat(libTags.map(function (tag) {
         return h('button', { type: 'button', class: 'ads-tag', 'aria-label': t('lf.tags.removeF', { tag: tag }), onclick: function () {
           libTags = libTags.filter(function (x) { return x !== tag; });
-          libTagShut = {};
           ui.tags.redraw(); ui.tags.changed();
           ui.tags.btn.focus();
         } }, [tag, h('span', { class: 'ads-tag__x', 'aria-hidden': 'true' }, '✕')]);
@@ -2114,7 +2138,8 @@
         el.hidden = !libEdit;
         if (!libEdit) return;
         var sel = picked(), toArch = sel.filter(function (im) { return !im.archivedAt; }), toRest = sel.filter(function (im) { return im.archivedAt; });
-        count.textContent = sel.length ? t('lf.sel', { n: num(sel.length) }) : t('lf.editHint');
+        var boxes = ui.box.querySelectorAll('.ads-libitem__check').length; // none while folder tiles are shown
+        count.textContent = sel.length ? t('lf.sel', { n: num(sel.length) }) : t(boxes ? 'lf.editHint' : 'lf.editTiles');
         none1.hidden = !sel.length;
         arch.textContent = t('lf.archive') + (toArch.length ? ' (' + num(toArch.length) + ')' : '');
         rest.textContent = t('lf.restore') + (toRest.length ? ' (' + num(toRest.length) + ')' : '');
@@ -2122,7 +2147,7 @@
         arch.disabled = busy || !toArch.length;
         rest.disabled = busy || !toRest.length;
         del.disabled = busy || !sel.length;
-        all1.disabled = busy;
+        all1.disabled = busy || !boxes;
       }
       function act(what) {
         var sel = picked();
@@ -2231,10 +2256,12 @@
           return { file: f, problem: problem };
         });
         var ok = list.filter(function (x) { return !x.problem; }).map(function (x) { return x.file; });
-        var where = libFolder === 'elements' ? 'elements' : 'uploads', type = '', go = null;
+        // Opened from Elements (or one of its types) the window starts on Elements (and that type).
+        var where = libFolder === 'elements' ? 'elements' : 'uploads', sendBtn = null;
+        var type = where === 'elements' && libSub && libSub !== 'none' ? libSub : '';
         var typeSel = select('ads-up-type', [['', t('lf.dlg.typeChoose')]].concat(lr.elementTypes.map(function (ty) { return [ty, t('lf.el.' + ty)]; })), type, function (v) { type = v; upd(); });
         var typeField = field('lf.dlg.type', typeSel, null, 'ads-up-type');
-        function upd() { typeField.hidden = where !== 'elements'; if (go) go.disabled = !ok.length || (where === 'elements' && !type); }
+        function upd() { typeField.hidden = where !== 'elements'; if (sendBtn) sendBtn.disabled = !ok.length || (where === 'elements' && !type); }
         var places = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('lf.dlg.where'))].concat(['uploads', 'elements'].map(function (k) {
           var r = h('input', { type: 'radio', name: 'ads-up-where', id: 'ads-up-' + k, value: k, checked: k === where });
           r.addEventListener('change', function () { where = k; upd(); });
@@ -2254,7 +2281,7 @@
           body: h('div', {}, [fileList, skipped && ok.length ? h('p', { class: 'ads-note' }, t('lib.dlg.skip', { n: skipped })) : null,
             ok.length ? places : h('p', { class: 'ads-warn' }, t('lib.dlg.none')), ok.length ? typeField : null]),
           actions: [{ label: t(ok.length === 1 ? 'lib.uploadOne' : 'lib.uploadN', { n: ok.length }), value: 'go', disabled: !ok.length }],
-          onOpen: function (dlg, btns) { go = btns.go || null; upd(); }
+          onOpen: function (dlg, btns) { sendBtn = btns.go || null; upd(); }
         }).then(function (v) {
           if (v === 'go') upload(ok, where === 'elements' ? { folder: 'elements', elementType: type } : { folder: 'uploads' });
         });
@@ -2277,8 +2304,8 @@
         else toast(t('lib.doneFailed', { n: done, f: failed.length, names: failed.slice(0, 3).join(', ') + (failed.length > 3 ? ', …' : '') }), 'act');
         if (full) toast(t('lf.err.full'), 'act');
         // The folder the pictures went to opens, so the new ones are in view.
-        var key = place.folder === 'elements' ? 'el:' + (place.elementType || 'none') : place.folder;
-        libOpen[place.folder] = true; libOpen[key] = true;
+        libFolder = place.folder;
+        libSub = place.folder === 'elements' ? place.elementType || 'none' : null;
         if (libView && !stale(libView.tok)) libView.load();
       }
       step(0);
