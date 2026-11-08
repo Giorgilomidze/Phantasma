@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-build="202611081122">
+<html lang="en" data-build="202611081150">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,9 +13,10 @@
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Noto+Sans+Georgian:wght@400;600&amp;display=swap">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600&amp;display=swap">
-<link rel="stylesheet" href="app.css?v=202611081122">
+<link rel="stylesheet" href="app.css?v=202611081150">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<script src="app.js?v=202611081122" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js" defer></script>
+<script src="app.js?v=202611081150" defer></script>
 </head>
 <body data-page="tender">
 <a class="skip" href="#main">Skip to content</a>
@@ -26,17 +27,17 @@
 <header class="site-head"><div class="wrap">
 <a class="brand" href="index.html">Tender Portal <span>by Phantasma</span></a>
 <nav class="nav" aria-label="Tender Portal"><a href="index.html">Dashboard</a><a href="tenders.html" aria-current="page">Tenders</a><a href="companies.html">Companies</a><a href="buyers.html">Buyers</a></nav>
-<p class="stamp">Data collected on <time datetime="2026-11-08T11:17">8 Nov 2026</time></p>
+<p class="stamp" id="stamp" hidden></p>
 </div></header>
 <main id="main" class="wrap" tabindex="-1">
 <h1 id="title">Tender</h1>
 <p class="lead" id="lead" hidden></p>
 <div id="app"><p class="loading">Loading…</p></div>
-<noscript><p class="note">This demo needs JavaScript to show the data.</p></noscript>
+<noscript><p class="note">This demo needs JavaScript and a sign-in to show the data.</p></noscript>
 </main>
 <footer class="site-foot"><div class="wrap">
 <p>Facts from the public procurement site <a href="https://tenders.procurement.gov.ge/public/?lang=ge" rel="noopener">tenders.procurement.gov.ge</a>; every tender links to its original record, and documents link to the state's copy. Always check the original.</p>
-<p>Interface in English; tender texts stay in Georgian as published. Data collected on 8 Nov 2026. Built 8 Nov 2026.</p>
+<p>Interface in English; tender texts stay in Georgian as published.<span id="dates"></span></p>
 </div></footer>
 </body>
 </html>

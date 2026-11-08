@@ -137,12 +137,13 @@
           </div>
         </li>
         <li>
-          <!-- Tender Portal (8 Nov 2026): opens the demo in tenders/ (12 tenders, built by
-               D:\Web Development\Tender Portal\app\build_preview.py --demo). No login: the
-               portal's pages are meant to be public. noindex + robots.txt Disallow. -->
+          <!-- Tender Portal (8 Nov 2026): opens the demo in tenders/ (built by
+               D:\Web Development\Tender Portal\app\build_demo.py). Needs a login like the other
+               tiles (owner, 8 Nov): the data sits in the private Storage bucket tender-demo,
+               readable only when signed in; a paywall comes later. noindex + robots.txt Disallow. -->
           <div class="service-tile" data-service="tender">
             <span class="service-tile__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M13 3v6h6"/><path d="M13 3l6 6v2"/><path d="M8.5 12h3"/><path d="M8.5 15.5h2"/><circle cx="16.5" cy="16.5" r="3"/><path d="M18.7 18.7 21 21"/></svg></span>
-            <a class="service-tile__link" href="./tenders/" aria-describedby="svc-tender-text">
+            <a class="service-tile__link" href="./tenders/" data-needs-login aria-describedby="svc-tender-text">
               <span class="service-tile__title">Tender Portal</span>
             </a>
             <span class="service-tile__text" id="svc-tender-text">What Georgian public tenders actually demand: standards, lab tests and who can certify them.</span>

@@ -1,7 +1,11 @@
-/* Tender Portal demo (solvephantasma.com/tenders/) - one file, no framework, no library.
+/* Tender Portal demo (solvephantasma.com/tenders/) - one file, no framework; one library: supabase-js
+ * (loaded before this file, as on the website).
  *
- * Every page is a static shell written by app/build_demo.py; <body data-page="..."> names the view
- * and this file fills #app from the JSON in data/. Charts are inline SVG drawn here.
+ * Every page is a static shell written by app/build_demo.py; <body data-page="..."> names the view.
+ * Signed out, this file shows only a sign-in gate (Google's own button). Signed in, it downloads the
+ * JSON from the private Supabase Storage bucket 'tender-demo' (readable by signed-in users only:
+ * supabase/tender-demo-storage.sql; uploaded by app/publish_demo.py) and fills #app. The pages are
+ * on the website's origin, so the website's login is this login. Charts are inline SVG drawn here.
  * Source: D:\Web Development\Tender Portal\app\demo\app.js (the copy in tenders/ is generated).
  *
  * Rules kept here: facts only (counts, sums, dates, prices; no scores or labels about companies);
@@ -11,8 +15,6 @@
 (function () {
   'use strict';
 
-  const ROOT = document.documentElement;
-  const BUILD = ROOT.getAttribute('data-build') || '';
   const PAGE = document.body.getAttribute('data-page') || '';
   const APP = document.getElementById('app');
   const TITLE = document.getElementById('title');
@@ -21,6 +23,16 @@
   const MAIL = 'consult@solvephantasma.com';
   const DASH = '–';
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* Login and data: the website's Supabase project (same constants as the website's script.js). The
+     publishable key and the Google client id are public by design; the data is protected by the
+     bucket's policy, not by this file. */
+  const SUPABASE_URL = 'https://muumpjtpjnoxxdkhqtik.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_R6Ruxp1ehYAGVcFRqrM_Lg_n1ahoV8e';
+  const BUCKET = 'tender-demo';
+  const GOOGLE_CLIENT_ID = '396544181713-ecijt1nf7u1qs4tej5n51vh7p4uu7m66.apps.googleusercontent.com';
+  const OTHER_LOGIN = '../services.html';     // the website's own login dialog (email, LinkedIn)
+  let sb = null;                              // the supabase-js client, made in boot()
 
   /* ------------------------------------------------------------------ DOM helpers */
 
@@ -136,20 +148,27 @@
 
   /* ------------------------------------------------------------------ data, links, state */
 
+  /* One JSON file from the private bucket, downloaded with the visitor's login (once per page).
+     A failed download rejects with err.status = the HTTP status. Storage answers 400 both for a
+     file that is missing and for one the bucket's policy hides from this account. */
   const cache = {};
   function load(path) {
     if (!cache[path]) {
-      cache[path] = fetch('data/' + path + (BUILD ? '?v=' + BUILD : '')).then((r) => {
-        if (!r.ok) {
-          const err = new Error('HTTP ' + r.status + ' for data/' + path);
-          err.status = r.status;
+      cache[path] = sb.storage.from(BUCKET).download(path).then((res) => {
+        if (res.error) {
+          const e = res.error;
+          const status = Number(e.status || (e.originalError && e.originalError.status) || e.statusCode) || 0;
+          const err = new Error((status ? 'HTTP ' + status : e.message || 'Error') + ' for ' + path);
+          err.status = status;
           throw err;
         }
-        return r.json();
-      });
+        return res.data.text();
+      }).then((text) => JSON.parse(text));
     }
     return cache[path];
   }
+  /* 400 / 403 (404 too, should Storage ever answer that way): this account may not read the data */
+  const noAccess = (err) => !!err && [400, 403, 404].indexOf(err.status) >= 0;
   function byId(rows) {
     const m = {};
     rows.forEach((r) => { m[r.id] = r; });
@@ -252,6 +271,13 @@
   function fail(err) {
     console.error(err); // eslint-disable-line no-console
     clear(APP);
+    if (noAccess(err)) {
+      add(APP, h('div', { class: 'note' }, [
+        h('p', { text: 'Your account doesn\'t have access yet.' }),
+        h('p', { class: 'small' }, ['Questions? Write to ', h('a', { href: 'mailto:' + MAIL, text: MAIL }), '.']),
+      ]));
+      return;
+    }
     add(APP, h('div', { class: 'note' }, [
       h('p', { text: 'The data could not be loaded. Reload the page, or try again later.' }),
       h('p', { class: 'small muted', text: String((err && err.message) || err) }),
@@ -884,14 +910,17 @@
       notFound('The address has no tender number. Pick a tender from the list.');
       return Promise.resolve();
     }
-    return Promise.all([load('t/' + no + '.json'), load('summary.json')]).then((res) => {
-      const t = res[0];
-      lookups(res[1]);
-      renderTender(t, res[1]);
+    // Both downloads start at once. Storage gives the same 400 for "no such file" and "no access",
+    // so summary.json decides: readable means the account has access and the tender is missing.
+    const one = load('t/' + no + '.json');
+    one.catch(() => {});                       // handled below, once summary.json has answered
+    return load('summary.json').then((S) => one.then((t) => {
+      lookups(S);
+      renderTender(t, S);
     }, (err) => {
-      if (err && err.status === 404) notFound('Tender ' + no + ' is not in this demo.');
+      if (noAccess(err)) notFound('Tender ' + no + ' is not in this demo.');
       else throw err;
-    });
+    }));
   }
 
   function renderTender(t, S) {
@@ -1310,6 +1339,100 @@
     });
   }
 
+  /* ------------------------------------------------------------------ sign-in */
+
+  /* Google's own button (Google Identity Services), the same flow as the website's script.js: the
+     button hands over a signed ID token and Supabase signs the visitor in on this page. The raw
+     nonce goes to Supabase, its SHA-256 (hex) to Google. Google only shows the button on origins
+     listed for this client id (https://solvephantasma.com; localhost only if added there). */
+  function loadGis() {
+    if (window.google && window.google.accounts && window.google.accounts.id) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = 'https://accounts.google.com/gsi/client';
+      el.async = true;
+      el.onload = resolve;
+      el.onerror = () => reject(new Error('the Google sign-in script did not load'));
+      document.head.appendChild(el);
+    });
+  }
+  function googleNonce() {
+    return Promise.resolve().then(() => {
+      const raw = btoa(String.fromCharCode.apply(null, crypto.getRandomValues(new Uint8Array(32))));
+      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)).then((buf) => ({
+        raw: raw,
+        hashed: Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join(''),
+      }));
+    });
+  }
+
+  /* Signed out: only the gate. Nothing is downloaded. */
+  function gate() {
+    document.body.classList.add('is-gated');   // hides the page links (app.css)
+    setTitle('Sign in to see the Tender Portal demo', 'Sign in');
+    setLead(null);
+    const slot = h('div', { class: 'gate__google' });
+    const msg = h('p', { class: 'gate__msg small', role: 'status' });
+    clear(APP);
+    add(APP, h('div', { class: 'gate' }, [
+      h('p', { text: 'The Tender Portal demo is for signed-in users. Sign in with your Google account to see it.' }),
+      slot,
+      msg,
+      h('p', { class: 'small' }, h('a', { href: OTHER_LOGIN, text: 'Other ways to sign in (email, LinkedIn)' })),
+    ]));
+    Promise.all([loadGis(), googleNonce()]).then((res) => {
+      const nonce = res[1];
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        nonce: nonce.hashed,
+        callback: (answer) => {
+          msg.textContent = 'Signing you in…';
+          sb.auth.signInWithIdToken({ provider: 'google', token: answer.credential, nonce: nonce.raw }).then((out) => {
+            if (out.error) throw out.error;
+            location.reload();                 // signed in: the same page, now with the data
+          }).catch((err) => {
+            console.error(err); // eslint-disable-line no-console
+            msg.textContent = 'Signing in did not work. Try again, or use another way to sign in.';
+          });
+        },
+      });
+      window.google.accounts.id.renderButton(slot, {
+        type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular',
+        text: 'signin_with', logo_alignment: 'center', locale: 'en',
+        width: Math.max(200, Math.min(400, slot.offsetWidth || 320)),   // Google allows 200-400 px
+      });
+    }).catch((err) => {
+      console.error(err); // eslint-disable-line no-console
+      msg.textContent = 'Google sign-in could not be loaded (a browser extension may block it). Reload the page, or use another way to sign in.';
+    });
+  }
+
+  /* Signed in: the account's email and "Sign out" in the demo bar */
+  function userBar(user) {
+    const links = document.querySelector('.demo-bar__links');
+    if (!links) return;
+    const out = h('button', { type: 'button', class: 'demo-bar__out', text: 'Sign out' });
+    out.addEventListener('click', () => {
+      out.disabled = true;
+      sb.auth.signOut().catch(() => null).then(() => location.reload());
+    });
+    add(links, h('span', { class: 'demo-bar__user' }, [
+      h('span', { class: 'demo-bar__email', text: (user && user.email) || 'Signed in' }), out,
+    ]));
+  }
+
+  /* The dates in the header and footer come from summary.json: the static pages carry no data */
+  function dates(S) {
+    const stamp = document.getElementById('stamp');
+    if (stamp && S.collected) {
+      clear(stamp);
+      add(stamp, ['Data collected on ', h('time', { datetime: S.collected, text: day(S.collected) })]);
+      stamp.hidden = false;
+    }
+    const foot = document.getElementById('dates');
+    if (foot) foot.textContent = ' Data collected on ' + day(S.collected) + '. Built ' + day(S.built) + '.';
+  }
+
   /* ------------------------------------------------------------------ start */
 
   const PAGES = {
@@ -1319,7 +1442,21 @@
   function boot() {
     const run = PAGES[PAGE];
     if (!run || !APP) return;
-    Promise.resolve().then(run).catch(fail);
+    if (!window.supabase || !window.supabase.createClient) {
+      fail(new Error('The sign-in library (supabase-js) did not load.'));
+      return;
+    }
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    sb.auth.getSession().then((res) => {
+      const session = res && res.data && res.data.session;
+      if (!session) {
+        gate();
+        return null;
+      }
+      userBar(session.user);
+      load('summary.json').then(dates, () => {});   // a failed download is reported by the page itself
+      return run();
+    }).catch(fail);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
