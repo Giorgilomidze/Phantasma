@@ -5525,13 +5525,18 @@ body.has-chat .site-footer { padding-bottom: calc(var(--space-7) + var(--space-8
   .conv,
   .role-switch a,
   .chat-switch__btn,
-  .fb-kind { transition: none; }
+  .fb-kind,
+  .admin-plan-btn__chev { transition: none; }
 }
 
 /* Admin: a client's preference answers — the Preferences % is a button (career.js, 0027);
-   the answers open in a compact, small-type row under the client. */
+   the answers open in a compact, small-type row under the client. Since 9 Nov 2026
+   an arrow after the % (the .t-toggle__chev of the account tables): right when
+   closed, down when open, so it reads as a button. */
 .admin-prefs-btn {
-  display: inline-grid;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-1) var(--space-2);
   margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
   border: 1px solid transparent;
@@ -5545,7 +5550,107 @@ body.has-chat .site-footer { padding-bottom: calc(var(--space-7) + var(--space-8
 .admin-prefs-btn:hover,
 .admin-prefs-btn[aria-expanded="true"] { border-color: var(--rule); background: var(--surface); }
 .admin-prefs-btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.admin-prefs-btn .t-toggle__chev { flex: none; color: var(--ink-soft); }
+.admin-prefs-btn:hover .t-toggle__chev,
+.admin-prefs-btn[aria-expanded="true"] .t-toggle__chev { color: var(--ink); }
+.admin-prefs-btn[aria-expanded="true"] .t-toggle__chev { transform: rotate(45deg); }   /* points down */
 .admin-prefs-row > td { padding: 0 0 var(--space-3); }
+
+/* Admin: the plan in each client row is a tag-like button (career.js, 0032, 9 Nov
+   2026) with a down arrow; it opens .plan-menu, fixed on top of the page and placed
+   under the button by script. The outcome of a change shows in .admin-plan-status. */
+.admin-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font: inherit;
+  font-size: var(--type-body-sm);
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.admin-plan-btn[data-plan="none"] { background: none; color: var(--ink-soft); }
+.admin-plan-btn:hover,
+.admin-plan-btn[aria-expanded="true"] { box-shadow: inset 0 0 0 1px var(--ink-soft); color: var(--ink); }
+.admin-plan-btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.admin-plan-btn__chev {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-25%) rotate(45deg);        /* points down */
+  transition: transform 150ms ease-out;
+}
+.admin-plan-btn[aria-expanded="true"] .admin-plan-btn__chev { transform: translateY(25%) rotate(-135deg); }
+.admin-plan-btn + .t-sub { margin-top: var(--space-1); }
+.admin-plan-status { margin: 0 0 var(--space-3); font-size: var(--type-body-sm); color: var(--ink); }
+.admin-plan-status[data-kind="error"] { color: var(--act); }
+.admin-plan-status[hidden] { display: none; }
+.plan-menu {
+  position: fixed;
+  z-index: 70;
+  width: min(280px, calc(100vw - 16px));
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--rule), 0 12px 32px rgb(20 33 61 / 0.16);
+  font-size: var(--type-body-sm);
+}
+.plan-menu[hidden] { display: none; }
+.plan-menu[aria-busy="true"] .plan-menu__list { opacity: 0.55; pointer-events: none; }
+.plan-menu__head {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-size: var(--type-caption);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.plan-menu__list { display: grid; }
+.plan-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.plan-menu__item::before {                       /* the tick column: ✓ on the current plan */
+  content: "";
+  flex: none;
+  width: 1em;
+  text-align: center;
+  color: var(--accent-deep);
+}
+.plan-menu__item[aria-checked="true"]::before { content: "\2713"; }
+.plan-menu__item[aria-checked="true"] { font-weight: 600; }
+.plan-menu__item:hover,
+.plan-menu__item:focus-visible { background: var(--surface); outline: none; }
+.plan-menu__item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-deep); }
+.plan-menu__item[aria-disabled="true"] { color: var(--ink-soft); opacity: 0.6; cursor: not-allowed; }
+.plan-menu__item[aria-disabled="true"]:hover { background: none; }
+.plan-menu__rule { height: 1px; margin: var(--space-1) var(--space-2); background: var(--rule); }
+.plan-menu__note {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  border-top: 1px solid var(--rule);
+  font-size: var(--type-caption);
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.plan-menu__note[data-kind="error"] { color: var(--act); }
 .admin-prefs {
   padding: var(--space-3) var(--space-4);
   border-radius: 4px;

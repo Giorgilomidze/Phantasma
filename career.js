@@ -1188,7 +1188,7 @@
     const tableBox = $('#clients-table');
     const COLS = [
       { text: 'Client',      sort: (c) => (c.full_name || c.email || '').toLowerCase() },
-      { text: 'Plan',        sort: (c) => c.plan_code || null },
+      { text: 'Plan',        sort: (c) => ('plan_current' in c ? (c.plan_current ? planSort(c.plan_code) || 99 : null) : c.plan_code || null) },
       { text: 'Searches',    sort: (c) => Number(c.runs) || 0,
         title: 'Search runs (weekly shortlists delivered). Below: vacancies matched, confirmed by the client (ticked or already sent) and sent' },
       { text: 'LinkedIn',    sort: (c) => (c.linkedin_connected ? 2 : c.linkedin_link ? 1 : 0),
@@ -1325,6 +1325,200 @@
       box.appendChild(grid);
     }
 
+    // ---- Plans (owner, 9 Nov 2026; supabase/0032): the plan in each row is a
+    // button that opens a small menu: Detective / Essential / Advanced / No plan.
+    // The database decides (career_admin_set_plan): a new plan runs four weeks
+    // from today, a change keeps the end date, and a plan the client PAID for
+    // never goes below the paid plan and cannot be removed. The menu greys out
+    // those choices so the admin sees the rule before choosing. Rows from
+    // before 0032 (no plan_current column) keep the plain text.
+    const planNote = $('#client-plan-status');
+    let plans = null;                              // [{ code, name, sort }], the public plans table
+    let plansLoading = null;
+    function loadPlans() {
+      if (plans) return Promise.resolve(plans);
+      if (!plansLoading) {
+        plansLoading = call(db().from('plans').select('code, name, sort').eq('is_active', true).order('sort'))
+          .then((res) => {
+            plansLoading = null;
+            if (!res.error && res.data && res.data.length) plans = res.data;
+            return plans;
+          });
+      }
+      return plansLoading;
+    }
+    const planOf   = (code) => (plans || []).find((p) => p.code === code) || null;
+    const planName = (code) => (planOf(code) ? planOf(code).name : code || '');
+    const planSort = (code) => (planOf(code) ? Number(planOf(code).sort) || 0 : 0);
+
+    function planCell(td, c) {
+      const cur = !!c.plan_current;
+      const label = cur ? c.plan_name || c.plan_code : 'No plan';
+      const b = el('button', 'admin-plan-btn', label);
+      b.type = 'button';
+      b.dataset.plan = cur ? c.plan_code : 'none';
+      b.dataset.focusKey = 'plan:' + c.user_id;
+      b.setAttribute('aria-haspopup', 'menu');
+      b.setAttribute('aria-controls', 'plan-menu-list');
+      b.setAttribute('aria-expanded', 'false');
+      b.setAttribute('aria-label', 'Plan of ' + nameOf(c) + ': ' + (cur ? label : 'no plan') + '. Change the plan');
+      const chev = el('span', 'admin-plan-btn__chev');
+      chev.setAttribute('aria-hidden', 'true');
+      b.appendChild(chev);
+      b.addEventListener('click', () => openPlanMenu(b, c));
+      td.appendChild(b);
+      let sub = '';
+      if (cur) {
+        const paid = !c.plan_paid_code ? 'assigned'
+          : c.plan_paid_code === c.plan_code ? 'paid' : 'paid ' + (planName(c.plan_paid_code) || c.plan_paid_code);
+        sub = 'until ' + fmtDate(c.plan_ends) + ' · ' + paid;
+      } else if (c.plan_code) {             // the last one: ended, cancelled, or a Pay now not finished
+        const how = c.plan_status === 'active' && c.plan_ends ? 'ended ' + fmtDate(c.plan_ends) : c.plan_status;
+        sub = (c.plan_name || c.plan_code) + (how ? ' · ' + how : '');
+      }
+      if (sub) td.appendChild(el('span', 't-sub', sub));
+    }
+
+    // One menu for the whole table, fixed on top (the table wrap scrolls sideways
+    // on phones and would clip it). Heading + role="menu" list + a note on the rule.
+    const planMenu = el('div', 'plan-menu');
+    planMenu.hidden = true;
+    const planHead = el('p', 'plan-menu__head');
+    planHead.id = 'plan-menu-head';
+    const planList = el('div', 'plan-menu__list');
+    planList.id = 'plan-menu-list';
+    planList.setAttribute('role', 'menu');
+    planList.setAttribute('aria-labelledby', 'plan-menu-head');
+    planList.setAttribute('aria-describedby', 'plan-menu-note');
+    const planTip = el('p', 'plan-menu__note');
+    planTip.id = 'plan-menu-note';
+    planMenu.append(planHead, planList, planTip);
+    document.body.appendChild(planMenu);
+    let planFor = null;                            // { btn, c } while the menu is open
+    let planBusy = false;
+
+    function placePlanMenu() {
+      if (!planFor) return;
+      const EDGE = 8;
+      const r = planFor.btn.getBoundingClientRect();
+      planMenu.style.left = '0px';                 // measure at full width
+      planMenu.style.top = '0px';
+      const w = planMenu.offsetWidth, h = planMenu.offsetHeight;
+      let top = r.bottom + 4;
+      if (top + h > window.innerHeight - EDGE) top = Math.max(EDGE, r.top - 4 - h);
+      planMenu.style.left = Math.max(EDGE, Math.min(r.left, window.innerWidth - w - EDGE)) + 'px';
+      planMenu.style.top = top + 'px';
+    }
+
+    function fillPlanMenu(c) {
+      planHead.textContent = 'Plan for ' + nameOf(c);
+      planList.replaceChildren();
+      planTip.dataset.kind = '';
+      if (!plans) { planTip.textContent = 'Could not load the plans. Please try again.'; planTip.dataset.kind = 'error'; return; }
+      const cur = c.plan_current ? c.plan_code : null;
+      const paid = c.plan_current ? c.plan_paid_code : null;
+      const item = (code, text) => {
+        const b = el('button', 'plan-menu__item', text);
+        b.type = 'button';
+        b.tabIndex = -1;
+        b.setAttribute('role', 'menuitemradio');
+        b.setAttribute('aria-checked', String(code === cur));
+        if (paid && (code === null || planSort(code) < planSort(paid))) b.setAttribute('aria-disabled', 'true');
+        b.addEventListener('click', () => { if (b.getAttribute('aria-disabled') !== 'true') choosePlan(code); });
+        planList.appendChild(b);
+      };
+      plans.forEach((p) => item(p.code, p.name));
+      const sep = el('div', 'plan-menu__rule');
+      sep.setAttribute('role', 'separator');
+      planList.appendChild(sep);
+      item(null, 'No plan');
+      planTip.textContent = paid
+        ? 'Paid for ' + planName(paid) + ': it can go up, or back to ' + planName(paid) + ', not lower.'
+        : cur ? 'A change keeps the end date (' + fmtDate(c.plan_ends) + ').' : 'A new plan runs four weeks from today.';
+    }
+
+    async function openPlanMenu(btn, c) {
+      if (planFor && planFor.btn === btn) { closePlanMenu(true); return; }
+      closePlanMenu(false);
+      planFor = { btn, c };
+      btn.setAttribute('aria-expanded', 'true');
+      planHead.textContent = 'Plan for ' + nameOf(c);
+      planList.replaceChildren();
+      planTip.textContent = 'Loading plans…';
+      planTip.dataset.kind = '';
+      planMenu.hidden = false;
+      placePlanMenu();
+      await loadPlans();
+      if (!planFor || planFor.btn !== btn) return;          // closed meanwhile
+      fillPlanMenu(planFor.c);
+      placePlanMenu();
+      const items = Array.from(planList.querySelectorAll('.plan-menu__item'));
+      const first = items.find((b) => b.getAttribute('aria-checked') === 'true') || items[0];
+      if (first) first.focus();
+    }
+
+    function closePlanMenu(focusBtn) {
+      if (!planFor) return;
+      const { btn } = planFor;
+      planFor = null;
+      planMenu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      if (focusBtn && btn.isConnected) btn.focus();
+    }
+
+    async function choosePlan(code) {
+      if (!planFor || planBusy) return;
+      const { c } = planFor;
+      const cur = c.plan_current ? c.plan_code : null;
+      if (code === cur) { closePlanMenu(true); return; }
+      planBusy = true;
+      planMenu.setAttribute('aria-busy', 'true');
+      planTip.textContent = 'Saving…';
+      const res = await call(db().rpc('career_admin_set_plan', { p_user: c.user_id, p_plan: code }));
+      planBusy = false;
+      planMenu.removeAttribute('aria-busy');
+      closePlanMenu(true);
+      const who = nameOf(c);
+      if (res.error) {
+        if (res.error.code === '42501') { showDenied(); return; }          // no longer an admin
+        note(planNote, 'error', res.error.code === 'PGRST202'
+          ? 'Changing plans needs the database update 0032 first.'
+          : 'Could not change the plan of ' + who + '. Please try again.');
+        return;
+      }
+      const r = res.data || {};
+      const text = {
+        assigned:  who + ' now has ' + planName(r.plan) + ' until ' + fmtDate(r.ends_at) + '.',
+        changed:   who + ': ' + planName(cur) + ' → ' + planName(r.plan) + ', until ' + fmtDate(r.ends_at) + '.',
+        removed:   who + ': plan removed.',
+        unchanged: who + ': no change.',
+        refused:   'Not changed: ' + who + ' paid for ' + planName(r.paid_plan) + ', so the plan cannot go lower.',
+      }[r.result] || who + ': saved.';
+      note(planNote, r.result === 'refused' ? 'error' : 'ok', text);
+      loadClients();
+    }
+
+    // Arrows / Home / End move through the items; Esc closes and returns to the
+    // plan button; Tab closes and moves on from it. A click elsewhere, scrolling
+    // or resizing closes it.
+    planMenu.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePlanMenu(true); return; }
+      if (e.key === 'Tab') { closePlanMenu(true); return; }
+      const items = Array.from(planList.querySelectorAll('.plan-menu__item'));
+      const i = items.indexOf(document.activeElement);
+      const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+      if (to === undefined || !items.length) return;
+      e.preventDefault();
+      items[(to + items.length) % items.length].focus();
+    });
+    document.addEventListener('click', (e) => {
+      if (planFor && !planMenu.contains(e.target) && !planFor.btn.contains(e.target)) closePlanMenu(false);
+    });
+    window.addEventListener('resize', () => closePlanMenu(false));
+    window.addEventListener('scroll', (e) => {
+      if (planFor && !planMenu.contains(e.target)) closePlanMenu(false);
+    }, { passive: true, capture: true });
+
     function clientRow(c) {
       const tr = document.createElement('tr');
       const name = tr.insertCell();
@@ -1333,7 +1527,9 @@
       if (c.full_name && c.email) name.appendChild(el('span', 't-sub', c.email));
 
       const plan = tr.insertCell();
-      if (c.plan_code) {
+      if ('plan_current' in c) {
+        planCell(plan, c);                         // 0032: a button that opens the plan menu
+      } else if (c.plan_code) {
         plan.appendChild(el('span', null, c.plan_code));
         const sub = [c.plan_status, c.plan_ends ? 'ends ' + fmtDate(c.plan_ends) : ''].filter(Boolean).join(' · ');
         if (sub) plan.appendChild(el('span', 't-sub', sub));
@@ -1369,6 +1565,11 @@
       pb.setAttribute('aria-expanded', 'false');
       pb.setAttribute('aria-label', 'Preferences ' + pct + '% filled: show the answers of ' + nameOf(c));
       pb.appendChild(wrap);
+      // Arrow (owner, 9 Nov 2026: "it is a button, it's not intuitive"): right when
+      // closed, down when the answers are open, like the account tables' row arrows.
+      const pchev = el('span', 't-toggle__chev');
+      pchev.setAttribute('aria-hidden', 'true');
+      pb.appendChild(pchev);
       pb.addEventListener('click', () => togglePrefs(tr, pb, c));
       tr.insertCell().appendChild(pb);
 
@@ -1416,6 +1617,26 @@
       if (keep) {
         const f = tbody.querySelector('[data-focus-key="' + keep + '"]');
         if (f) f.focus();
+      }
+      // An open plan menu stays with its client's new button; refilled only when
+      // that client's plan changed meanwhile (another admin).
+      if (planFor) {
+        const id = planFor.c.user_id;
+        const nb = tbody.querySelector('[data-focus-key="plan:' + id + '"]');
+        if (!nb) { closePlanMenu(false); return; }
+        const fresh = clientOf(id) || planFor.c;
+        const same = fresh.plan_current === planFor.c.plan_current && fresh.plan_code === planFor.c.plan_code
+          && fresh.plan_paid_code === planFor.c.plan_paid_code;
+        planFor.btn = nb;
+        planFor.c = fresh;
+        nb.setAttribute('aria-expanded', 'true');
+        if (!same && !planBusy && plans) {
+          const had = planMenu.contains(document.activeElement);
+          fillPlanMenu(fresh);
+          const f = planList.querySelector('[aria-checked="true"]') || planList.querySelector('.plan-menu__item');
+          if (had && f) f.focus();
+        }
+        placePlanMenu();
       }
     }
     search.addEventListener('input', renderRows);
@@ -1799,6 +2020,8 @@
       stopListening();
       clearTimeout(refreshTimer);
       me = s ? { id: s.user.id, email: (s.user.email || '').toLowerCase() } : null;
+      closePlanMenu(false);
+      note(planNote, '', '');
       clients = [];
       clientsReady = false;
       openId = null;
