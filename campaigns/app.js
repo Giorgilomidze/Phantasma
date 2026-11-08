@@ -1741,9 +1741,10 @@
 
   /* ---------------------------------------------------------------------
      9. Image Library (9 Nov 2026, owner request; supabase/0033). Pictures sit in folders, shown as
-        tiles (the newest picture as the cover, name, number of pictures, size): Uploads, Elements
-        (tiles for Price Tag / Picture Frame / Picture Background), AI Generated, Products, Archive.
-        A tile or a shortcut button opens the folder; the tag filter sits right of the shortcuts. Edit ticks pictures to archive, restore or delete them (no Delete button on a card);
+        tiles (the newest picture as the cover, name, number of pictures, size): Uploads, Elements,
+        AI Generated, Products, Archive. A tile (or its shortcut button) opens the folder's pictures
+        below the tiles; Elements first shows a line of small buttons for its sub-folders (Price Tag /
+        Picture Frame / Picture Background). The tag filter sits right of the shortcuts. Edit ticks pictures to archive, restore or delete them (no Delete button on a card);
         a click on a picture opens its details (facts + tags). Each person may store up to 50 MB.
      --------------------------------------------------------------------- */
   var LIB_FOLDERS = ['uploads', 'elements', 'ai', 'products', 'archive']; // shortcut row + folder list, in order
@@ -1897,9 +1898,10 @@
       // The shortcut buttons stay in place (and keep focus); only the box below them is redrawn.
       var chips = ['all'].concat(LIB_FOLDERS).map(function (k) {
         return h('button', { type: 'button', class: 'ads-filter', 'data-key': k, 'aria-pressed': String(k === libFolder), onclick: function () {
-          libFolder = k; libSub = null;
+          libFolder = k; libSub = null; // All closes the open folder
           syncChips();
           fillFolders();
+          reveal();
         } }, k === 'all' ? t('common.all') : t('lf.f.' + k));
       });
       var tags = tagFilter();
@@ -1921,8 +1923,10 @@
       if (!libTags.length) return list;
       return list.filter(function (im) { return libTags.every(function (tag) { return im.tags.indexOf(tag) !== -1; }); });
     }
-    // The box shows the folder tiles (All), the element-type tiles (Elements) or the pictures of one
-    // folder / element type. focus: 'head' = the folder heading, 'tile:<key>' = that tile.
+    // The box: one tile per folder (the newest picture as the cover, name, count, size). The open
+    // folder's pictures expand below the tiles; a folder with sub-folders shows a line of small
+    // sub-folder buttons first, and a sub-folder's pictures expand below that line (owner, 9 Nov 2026).
+    // focus: 'tile:<key>' or 'sub:<key>' = the control that was used, back in focus after the redraw.
     function fillFolders(focus) {
       var box = ui.box;
       box.innerHTML = '';
@@ -1932,11 +1936,19 @@
         box.appendChild(emptyState('lib.emptyTitle', 'lib.emptyText', null, { mb: rules.maxMb, max: rules.maxFiles }));
       } else {
         var shown = matches(all);
-        if (libFolder === 'all') drawTiles(shown);
-        else drawFolder(inFolder(shown, libFolder));
+        // A tag filter keeps only the folders with a match (their counts are the matches).
+        var list = LIB_FOLDERS.map(function (k) { return { key: k, items: inFolder(shown, k) }; })
+          .filter(function (f) { return !libTags.length || f.items.length; });
+        if (libFolder !== 'all' && !list.some(function (f) { return f.key === libFolder; })) { libFolder = 'all'; libSub = null; syncChips(); }
+        if (!list.length) ui.none.hidden = false;
+        else {
+          box.appendChild(tiles(list));
+          var open = list.filter(function (f) { return f.key === libFolder; })[0];
+          if (open) box.appendChild(panel(open));
+        }
       }
       ui.bar.update();
-      var el = focus === 'head' ? $('.ads-fhead__title', box) : focus ? $('.ads-ftile[data-key="' + focus.slice(5) + '"]', box) : null;
+      var el = focus ? $('[data-focus="' + focus + '"]', box) : null;
       if (el) el.focus();
     }
     // A folder's pictures, newest first (the Archive: the last archived first).
@@ -1949,66 +1961,71 @@
       var bytes = items.reduce(function (s, im) { return s + (im.bytes || 0); }, 0);
       return countText(items.length) + (bytes ? ' · ' + fmtBytes(bytes) : '');
     }
-    // All: one tile per folder. A tag filter shows only the folders with a match (counting the matches).
-    function drawTiles(shown) {
-      var list = LIB_FOLDERS.map(function (k) { return { key: k, title: t('lf.f.' + k), items: inFolder(shown, k), archive: k === 'archive' }; })
-        .filter(function (f) { return !libTags.length || f.items.length; });
-      if (!list.length) { ui.none.hidden = false; return; }
-      ui.box.appendChild(tiles(list, function (f) { go(f.key, null); }));
+    // Sub-folders of a folder (null: none). Today only Elements, one per element type; a folder that
+    // gets sub-folders later is added here and works the same way.
+    function subsOf(key, items) {
+      if (key !== 'elements') return null;
+      return lr.elementTypes.concat(items.some(function (im) { return !im.elementType; }) ? ['none'] : []);
     }
-    // One folder: a way back, its heading, then its pictures (Elements: a tile per element type first).
-    function drawFolder(items) {
-      var box = ui.box, archive = libFolder === 'archive';
-      box.appendChild(backBtn());
-      if (libFolder === 'elements' && !libSub) {
-        box.appendChild(folderHead(t('lf.f.elements'), items, false));
-        var types = lr.elementTypes.concat(items.some(function (im) { return !im.elementType; }) ? ['none'] : []);
-        var list = types.map(function (ty) {
-          return { key: 'el:' + ty, type: ty, title: t('lf.el.' + ty), items: items.filter(function (im) { return (im.elementType || 'none') === ty; }) };
-        }).filter(function (f) { return !libTags.length || f.items.length; });
-        if (!list.length) { ui.none.hidden = false; return; }
-        box.appendChild(tiles(list, function (f) { go('elements', f.type); }));
-        return;
-      }
-      var pics = libSub ? items.filter(function (im) { return (im.elementType || 'none') === libSub; }) : items;
-      box.appendChild(folderHead(libSub ? t('lf.el.' + libSub) : t('lf.f.' + libFolder), pics, archive));
-      if (archive && pics.length) box.appendChild(h('p', { class: 'ads-hint ads-fnote' }, t('lf.archiveNote', { days: lr.archiveDays })));
-      if (libTags.length && !pics.length) { ui.none.hidden = false; return; }
-      box.appendChild(libSub ? grid(pics, 'lf.empty.type', { type: t('lf.el.' + libSub) }) : grid(pics, 'lf.empty.' + libFolder, { days: lr.archiveDays }));
+    function subItems(items, sub) { return items.filter(function (im) { return (im.elementType || 'none') === sub; }); }
+    function subLabel(sub) { return t('lf.el.' + sub); }
+    // A tile opens its folder below the tiles; a second click (or ✕) closes it again.
+    function toggleFolder(key, focus) {
+      libFolder = libFolder === key ? 'all' : key;
+      libSub = null;
+      syncChips();
+      fillFolders(focus);
+      reveal();
     }
-    // Folder tiles: the newest picture as the cover, then the name, how many pictures and their size.
-    function tiles(list, open) {
+    // The opened pictures come into view when they start below the screen (a phone shows the tiles in
+    // several rows). Nothing moves when they are already in view.
+    function reveal() {
+      var p = $('.ads-fpanel', ui.box);
+      if (!p || p.getBoundingClientRect().top < window.innerHeight - 160) return;
+      var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      p.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+    }
+    function tiles(list) {
+      var panelId = 'ads-fpanel-' + tok;
       return h('ul', { class: 'ads-ftiles' }, list.map(function (f) {
+        var archive = f.key === 'archive', open = f.key === libFolder;
         var newest = f.items[0], cover = newest ? imageEl(newest.id, 'ads-ftile__img') : null;
         if (cover && cover.tagName === 'IMG') cover.alt = '';
-        else cover = h('span', { class: 'ads-ftile__empty' }, [folderIcon(f.archive, 40), f.items.length ? null : h('span', {}, t('lf.emptyFolder'))]);
-        return h('li', {}, h('button', { type: 'button', class: 'ads-ftile', 'data-key': f.key, onclick: function () { open(f); } }, [
+        else cover = h('span', { class: 'ads-ftile__empty' }, [folderIcon(archive, 40), f.items.length ? null : h('span', {}, t('lf.emptyFolder'))]);
+        return h('li', {}, h('button', { type: 'button', class: 'ads-ftile', 'data-focus': 'tile:' + f.key, 'aria-expanded': String(open), 'aria-controls': open ? panelId : null,
+          onclick: function () { toggleFolder(f.key, 'tile:' + f.key); } }, [
           h('span', { class: 'ads-ftile__cover' }, cover),
           h('span', { class: 'ads-ftile__body' }, [
-            h('span', { class: 'ads-ftile__name' }, [folderIcon(f.archive), f.title]),
+            h('span', { class: 'ads-ftile__name' }, [folderIcon(archive), t('lf.f.' + f.key)]),
             h('span', { class: 'ads-ftile__meta' }, metaText(f.items))
           ])
         ]));
       }));
     }
-    function folderHead(title, items, archive) {
-      return h('div', { class: 'ads-fhead' }, [
-        h('h2', { class: 'ads-fhead__title', tabindex: '-1' }, [folderIcon(archive, 24), title]),
-        h('span', { class: 'ads-fhead__meta' }, metaText(items))
-      ]);
-    }
-    // "← All folders" (inside an element type: "← Elements"); focus goes back to the tile we came from.
-    function backBtn() {
-      var up = libSub ? 'elements' : 'all', from = libSub ? 'el:' + libSub : libFolder;
-      var name = up === 'all' ? t('lf.allFolders') : t('lf.f.elements');
-      return h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost ads-fback', 'aria-label': t('lf.backTo', { name: name }),
-        onclick: function () { go(up, null, 'tile:' + from); } }, [h('span', { 'aria-hidden': 'true' }, '← '), name]);
-    }
-    // Opens a folder (or an element type, or All) as if its shortcut had been pressed.
-    function go(folder, sub, focus) {
-      libFolder = folder; libSub = sub || null;
-      syncChips();
-      fillFolders(focus || 'head');
+    // The open folder below the tiles: its name, count and size, a close button, then its pictures
+    // (or the line of sub-folders, and the chosen sub-folder's pictures below it).
+    function panel(f) {
+      var archive = f.key === 'archive', name = t('lf.f.' + f.key), subs = subsOf(f.key, f.items);
+      var kids = [h('div', { class: 'ads-fhead' }, [
+        h('h2', { class: 'ads-fhead__title' }, [folderIcon(archive, 24), name]),
+        h('span', { class: 'ads-fhead__meta' }, metaText(f.items)),
+        h('button', { type: 'button', class: 'ads-iconbtn ads-fpanel__close', 'aria-label': t('lf.close', { name: name }), onclick: function () { toggleFolder(f.key, 'tile:' + f.key); } }, '✕')
+      ])];
+      if (subs) {
+        if (libSub && subs.indexOf(libSub) === -1) libSub = null;
+        kids.push(h('div', { class: 'ads-subs', role: 'group', 'aria-label': t('lf.subs', { name: name }) },
+          subs.filter(function (s) { return !libTags.length || subItems(f.items, s).length; }).map(function (s) {
+            return h('button', { type: 'button', class: 'ads-subbtn', 'data-focus': 'sub:' + s, 'aria-pressed': String(libSub === s), onclick: function () {
+              libSub = libSub === s ? null : s;
+              fillFolders('sub:' + s);
+            } }, [subLabel(s), h('span', { class: 'ads-subbtn__n' }, num(subItems(f.items, s).length))]);
+          })));
+        kids.push(libSub ? grid(subItems(f.items, libSub), 'lf.empty.type', { type: subLabel(libSub) }) : h('p', { class: 'ads-hint ads-fnote' }, t('lf.subsHint')));
+      } else {
+        if (archive && f.items.length) kids.push(h('p', { class: 'ads-hint ads-fnote' }, t('lf.archiveNote', { days: lr.archiveDays })));
+        kids.push(grid(f.items, 'lf.empty.' + f.key, { days: lr.archiveDays }));
+      }
+      return h('section', { class: 'ads-fpanel', id: 'ads-fpanel-' + tok, 'aria-label': name }, kids);
     }
     function syncChips() { ui.chips.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-key') === libFolder)); }); }
     function grid(items, emptyKey, vars) {
