@@ -25,6 +25,12 @@
    holds up to 6 products (productIds) and up to 10 pictures (imageIds).
    Campaign edits (updateCampaign, 7 Nov 2026) are mock in both modes too: the
    campaigns are sample data; the Meta update comes with live campaigns.
+   9 Nov 2026 (supabase/0033, run by the owner): library folders (uploads,
+   elements with a type, ai, products), tags, an Archive (archivedAt; deleted
+   for good 30 days later, the server picks them, the browser removes the
+   files), and a storage limit per person (ads_library_usage; the database
+   refuses an upload over it). A picture chosen as a product photo moves to
+   Products in the database (trigger), not here.
    In mock mode, library uploads live in memory only (gone on reload) and the
    stock sits in the demo state in localStorage.
    No secrets belong in this file.
@@ -41,6 +47,11 @@
   var IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }; // mime -> file extension
   var IMG_EXTS = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
   var IMG_MAX_MB = 10, IMG_MAX_FILES = 20, IMG_MAX_TITLE = 200;
+  var IMG_FOLDERS = ['uploads', 'elements', 'ai', 'products']; // a picture's folder (0033); the Archive is archivedAt
+  var ELEMENT_TYPES = ['price_tag', 'frame', 'background'];  // the Elements sub-folders (owner, 9 Nov 2026)
+  var LIB_MB = 50;        // storage per person (live: ads_settings.library_mb, read through ads_library_usage)
+  var ARCHIVE_DAYS = 30;  // archived pictures are deleted for good this many days after archiving
+  var TAG_MAX = 20, TAG_LEN = 40; // tags per picture, characters per tag (the database applies the same rule)
   var STOCK_BATCH = 1000; // rows per ads_import_stock call (server limit)
   var POST_MAX_PRODUCTS = 6, POST_MAX_IMAGES = 10; // per post (the composer enforces them too)
   var CAMP_NAME_MAX = 80; // campaign name length (the wizard's and the edit window's fields stop there too)
@@ -568,21 +579,33 @@
 
   /* ---- image library ---- */
   // Item: { id, business, kind ('picture' | 'element'), title, title_en, title_ka, url, mime, bytes,
-  //   width, height, createdAt, sample }. Sample images have no url: app.js draws them.
+  //   width, height, createdAt, sample, and since 9 Nov 2026 (0033): folder ('uploads' | 'elements' |
+  //   'ai' | 'products'), elementType ('price_tag' | 'frame' | 'background' | null; elements only),
+  //   source ('upload' | 'ai'), tags ([] of lower-case words), archivedAt (ISO time or null: in the
+  //   Archive, deleted for good ARCHIVE_DAYS later) }. The kind follows the folder. Sample images have
+  //   no url: app.js draws them.
+  var IMG_COLS = 'id,business_id,kind,title,path,mime,bytes,width,height,created_at,folder,element_type,source,tags,archived_at';
   function sampleImages(b) {
     return fixed.images.filter(function (p) { return !b || p.business === b; })
-      .map(function (p) { return Object.assign({}, p, { kind: 'picture', sample: true }); });
+      .map(function (p) { return Object.assign({}, p, { kind: 'picture', sample: true, folder: 'uploads', elementType: null, source: 'upload', tags: [], archivedAt: null }); });
   }
-  function liveImage(r, url) {
-    return { id: r.id, business: r.business_id, kind: r.kind, title: r.title, title_en: r.title, title_ka: r.title, url: url,
-      mime: r.mime, bytes: r.bytes, width: r.width, height: r.height, createdAt: r.created_at, sample: false };
+  // d: folder / source for a row without the 0033 columns (the AI function's reply carries none).
+  function liveImage(r, url, d) {
+    d = d || {};
+    var folder = IMG_FOLDERS.indexOf(r.folder) !== -1 ? r.folder : d.folder || (r.kind === 'element' ? 'elements' : 'uploads');
+    return { id: r.id, business: r.business_id, kind: folder === 'elements' ? 'element' : 'picture', title: r.title, title_en: r.title, title_ka: r.title, url: url,
+      mime: r.mime, bytes: r.bytes, width: r.width, height: r.height, createdAt: r.created_at, sample: false,
+      folder: folder, elementType: folder === 'elements' && ELEMENT_TYPES.indexOf(r.element_type) !== -1 ? r.element_type : null,
+      source: r.source === 'ai' || d.source === 'ai' ? 'ai' : 'upload', tags: Array.isArray(r.tags) ? r.tags.slice() : [], archivedAt: r.archived_at || null };
   }
   function liveImages(b) {
     if (!client) return Promise.reject(new Error('no client'));
-    return selectAll(function () {
-      var q = client.from('ads_images').select('id,business_id,kind,title,path,mime,bytes,width,height,created_at');
-      if (b) q = q.eq('business_id', b);
-      return q.order('created_at', { ascending: false }).order('id', { ascending: true });
+    return purgeExpired().then(function () {
+      return selectAll(function () {
+        var q = client.from('ads_images').select(IMG_COLS);
+        if (b) q = q.eq('business_id', b);
+        return q.order('created_at', { ascending: false }).order('id', { ascending: true });
+      });
     }).then(function (rows) {
       if (!rows.length) return [];
       // The bucket is private: one call signs every address, valid for an hour.
@@ -593,16 +616,64 @@
       });
     });
   }
-  // The business's uploads (newest first), then the sample images.
+  // The business's pictures (newest first), then the sample images. Archived pictures only with
+  // opts.archived (the Library page; the start-up cache, so posts still show them): every picker
+  // offers only pictures that are not archived.
   // opts.strict: a failed live read rejects (the Library page shows it). Without it the
   // pickers still get the samples, so a missing table never blocks the rest of the tool.
   function listImages(b, opts) {
+    opts = opts || {};
+    function keep(x) { return opts.archived || !x.archivedAt; }
     return init().then(function () {
-      if (!isLive()) return wait(uploads.filter(function (u) { return !b || u.business === b; }).concat(sampleImages(b)));
-      return liveImages(b).catch(function (e) { if (opts && opts.strict) throw e; return []; })
-        .then(function (mine) { return mine.concat(sampleImages(b)); });
+      if (!isLive()) {
+        purgeMock();
+        return wait(uploads.filter(function (u) { return (!b || u.business === b) && keep(u); }).concat(sampleImages(b)));
+      }
+      return liveImages(b).catch(function (e) { if (opts.strict) throw e; return []; })
+        .then(function (mine) { return mine.filter(keep).concat(sampleImages(b)); });
     });
   }
+  // Archived pictures whose days are over: mock = this tab's uploads.
+  function purgeMock() {
+    var cut = Date.now() - ARCHIVE_DAYS * 86400000;
+    uploads = uploads.filter(function (u) {
+      if (!u.archivedAt || Date.parse(u.archivedAt) > cut) return true;
+      try { URL.revokeObjectURL(u.url); } catch (e) { /* ignore */ }
+      return false;
+    });
+  }
+  // LIVE, at most every 10 minutes, never blocking the list: the server picks the pictures archived
+  // more than ARCHIVE_DAYS ago (its own clock); their files go first, then the rows, so a failed file
+  // removal leaves everything for the next try.
+  var purgedAt = 0;
+  function purgeExpired() {
+    if (!client || Date.now() - purgedAt < 600000) return Promise.resolve();
+    purgedAt = Date.now();
+    return client.rpc('ads_images_expired').then(must).then(function (list) {
+      list = Array.isArray(list) ? list : [];
+      if (!list.length) return;
+      return client.storage.from(IMG_BUCKET).remove(list.map(function (x) { return x.path; })).then(must).then(function () {
+        var ids = list.map(function (x) { return x.id; });
+        return client.from('ads_images').delete().in('id', ids).then(must).then(function () {
+          auditLive('image.purge', 'image', null, { count: ids.length });
+        });
+      });
+    }).catch(function () { /* tried again next time */ });
+  }
+  // Storage of the signed-in person in bytes: { used, limit }. Everything they stored counts, archived
+  // pictures too until they are deleted. Mock: this tab's uploads against the default limit.
+  function libraryUsage() {
+    return init().then(function () {
+      if (!isLive()) return wait({ used: mockUsed(), limit: LIB_MB * 1048576 });
+      if (!client) throw new Error('no client');
+      return client.rpc('ads_library_usage').then(must).then(function (r) {
+        return { used: Number(r && r.used_bytes) || 0, limit: Number(r && r.limit_bytes) || LIB_MB * 1048576 };
+      });
+    });
+  }
+  function mockUsed() { return uploads.reduce(function (s, u) { return s + (u.bytes || 0); }, 0); }
+  // The database refuses an upload over the limit (0033 trigger) -> i18n key.
+  function storageErr(err) { return err && /storage_full/.test(String(err.message || '')) ? codeError('lf.err.full') : err; }
   function mimeOf(file) {
     var type = String(file.type || '').toLowerCase(), m = /\.([a-z0-9]+)$/i.exec(file.name || '');
     return type || (m && IMG_EXTS[m[1].toLowerCase()]) || '';
@@ -628,67 +699,153 @@
   }
   // Title = file name without its extension, max 200 characters.
   function titleOf(name) { return String(name || '').replace(/\.[^.]*$/, '').replace(/\s+/g, ' ').trim().slice(0, IMG_MAX_TITLE) || 'image'; }
-  // Uploads one picture. kind: 'picture' | 'element'. opts.title (optional) replaces the
-  // file-name title (product photos carry the product name). Resolves with the new library item.
-  function uploadImage(b, file, kind, opts) {
+  // Where an upload goes. place: { folder, elementType, source } (0033), or the older 'picture' |
+  // 'element' (= Uploads | Elements without a type).
+  function placeOf(p) {
+    if (p && typeof p === 'object') {
+      var f = IMG_FOLDERS.indexOf(p.folder) !== -1 ? p.folder : 'uploads';
+      return { folder: f, elementType: f === 'elements' && ELEMENT_TYPES.indexOf(p.elementType) !== -1 ? p.elementType : null, source: p.source === 'ai' ? 'ai' : 'upload' };
+    }
+    return { folder: p === 'element' ? 'elements' : 'uploads', elementType: null, source: 'upload' };
+  }
+  // Uploads one picture into a folder (see placeOf). opts.title (optional) replaces the file-name
+  // title (product photos carry the product name). Resolves with the new library item.
+  function uploadImage(b, file, place, opts) {
     return init().then(function () {
       var bad = checkImageFile(file);
       if (bad) throw codeError(bad.key, bad.vars);
-      if (kind !== 'picture' && kind !== 'element') throw new Error('bad kind');
+      var pl = placeOf(place);
       var own = opts && opts.title ? String(opts.title).replace(/\s+/g, ' ').trim().slice(0, IMG_MAX_TITLE) : '';
       var mime = mimeOf(file), title = own || titleOf(file.name);
       return imageSize(file).then(function (dim) {
-        if (isLive()) return uploadLive(b, file, kind, mime, title, dim);
-        var im = { id: newId('img'), business: b, kind: kind, title: title, title_en: title, title_ka: title, url: URL.createObjectURL(file),
-          mime: mime, bytes: file.size, width: dim.width, height: dim.height, createdAt: new Date().toISOString(), sample: false };
+        if (isLive()) return uploadLive(b, file, pl, mime, title, dim);
+        if (mockUsed() + file.size > LIB_MB * 1048576) throw codeError('lf.err.full');
+        var im = { id: newId('img'), business: b, kind: pl.folder === 'elements' ? 'element' : 'picture', title: title, title_en: title, title_ka: title, url: URL.createObjectURL(file),
+          mime: mime, bytes: file.size, width: dim.width, height: dim.height, createdAt: new Date().toISOString(), sample: false,
+          folder: pl.folder, elementType: pl.elementType, source: pl.source, tags: [], archivedAt: null };
         uploads.unshift(im);
-        audit('image.upload', 'image', im.id, title + ' | ' + kind + ' | ' + file.size + ' bytes | ' + dim.width + 'x' + dim.height + ' (MOCK: kept in this browser tab only)');
+        audit('image.upload', 'image', im.id, title + ' | ' + pl.folder + (pl.elementType ? ' / ' + pl.elementType : '') + ' | ' + file.size + ' bytes | ' + dim.width + 'x' + dim.height + ' (MOCK: kept in this browser tab only)');
         save();
         return wait(im);
       });
     });
   }
   // LIVE: the file goes to the private bucket first (never overwriting), then the row. If the
-  // row cannot be saved the file is taken out again, so no orphan file stays behind.
-  function uploadLive(b, file, kind, mime, title, dim) {
+  // row cannot be saved (also: storage full) the file is taken out again, so no orphan file stays.
+  function uploadLive(b, file, pl, mime, title, dim) {
     if (!client) return Promise.reject(new Error('no client'));
     var path = b + '/' + newRequestId() + '.' + IMG_TYPES[mime];
     var bucket = client.storage.from(IMG_BUCKET);
     return bucket.upload(path, file, { contentType: mime, upsert: false, cacheControl: '3600' }).then(function (u) {
       must(u);
-      return client.from('ads_images').insert({ business_id: b, kind: kind, title: title, path: path, mime: mime, bytes: file.size, width: dim.width, height: dim.height })
-        .select('id,business_id,kind,title,path,mime,bytes,width,height,created_at').single()
+      return client.from('ads_images').insert({ business_id: b, kind: pl.folder === 'elements' ? 'element' : 'picture', title: title, path: path, mime: mime,
+        bytes: file.size, width: dim.width, height: dim.height, folder: pl.folder, element_type: pl.elementType, source: pl.source })
+        .select(IMG_COLS).single()
         .then(must)
         .catch(function (err) {
+          err = storageErr(err);
           return bucket.remove([path]).then(function () { throw err; }, function () { throw err; });
         });
     }).then(function (row) {
-      auditLive('image.upload', 'image', row.id, { business_id: b, title: title, kind: kind, bytes: file.size });
+      auditLive('image.upload', 'image', row.id, { business_id: b, title: title, folder: pl.folder, element_type: pl.elementType, bytes: file.size });
       return bucket.createSignedUrl(path, 3600).then(function (s) { return liveImage(row, (s.data && s.data.signedUrl) || ''); },
         function () { return liveImage(row, ''); }); // saved; the address comes with the next list
     });
   }
-  // Deletes one upload. Sample images are refused.
-  function deleteImage(id) {
+  function isSampleImage(id) { return fixed.images.some(function (x) { return x.id === id; }); }
+  // A list in parts of n (the server takes a limited number of ids per call).
+  function chunks(list, n) { var out = []; for (var i = 0; i < list.length; i += n) out.push(list.slice(i, i + n)); return out; }
+  // Deletes pictures for good: the rows first (that is what the tool shows), then their files, best
+  // effort. Products and picture styles that used one lose it (the database clears the link).
+  // Sample images are refused. Resolves { deleted }.
+  function deleteImages(ids) {
     return init().then(function () {
-      if (fixed.images.some(function (x) { return x.id === id; })) throw codeError('lib.err.sample');
+      ids = idList(ids);
+      if (!ids.length) return { deleted: 0 };
+      if (ids.some(isSampleImage)) throw codeError('lib.err.sample');
       if (!isLive()) {
-        var i = uploads.findIndex(function (x) { return x.id === id; });
-        if (i === -1) throw new Error('not found');
-        var im = uploads.splice(i, 1)[0];
-        try { URL.revokeObjectURL(im.url); } catch (e) { /* ignore */ }
-        audit('image.delete', 'image', id, im.title + ' (MOCK)');
+        var gone = uploads.filter(function (x) { return ids.indexOf(x.id) !== -1; });
+        if (!gone.length) throw new Error('not found');
+        uploads = uploads.filter(function (x) { return ids.indexOf(x.id) === -1; });
+        gone.forEach(function (im) {
+          try { URL.revokeObjectURL(im.url); } catch (e) { /* ignore */ }
+          audit('image.delete', 'image', im.id, im.title + ' (MOCK)');
+        });
         save();
-        return wait({ ok: true });
+        return wait({ deleted: gone.length });
       }
       if (!client) throw new Error('no client');
-      // The row first (that is what the tool shows), then the file, best effort.
-      return client.from('ads_images').delete().eq('id', id).select('id,business_id,title,path').then(function (r) {
-        var row = (must(r) || [])[0];
-        if (!row) throw new Error('not found');
-        auditLive('image.delete', 'image', id, { business_id: row.business_id, title: row.title });
-        return client.storage.from(IMG_BUCKET).remove([row.path]).then(function () { return { ok: true }; }, function () { return { ok: true }; });
+      var done = 0;
+      return chunks(ids, 100).reduce(function (p, part) {
+        return p.then(function () {
+          return client.from('ads_images').delete().in('id', part).select('id,business_id,title,path').then(function (r) {
+            var rows = must(r) || [];
+            if (!rows.length) return;
+            done += rows.length;
+            auditLive('image.delete', 'image', rows.length === 1 ? rows[0].id : null,
+              { business_id: rows[0].business_id, count: rows.length, titles: rows.slice(0, 20).map(function (x) { return x.title; }) });
+            return client.storage.from(IMG_BUCKET).remove(rows.map(function (x) { return x.path; })).then(function () { /* ok */ }, function () { /* best effort */ });
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        if (!done) throw new Error('not found');
+        return { deleted: done };
       });
+    });
+  }
+  function deleteImage(id) { return deleteImages([id]).then(function () { return { ok: true }; }); }
+  // Archive (archive = true) or restore (false). An archived picture leaves its folder for the Archive
+  // and is deleted for good ARCHIVE_DAYS later; restored, it is back in its folder. Resolves { changed }.
+  function archiveImages(ids, archive) {
+    return init().then(function () {
+      ids = idList(ids);
+      var on = !!archive;
+      if (!ids.length) return { changed: 0 };
+      if (ids.some(isSampleImage)) throw codeError('lib.err.sample');
+      if (!isLive()) {
+        var n = 0, now = new Date().toISOString();
+        uploads.forEach(function (u) {
+          if (ids.indexOf(u.id) === -1 || !!u.archivedAt === on) return;
+          u.archivedAt = on ? now : null; n++;
+          audit(on ? 'image.archive' : 'image.restore', 'image', u.id, u.title + ' (MOCK)');
+        });
+        save();
+        return wait({ changed: n });
+      }
+      if (!client) throw new Error('no client');
+      var changed = 0;
+      return chunks(ids, 200).reduce(function (p, part) {
+        return p.then(function () {
+          return client.rpc('ads_images_archive', { p_ids: part, p_archive: on }).then(must).then(function (c) { changed += Number(c) || 0; });
+        });
+      }, Promise.resolve()).then(function () { return { changed: changed }; });
+    });
+  }
+  // Tags: trimmed, single spaces, lower case, at most TAG_LEN characters, no repeats, at most TAG_MAX
+  // per picture (the database applies the same rule).
+  function cleanTags(list) {
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (x) {
+      var s = String(x == null ? '' : x).replace(/\s+/g, ' ').trim().toLowerCase().slice(0, TAG_LEN).trim();
+      if (s && out.indexOf(s) === -1 && out.length < TAG_MAX) out.push(s);
+    });
+    return out;
+  }
+  // Replaces one picture's tags. Resolves with the saved list.
+  function setImageTags(id, tags) {
+    return init().then(function () {
+      if (isSampleImage(id)) throw codeError('lib.err.sample');
+      var clean = cleanTags(tags);
+      if (!isLive()) {
+        var u = uploads.filter(function (x) { return x.id === id; })[0];
+        if (!u) throw new Error('not found');
+        u.tags = clean.slice();
+        audit('image.tags', 'image', id, (clean.join(', ') || '-') + ' (MOCK)');
+        save();
+        return wait(clean);
+      }
+      if (!client) throw new Error('no client');
+      return client.rpc('ads_image_set_tags', { p_id: id, p_tags: clean }).then(must).then(function (saved) { return Array.isArray(saved) ? saved : clean; });
     });
   }
 
@@ -720,7 +877,7 @@
     if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
     return callFn('ads-generate-image', { business_id: b, prompt: o.prompt, aspect_ratio: o.aspect, quality: o.quality, reference_ids: o.refs || [], title: o.title || undefined })
       .then(fnResult).then(function (r) {
-        return { image: liveImage(r.image, r.image.url || ''), remaining: r.remaining, limit: r.limit };
+        return { image: liveImage(r.image, r.image.url || '', { folder: 'ai', source: 'ai' }), remaining: r.remaining, limit: r.limit };
       });
   }
 
@@ -878,7 +1035,7 @@
   // Library items (with a signed address) for these ids, by id. A failed read gives {} (pictures are optional).
   function imagesById(ids) {
     if (!ids.length) return Promise.resolve({});
-    return client.from('ads_images').select('id,business_id,kind,title,path,mime,bytes,width,height,created_at').in('id', ids).then(must).then(function (rows) {
+    return client.from('ads_images').select(IMG_COLS).in('id', ids).then(must).then(function (rows) {
       rows = rows || [];
       if (!rows.length) return {};
       return client.storage.from(IMG_BUCKET).createSignedUrls(rows.map(function (r) { return r.path; }), 3600).then(function (s) {
@@ -1022,6 +1179,9 @@
     // Image library + stock (6 Nov 2026)
     imageRules: { accept: 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp', maxMb: IMG_MAX_MB, maxFiles: IMG_MAX_FILES },
     checkImageFile: checkImageFile, uploadImage: uploadImage, deleteImage: deleteImage, importStock: importStock,
+    // Library folders, Archive, tags, storage per person (9 Nov 2026, 0033)
+    libraryRules: { folders: IMG_FOLDERS.slice(), elementTypes: ELEMENT_TYPES.slice(), archiveDays: ARCHIVE_DAYS, maxTags: TAG_MAX, tagLen: TAG_LEN, defaultMb: LIB_MB },
+    libraryUsage: libraryUsage, deleteImages: deleteImages, archiveImages: archiveImages, setImageTags: setImageTags, cleanTags: cleanTags,
     // AI pictures with Gemini (6 Nov 2026, live only)
     aiImageStatus: aiImageStatus, aiTest: aiTest, generateImage: generateImage,
     // Posts with several products / pictures, product details, picture styles (6 Nov 2026, 0029)

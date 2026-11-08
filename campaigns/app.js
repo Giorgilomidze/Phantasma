@@ -1628,15 +1628,16 @@
     // (the default) the colour follows the banner in the finished picture (see autoNameColor).
     var nc = opts.filter(function (c) { return c.group.nameColor; })[0];
     var color = nc && /^#[0-9a-f]{6}$/i.test(nc.option.textColor || '') ? nc.option.textColor : null;
-    return api.generateImage(biz, { prompt: assemblePrompt(ps, chosen, p, o.mode), aspect: o.aspect, quality: o.quality, refs: refs.slice(0, GEN_MAX_REFS), title: 'Post: ' + name + ' · ' + codes })
-      .then(function (r) {
-        cacheImages([r.image]);
-        if (o.mode !== 'overlay') return { image: r.image, plain: false };
-        return nameOnPicture(r.image, name, color).then(function (file) {
-          return api.uploadImage(biz, file, 'picture', { title: 'Post picture: ' + name });
-        }).then(function (im) { cacheImages([im]); return { image: im, plain: false }; },
-          function () { return { image: r.image, plain: true }; });
-      });
+    return roomForAi().then(function () {
+      return api.generateImage(biz, { prompt: assemblePrompt(ps, chosen, p, o.mode), aspect: o.aspect, quality: o.quality, refs: refs.slice(0, GEN_MAX_REFS), title: 'Post: ' + name + ' · ' + codes });
+    }).then(function (r) {
+      cacheImages([r.image]);
+      if (o.mode !== 'overlay') return { image: r.image, plain: false };
+      return nameOnPicture(r.image, name, color).then(function (file) {
+        return api.uploadImage(biz, file, { folder: 'ai', source: 'ai' }, { title: 'Post picture: ' + name });
+      }).then(function (im) { cacheImages([im]); return { image: im, plain: false }; },
+        function () { return { image: r.image, plain: true }; });
+    });
   }
   // The AI picture with the name written in the NAME ZONE (top 15 % of the height, full width, 6 %
   // side padding): fetched as a blob, drawn on a canvas of the same size, saved as JPEG (0.92).
@@ -1739,9 +1740,20 @@
   }
 
   /* ---------------------------------------------------------------------
-     9. Image Library: upload from the computer, grid, sample images
+     9. Image Library (9 Nov 2026, owner request; supabase/0033). Pictures sit in folders that open
+        on a click: Uploads, Elements (Price Tag / Picture Frame / Picture Background), AI Generated,
+        Products, Archive. The shortcut row shows all folders or one; the tag filter sits on its
+        right. Edit ticks pictures to archive, restore or delete them (no Delete button on a card);
+        a click on a picture opens its details (facts + tags). Each person may store up to 50 MB.
      --------------------------------------------------------------------- */
-  var libFilter = 'all';
+  var LIB_FOLDERS = ['uploads', 'elements', 'ai', 'products', 'archive']; // shortcut row + folder list, in order
+  var LIB_AI_ROOM = 1.5 * 1048576; // free storage an AI picture needs (they are 0.3-0.7 MB, a post picture twice)
+  var libFolder = 'all';  // shortcut: 'all' or one of LIB_FOLDERS
+  var libOpen = {};       // folders / element types the user opened: { uploads: true, 'el:frame': true }
+  var libTagShut = {};    // while a tag filter is on, folders with matches open by themselves; the ones closed
+  var libTags = [];       // tag filter: a picture shows when it has all of these
+  var libEdit = false;    // Edit mode
+  var libSel = {};        // ticked picture ids (Edit mode), kept across folders
   var libJob = null;  // upload in progress: { n, total }. It keeps going when the user leaves the page.
   var libView = null; // the Library view on screen: { tok, status, load }
   var aiJob = null;   // an AI picture being made: { business }. It also keeps going when the user leaves.
@@ -1752,15 +1764,62 @@
     libView.status.textContent = libJob ? t('lib.progress', { n: libJob.n, total: libJob.total }) : aiJob ? t('aimg.working') : '';
   }
   function hasFiles(e) { var ty = e.dataTransfer && e.dataTransfer.types; return !!ty && [].indexOf.call(ty, 'Files') !== -1; }
+  // The folder a picture shows in: the Archive while archived, else its own.
+  function libPlace(im) { return im.archivedAt ? 'archive' : im.folder || (im.kind === 'element' ? 'elements' : 'uploads'); }
+  // "Elements › Price Tag", "AI Generated" ... (the picture's own folder, also while archived).
+  function folderLabel(im) {
+    var f = im.folder || 'uploads';
+    return t('lf.f.' + f) + (f === 'elements' ? ' › ' + t('lf.el.' + (im.elementType || 'none')) : '');
+  }
+  // The day an archived picture is deleted for good.
+  function purgeDay(im) { return new Date(Date.parse(im.archivedAt) + api.libraryRules.archiveDays * 86400000).toISOString(); }
+  function countText(n) { return t(n === 1 ? 'lf.count1' : 'lf.count', { n: num(n) }); }
+  // Small folder / archive-box icon (inline SVG, hidden from screen readers).
+  function folderIcon(archive) {
+    var ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'), p = document.createElementNS(ns, 'path');
+    [['viewBox', '0 0 24 24'], ['width', '20'], ['height', '20'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'ads-folder__icon']]
+      .forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    p.setAttribute('d', archive ? 'M3 4.5h18v4H3zM5 8.5h14V20H5zM10 12h4'
+      : 'M3 7a1.5 1.5 0 0 1 1.5-1.5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z');
+    [['fill', 'none'], ['stroke', 'currentColor'], ['stroke-width', '1.6'], ['stroke-linejoin', 'round'], ['stroke-linecap', 'round']]
+      .forEach(function (a) { p.setAttribute(a[0], a[1]); });
+    svg.appendChild(p);
+    return svg;
+  }
+  // An AI picture needs free storage: the database refuses to save it when the storage is full, after
+  // Gemini has already made (and charged for) it. Resolves when there is room; otherwise rejects with
+  // the i18n key lf.err.fullAi. A failed usage read lets it through (the server checks anyway).
+  function roomForAi() {
+    return api.libraryUsage().then(function (u) {
+      if (u.limit - u.used >= LIB_AI_ROOM) return;
+      var e = new Error('storage full');
+      e.key = 'lf.err.fullAi'; e.vars = { used: fmtBytes(u.used), limit: fmtBytes(u.limit) };
+      throw e;
+    }, function () { /* unknown: the server still checks */ });
+  }
+  // Library folder for a style group's pictures: frames, price tags and backgrounds are Elements of
+  // that type; another group's pictures follow its "stored as" setting.
+  var GROUP_ELEMENT = { FRAME: 'frame', TAG: 'price_tag', BG: 'background' };
+  function groupPlace(g) {
+    var ty = g && GROUP_ELEMENT[String(g.token || '').toUpperCase()];
+    if (ty) return { folder: 'elements', elementType: ty };
+    return { folder: g && g.pictureKind === 'element' ? 'elements' : 'uploads' };
+  }
 
   function viewImages(tok) {
-    var rules = api.imageRules;
+    var rules = api.imageRules, lr = api.libraryRules;
     var body = h('div', {}, skeleton(3));
     var status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
+    var storage = h('div', { class: 'ads-storage', hidden: true });
+    var usage = null;   // { used, limit } of the signed-in person; null until known
+    var all = [];       // the business's pictures (archived ones too), not the samples
+    var samples = [];
+    var ui = null;      // the parts built once (they keep focus while folders redraw)
     // The native file picker, opened by the Upload button (keyboard users) ...
     var picker = h('input', { type: 'file', multiple: true, accept: rules.accept, hidden: true });
     picker.addEventListener('change', function () { var f = [].slice.call(picker.files || []); picker.value = ''; if (f.length) choose(f); });
     var upBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { if (libJob) toast(t('lib.busy'), 'act'); else picker.click(); } }, t('lib.upload'));
+    var editBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', 'aria-pressed': String(libEdit), onclick: function () { setEdit(!libEdit); } }, t(libEdit ? 'lf.editDone' : 'lf.edit'));
     // ... and a drop zone for files dragged from the computer.
     var drop = h('div', { class: 'ads-drop' }, [h('p', { class: 'ads-drop__title' }, t('lib.drop')), h('p', { class: 'ads-hint' }, t('lib.rules', { mb: rules.maxMb, max: rules.maxFiles }))]);
     var depth = 0; // dragenter / dragleave also fire for the zone's children
@@ -1774,120 +1833,452 @@
       if (libJob) toast(t('lib.busy'), 'act'); else choose(f);
     });
     render(h('div', {}, [
-      pageHead('nav.images', [upBtn, h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { openAiDialog(); } }, t('lib.ai')), soonBtn('lib.drive')]),
+      pageHead('nav.images', [upBtn, h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { openAiDialog(); } }, t('lib.ai')), editBtn, soonBtn('lib.drive')]),
       liveMode() ? null : h('p', { class: 'ads-warn' }, t('lib.mockNote')),
-      picker, drop, status, body
+      picker, drop, storage, status, body
     ]), 'nav.images');
     libView = { tok: tok, status: status, load: load };
     libSync();
     load();
 
-    function load(focusHead) {
-      api.listImages(ctx.business, { strict: true }).then(function (list) {
+    // focus: true = the page heading (the focused card is gone), 'bar' = the Edit bar (its button was
+    // switched off while working), a picture id = that picture's card.
+    function load(focus) {
+      api.listImages(ctx.business, { strict: true, archived: true }).then(function (list) {
         if (stale(tok)) return;
         cacheImages(list);
-        draw(list.filter(function (x) { return !x.sample; }), list.filter(function (x) { return x.sample; }));
-        if (focusHead === true) { var hd = $('.ads-h1', main); if (hd) hd.focus(); }
-      }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(function () { load(); })); } });
+        all = list.filter(function (x) { return !x.sample; });
+        samples = list.filter(function (x) { return x.sample; });
+        // Ticks of pictures that are gone, and tags nobody carries any more, are dropped.
+        Object.keys(libSel).forEach(function (id) { if (!all.some(function (x) { return x.id === id; })) delete libSel[id]; });
+        libTags = libTags.filter(function (tag) { return all.some(function (x) { return x.tags.indexOf(tag) !== -1; }); });
+        draw();
+        var el = focus === 'bar' ? $('.ads-editbar__count', main) : typeof focus === 'string' ? $('.ads-libitem__open[data-id="' + focus + '"]', main) : null;
+        if (el) el.focus();
+        else if (focus) { var hd = $('.ads-h1', main); if (hd) hd.focus(); }
+      }).catch(function () { if (!stale(tok)) { ui = null; body.innerHTML = ''; body.appendChild(errorState(function () { load(); })); } });
+      loadUsage();
     }
-    function draw(mine, samples) {
-      body.innerHTML = '';
-      if (mine.length) {
-        var grid = h('ul', { class: 'ads-libgrid' }), none = h('p', { class: 'ads-note' }, t('lib.noneInFilter'));
-        var fill = function () {
-          grid.innerHTML = '';
-          var shown = mine.filter(function (x) { return libFilter === 'all' || x.kind === libFilter; });
-          shown.forEach(function (im) { grid.appendChild(item(im)); });
-          none.hidden = !!shown.length;
-        };
-        // The filter buttons stay in place (and keep focus); only the grid is redrawn.
-        body.appendChild(h('div', { class: 'ads-chips ads-libfilter', role: 'group', 'aria-label': t('lib.filter') }, ['all', 'picture', 'element'].map(function (k) {
-          return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === libFilter), onclick: function (e) {
-            var me = e.currentTarget;
-            libFilter = k;
-            [].forEach.call(me.parentNode.children, function (b) { b.setAttribute('aria-pressed', String(b === me)); });
-            fill();
-          } }, k === 'all' ? t('common.all') : t('lib.f.' + k));
-        })));
-        body.appendChild(grid); body.appendChild(none);
-        fill();
-      } else {
-        body.appendChild(emptyState('lib.emptyTitle', 'lib.emptyText', null, { mb: rules.maxMb, max: rules.maxFiles }));
-      }
+    function loadUsage() {
+      api.libraryUsage().then(function (u) { if (!stale(tok)) { usage = u; drawUsage(); } },
+        function () { usage = null; storage.hidden = true; });
+    }
+    function drawUsage() {
+      var pct = Math.min(100, Math.round(usage.used * 100 / Math.max(1, usage.limit)));
+      var fill = h('span', { class: 'ads-storage__fill' });
+      fill.style.width = pct + '%';
+      storage.innerHTML = '';
+      storage.hidden = false;
+      storage.className = 'ads-storage' + (pct >= 100 ? ' is-full' : pct >= 90 ? ' is-high' : '');
+      append(storage, [
+        h('span', { class: 'ads-storage__text' }, t('lf.storage', { used: fmtBytes(usage.used), limit: fmtBytes(usage.limit) })),
+        h('span', { class: 'ads-storage__bar', 'aria-hidden': 'true' }, fill),
+        pct >= 100 ? h('span', { class: 'ads-storage__warn' }, t('lf.storage.full')) : null
+      ]);
+    }
+
+    /* ---- the page: shortcut row + tag filter, active tags, Edit bar, folders, samples ---- */
+    function draw() {
+      if (!ui) build();
+      ui.row.hidden = !all.length;
+      ui.tags.redraw();
+      ui.tags.label();
+      fillFolders();
+      ui.samples.innerHTML = '';
       if (samples.length) {
-        body.appendChild(h('details', { class: 'ads-details ads-samples' }, [
+        ui.samples.appendChild(h('details', { class: 'ads-details ads-samples' }, [
           h('summary', {}, t('lib.samples', { n: samples.length })),
           h('p', { class: 'ads-note' }, t('lib.samplesNote')),
-          h('ul', { class: 'ads-libgrid' }, samples.map(function (im) { return item(im); }))
+          h('ul', { class: 'ads-libgrid' }, samples.map(function (im) { return card(im, true); }))
         ]));
       }
     }
-    function item(im) {
+    function build() {
+      var shortcuts = h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('lf.show') }, ['all'].concat(LIB_FOLDERS).map(function (k) {
+        return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === libFolder), onclick: function (e) {
+          var me = e.currentTarget;
+          libFolder = k;
+          [].forEach.call(me.parentNode.children, function (b) { b.setAttribute('aria-pressed', String(b === me)); });
+          fillFolders();
+        } }, k === 'all' ? t('common.all') : t('lf.f.' + k));
+      }));
+      var tags = tagFilter();
+      ui = {
+        row: h('div', { class: 'ads-libbar' }, [shortcuts, tags.el]),
+        tags: tags,
+        active: h('div', { class: 'ads-libtags', hidden: true }),
+        bar: editBar(),
+        box: h('div', { class: 'ads-folders' }),
+        none: h('p', { class: 'ads-note', hidden: true }, t('lf.noMatch')),
+        samples: h('div', {})
+      };
+      body.innerHTML = '';
+      append(body, [ui.row, ui.active, ui.bar.el, ui.box, ui.none, ui.samples]);
+    }
+    // The pictures that carry every chosen tag.
+    function matches(list) {
+      if (!libTags.length) return list;
+      return list.filter(function (im) { return libTags.every(function (tag) { return im.tags.indexOf(tag) !== -1; }); });
+    }
+    function fillFolders() {
+      var box = ui.box;
+      box.innerHTML = '';
+      ui.none.hidden = true;
+      drawActive();
+      ui.bar.update();
+      if (!all.length) {
+        box.appendChild(emptyState('lib.emptyTitle', 'lib.emptyText', null, { mb: rules.maxMb, max: rules.maxFiles }));
+        return;
+      }
+      var shown = matches(all), any = false;
+      (libFolder === 'all' ? LIB_FOLDERS : [libFolder]).forEach(function (key) {
+        var items = shown.filter(function (im) { return libPlace(im) === key; });
+        if (key === 'archive') items.sort(function (a, b) { return Date.parse(b.archivedAt) - Date.parse(a.archivedAt); });
+        if (libTags.length && !items.length) return; // a tag filter hides folders without a match
+        any = true;
+        box.appendChild(folderFor(key, items));
+      });
+      ui.none.hidden = any;
+    }
+    function isOpen(key) {
+      if (libFolder === key) return true; // the shortcut shows this folder opened
+      if (libTags.length) return libTagShut[key] !== true;
+      return !!libOpen[key];
+    }
+    function setOpen(key, on) { if (libTags.length) libTagShut[key] = !on; else libOpen[key] = on; }
+    function metaText(items) {
+      var bytes = items.reduce(function (s, im) { return s + (im.bytes || 0); }, 0);
+      return countText(items.length) + (bytes ? ' · ' + fmtBytes(bytes) : '');
+    }
+    // One folder (level 1) or element type (level 2): a header button that opens / closes it; the
+    // content is built when it opens first.
+    function section(key, title, items, level, content) {
+      var id = 'ads-fold-' + key.replace(/[^a-z_]/g, '-'), open = isOpen(key);
+      var inner = h('div', { class: 'ads-folder__body', id: id, hidden: !open });
+      var sec = h('section', { class: 'ads-folder ads-folder--l' + level + (open ? ' is-open' : '') });
+      var btn = h('button', { type: 'button', class: 'ads-folder__btn', 'aria-expanded': String(open), 'aria-controls': id, onclick: function () {
+        var now = btn.getAttribute('aria-expanded') !== 'true';
+        setOpen(key, now);
+        btn.setAttribute('aria-expanded', String(now));
+        sec.classList.toggle('is-open', now);
+        if (now && !inner.firstChild) append(inner, content());
+        inner.hidden = !now;
+      } }, [folderIcon(key === 'archive'), h('span', { class: 'ads-folder__name' }, title),
+        h('span', { class: 'ads-folder__meta' }, metaText(items)), h('span', { class: 'ads-folder__chev', 'aria-hidden': 'true' })]);
+      append(sec, [h(level === 1 ? 'h2' : 'h3', { class: 'ads-folder__h' }, btn), inner]);
+      if (open) append(inner, content());
+      return sec;
+    }
+    function folderFor(key, items) {
+      if (key === 'elements') {
+        var types = lr.elementTypes.concat(items.some(function (im) { return !im.elementType; }) ? ['none'] : []);
+        return section(key, t('lf.f.elements'), items, 1, function () {
+          return types.map(function (ty) {
+            var sub = items.filter(function (im) { return (im.elementType || 'none') === ty; });
+            if (libTags.length && !sub.length) return null;
+            return section('el:' + ty, t('lf.el.' + ty), sub, 2, function () { return grid(sub, 'lf.empty.type', { type: t('lf.el.' + ty) }); });
+          });
+        });
+      }
+      return section(key, t('lf.f.' + key), items, 1, function () {
+        return [key === 'archive' && items.length ? h('p', { class: 'ads-hint ads-folder__note' }, t('lf.archiveNote', { days: lr.archiveDays })) : null,
+          grid(items, 'lf.empty.' + key, { days: lr.archiveDays })];
+      });
+    }
+    function grid(items, emptyKey, vars) {
+      if (!items.length) return h('p', { class: 'ads-note ads-folder__empty' }, t(emptyKey, vars));
+      return h('ul', { class: 'ads-libgrid' }, items.map(function (im) { return card(im); }));
+    }
+    // A picture: name on two lines at most (the whole name on hover and in the details). Edit mode:
+    // the card is a tick box. Otherwise a click opens the details. noPick: samples are never ticked.
+    function card(im, noPick) {
       var title = lname(im, 'title'), facts = [];
       if (im.bytes) facts.push(fmtBytes(im.bytes));
       if (im.width && im.height) facts.push(t('lib.dims', { w: im.width, h: im.height }));
-      return h('li', { class: 'ads-libitem' }, [
-        imageEl(im.id, 'ads-libitem__img'),
-        h('div', { class: 'ads-libitem__body' }, [
-          h('span', { class: 'ads-libitem__title' }, title),
-          im.sample ? pill(t('common.sample'), 'sample') : pill(t('lib.kind.' + im.kind), im.kind),
-          facts.length ? h('span', { class: 'ads-sub' }, facts.join(' · ')) : null,
-          im.createdAt ? h('span', { class: 'ads-sub' }, fmtDateTime(im.createdAt)) : null,
-          im.sample ? null : h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--danger-ghost', 'aria-label': t('lib.deleteAria', { name: title }), onclick: function () { remove(im, title); } }, t('common.delete'))
-        ])
+      var img = imageEl(im.id, 'ads-libitem__img');
+      if (img.tagName === 'IMG') img.alt = ''; // the name is said once, by the card
+      var info = h('div', { class: 'ads-libitem__body' }, [
+        facts.length ? h('span', { class: 'ads-sub' }, facts.join(' · ')) : null,
+        im.archivedAt ? h('span', { class: 'ads-sub ads-sub--act' }, t('lf.deletesOn', { date: fmtDate(purgeDay(im)) }))
+          : im.createdAt ? h('span', { class: 'ads-sub' }, fmtDateTime(im.createdAt)) : null
       ]);
+      if (libEdit && !noPick) {
+        var id = 'ads-sel-' + im.id;
+        var cb = h('input', { type: 'checkbox', id: id, class: 'ads-libitem__check', checked: !!libSel[im.id] });
+        cb.addEventListener('change', function () { if (cb.checked) libSel[im.id] = true; else delete libSel[im.id]; ui.bar.update(); });
+        return h('li', { class: 'ads-libitem ads-libitem--pick' }, [
+          h('label', { class: 'ads-libitem__open', for: id, title: title }, [cb, img, h('span', { class: 'ads-libitem__title' }, title)]), info]);
+      }
+      return h('li', { class: 'ads-libitem' }, [
+        h('button', { type: 'button', class: 'ads-libitem__open', 'data-id': im.id, title: title, 'aria-label': t('lf.open', { name: title }), onclick: function () { openDetails(im); } },
+          [img, h('span', { class: 'ads-libitem__title' }, title)]), info]);
     }
-    function remove(im, title) {
-      confirmDialog({ title: t('lib.del.title'), message: t('lib.del.text', { name: title }), confirmLabel: t('common.delete'), danger: true }).then(function (ok) {
-        if (!ok) return;
-        api.deleteImage(im.id).then(function () {
-          delete imageCache[im.id]; // posts that used it now show "No image"
-          toast(t('lib.deleted', { name: title }));
-          if (!stale(tok)) load(true); // the deleted card had focus: move it to the page heading
-        }).catch(function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
-      });
+
+    /* ---- tag filter (right of the shortcut row) and the row of chosen tags ---- */
+    function allTags() {
+      var seen = {};
+      all.forEach(function (im) { im.tags.forEach(function (tag) { seen[tag] = (seen[tag] || 0) + 1; }); });
+      return seen;
     }
-    // Lists the chosen files with "ready" or the reason, asks Pictures or Elements, then uploads.
-    function choose(files) {
-      var list = files.map(function (f, i) {
-        return { file: f, problem: i >= rules.maxFiles ? { key: 'lib.err.tooMany', vars: { max: rules.maxFiles } } : api.checkImageFile(f) };
-      });
-      var ok = list.filter(function (x) { return !x.problem; }).map(function (x) { return x.file; });
-      var kind = 'picture';
-      var kinds = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('lib.dlg.as'))].concat(['picture', 'element'].map(function (k) {
-        var r = h('input', { type: 'radio', name: 'ads-up-kind', id: 'ads-up-' + k, value: k, checked: k === kind });
-        r.addEventListener('change', function () { kind = k; });
-        return h('label', { class: 'ads-option', for: 'ads-up-' + k }, [r, h('span', {}, [h('strong', {}, t('lib.as.' + k)), h('span', { class: 'ads-sub' }, t('lib.as.' + k + '.d'))])]);
+    function tagFilter() {
+      var panelId = 'ads-tagpanel-' + tok;
+      var btn = h('button', { type: 'button', class: 'ads-filter ads-tagfilter__btn', 'aria-expanded': 'false', 'aria-controls': panelId, onclick: function () {
+        show(btn.getAttribute('aria-expanded') !== 'true');
+      } });
+      var list = h('div', { class: 'ads-tagfilter__list' });
+      var clear = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () { libTags = []; libTagShut = {}; redraw(); changed(); btn.focus(); } }, t('lf.tags.clear'));
+      var panel = h('div', { class: 'ads-tagfilter__panel', id: panelId, role: 'group', 'aria-label': t('lf.tags.filter'), hidden: true },
+        [h('p', { class: 'ads-hint' }, t('lf.tags.hint')), list, clear]);
+      var wrap = h('div', { class: 'ads-tagfilter' }, [btn, panel]);
+      function show(on) {
+        panel.hidden = !on;
+        btn.setAttribute('aria-expanded', String(on));
+        if (on) { redraw(); var f = panel.querySelector('input'); if (f) f.focus(); }
+      }
+      function redraw() {
+        var counts = allTags(), names = Object.keys(counts).sort(function (a, b) { return a.localeCompare(b); });
+        list.innerHTML = '';
+        clear.hidden = !libTags.length;
+        if (!names.length) { list.appendChild(h('p', { class: 'ads-note' }, t('lf.tags.noneYet'))); return; }
+        list.appendChild(h('ul', { class: 'ads-tagfilter__opts' }, names.map(function (tag, i) {
+          var id = panelId + '-' + i;
+          var cb = h('input', { type: 'checkbox', id: id, checked: libTags.indexOf(tag) !== -1 });
+          cb.addEventListener('change', function () {
+            libTags = cb.checked ? libTags.concat(tag) : libTags.filter(function (x) { return x !== tag; });
+            libTagShut = {};
+            clear.hidden = !libTags.length;
+            changed();
+          });
+          return h('li', {}, h('label', { class: 'ads-tagfilter__opt', for: id }, [cb, h('span', { class: 'ads-tagfilter__name' }, tag), h('span', { class: 'ads-sub' }, num(counts[tag]))]));
+        })));
+      }
+      function label() {
+        btn.textContent = libTags.length ? t('lf.tagsN', { n: libTags.length }) : t('lf.tags');
+      }
+      function changed() { label(); fillFolders(); }
+      // Esc closes it (focus back on the button); so does a click outside. The listener goes when the page does.
+      wrap.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) { e.preventDefault(); e.stopPropagation(); show(false); btn.focus(); } });
+      function outside(e) {
+        if (!document.contains(wrap)) { document.removeEventListener('click', outside, true); return; }
+        if (!panel.hidden && !wrap.contains(e.target)) show(false);
+      }
+      document.addEventListener('click', outside, true);
+      return { el: wrap, redraw: redraw, label: label, changed: changed, btn: btn };
+    }
+    // "Filtered by tag: [sale ✕] [summer ✕]" under the row, while a tag filter is on.
+    function drawActive() {
+      var row = ui.active;
+      row.innerHTML = '';
+      row.hidden = !libTags.length;
+      if (!libTags.length) return;
+      append(row, [h('span', { class: 'ads-sub' }, t('lf.tags.active'))].concat(libTags.map(function (tag) {
+        return h('button', { type: 'button', class: 'ads-tag', 'aria-label': t('lf.tags.removeF', { tag: tag }), onclick: function () {
+          libTags = libTags.filter(function (x) { return x !== tag; });
+          libTagShut = {};
+          ui.tags.redraw(); ui.tags.changed();
+          ui.tags.btn.focus();
+        } }, [tag, h('span', { class: 'ads-tag__x', 'aria-hidden': 'true' }, '✕')]);
       })));
-      var fileList = h('ul', { class: 'ads-filelist' }, list.map(function (x) {
-        return h('li', { class: 'ads-filelist__item' }, [
-          h('span', { class: 'ads-filelist__name' }, x.file.name),
-          h('span', { class: 'ads-filelist__size' }, fmtBytes(x.file.size)),
-          h('span', { class: 'ads-filelist__state ads-filelist__state--' + (x.problem ? 'bad' : 'ok') }, x.problem ? t(x.problem.key, x.problem.vars) : t('lib.dlg.ok'))
-        ]);
-      }));
-      var skipped = list.length - ok.length;
+    }
+
+    /* ---- Edit mode: tick pictures, then Archive / Restore / Delete ---- */
+    function setEdit(on) {
+      libEdit = !!on;
+      if (!libEdit) libSel = {};
+      editBtn.textContent = t(libEdit ? 'lf.editDone' : 'lf.edit');
+      editBtn.setAttribute('aria-pressed', String(libEdit));
+      if (ui) fillFolders();
+    }
+    function editBar() {
+      var count = h('span', { class: 'ads-editbar__count', 'aria-live': 'polite', tabindex: '-1' });
+      function small(key, kind, fn) {
+        return h('button', { type: 'button', class: 'ads-btn ads-btn--small ' + (kind === 'danger' ? 'ads-btn--danger' : kind === 'ghost' ? 'ads-btn--ghost' : 'ads-btn--primary'), onclick: fn }, t(key));
+      }
+      var all1 = small('lf.selAll', 'ghost', function () {
+        [].forEach.call(ui.box.querySelectorAll('.ads-libitem__check'), function (c) { c.checked = true; libSel[c.id.slice(8)] = true; });
+        update();
+      });
+      var none1 = small('lf.selNone', 'ghost', function () {
+        libSel = {};
+        [].forEach.call(ui.box.querySelectorAll('.ads-libitem__check'), function (c) { c.checked = false; });
+        update(); all1.focus();
+      });
+      var arch = small('lf.archive', 'primary', function () { act('archive'); });
+      var rest = small('lf.restore', 'primary', function () { act('restore'); });
+      var del = small('lf.delete', 'danger', function () { act('delete'); });
+      var busy = false;
+      var el = h('div', { class: 'ads-editbar', role: 'region', 'aria-label': t('lf.bar'), hidden: true },
+        [count, h('div', { class: 'ads-editbar__tools' }, [all1, none1, arch, rest, del])]);
+      function picked() { return all.filter(function (im) { return libSel[im.id]; }); }
+      function update() {
+        el.hidden = !libEdit;
+        if (!libEdit) return;
+        var sel = picked(), toArch = sel.filter(function (im) { return !im.archivedAt; }), toRest = sel.filter(function (im) { return im.archivedAt; });
+        count.textContent = sel.length ? t('lf.sel', { n: num(sel.length) }) : t('lf.editHint');
+        none1.hidden = !sel.length;
+        arch.textContent = t('lf.archive') + (toArch.length ? ' (' + num(toArch.length) + ')' : '');
+        rest.textContent = t('lf.restore') + (toRest.length ? ' (' + num(toRest.length) + ')' : '');
+        del.textContent = t('lf.delete') + (sel.length ? ' (' + num(sel.length) + ')' : '');
+        arch.disabled = busy || !toArch.length;
+        rest.disabled = busy || !toRest.length;
+        del.disabled = busy || !sel.length;
+        all1.disabled = busy;
+      }
+      function act(what) {
+        var sel = picked();
+        if (what === 'delete') {
+          var n = sel.length;
+          confirmDialog({ title: t(n === 1 ? 'lf.del.title1' : 'lf.del.title', { n: num(n) }), message: t('lf.del.text'), confirmLabel: t('lf.del.confirm', { n: num(n) }), danger: true })
+            .then(function (ok) {
+              if (!ok) return;
+              run(api.deleteImages(sel.map(function (im) { return im.id; })), function (r) {
+                sel.forEach(function (im) { delete imageCache[im.id]; delete libSel[im.id]; });
+                toast(t('lf.deletedN', { n: num(r.deleted) }));
+                return true; // the ticked cards had focus: the heading takes it
+              });
+            });
+          return;
+        }
+        var on = what === 'archive', list = sel.filter(function (im) { return !!im.archivedAt !== on; });
+        run(api.archiveImages(list.map(function (im) { return im.id; }), on), function (r) {
+          list.forEach(function (im) { delete libSel[im.id]; });
+          if (on) toast(t('lf.archived', { n: num(r.changed), date: fmtDate(new Date(Date.now() + lr.archiveDays * 86400000).toISOString(), true) }));
+          else toast(t('lf.restored', { n: num(r.changed) }));
+          return false;
+        });
+      }
+      function run(job, done) {
+        busy = true; update();
+        job.then(function (r) { busy = false; var head = done(r); if (!stale(tok)) load(head ? true : 'bar'); },
+          function (e) { busy = false; update(); toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+      }
+      return { el: el, update: update };
+    }
+
+    /* ---- details window: the picture, its facts and its tags ---- */
+    function openDetails(im) {
+      var title = lname(im, 'title'), tags = im.tags.slice(), changed = false, saving = false, src = imageUri(im);
+      var big = src ? h('img', { class: 'ads-libdlg__img' + (im.kind === 'element' ? ' ads-img--element' : ''), src: src, alt: title })
+        : h('div', { class: 'ads-libdlg__img ads-img-empty' }, t('common.noImage'));
+      var size = [];
+      if (im.bytes) size.push(fmtBytes(im.bytes));
+      if (im.width && im.height) size.push(t('lib.dims', { w: im.width, h: im.height }));
+      if (im.mime) size.push(String(im.mime).replace('image/', '').toUpperCase());
+      var facts = [[t('lf.d.name'), title]];
+      if (size.length) facts.push([t('lf.d.size'), size.join(' · ')]);
+      facts.push([t('lf.d.source'), t('lf.src.' + (im.sample ? 'sample' : im.source === 'ai' ? 'ai' : 'upload'))]);
+      if (!im.sample) facts.push([t('lf.d.folder'), im.archivedAt ? t('lf.d.from', { folder: folderLabel(im) }) : folderLabel(im)]);
+      if (im.createdAt) facts.push([t('lf.d.added'), fmtDateTime(im.createdAt)]);
+      if (im.archivedAt) facts.push([t('lf.d.archived'), t('lf.d.deletes', { date: fmtDate(purgeDay(im), true) })]);
+      var list = h('ul', { class: 'ads-tags' }), note = h('p', { class: 'ads-hint', 'aria-live': 'polite' });
+      var input = h('input', { type: 'text', id: 'ads-tag-new', class: 'ads-input', maxlength: '200', autocomplete: 'off', list: 'ads-tag-sugg', 'aria-describedby': 'ads-tag-new-hint' });
+      var known = Object.keys(allTags()).sort(function (a, b) { return a.localeCompare(b); });
+      var addBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: add }, t('lf.tags.add'));
+      function drawTags() {
+        list.innerHTML = '';
+        if (!tags.length) { list.appendChild(h('li', { class: 'ads-hint' }, t('lf.tags.none'))); return; }
+        tags.forEach(function (tag) {
+          list.appendChild(h('li', {}, h('button', { type: 'button', class: 'ads-tag', 'aria-label': t('lf.tags.remove', { tag: tag }), onclick: function () {
+            save(tags.filter(function (x) { return x !== tag; }));
+          } }, [tag, h('span', { class: 'ads-tag__x', 'aria-hidden': 'true' }, '✕')])));
+        });
+      }
+      function add() {
+        var typed = input.value.split(',');
+        var next = api.cleanTags(tags.concat(typed));
+        if (next.length === tags.length) {
+          var wanted = api.cleanTags(typed).filter(function (x) { return tags.indexOf(x) === -1; });
+          note.textContent = wanted.length ? t('lf.tags.max', { max: lr.maxTags }) : '';
+          input.value = ''; input.focus();
+          return;
+        }
+        save(next);
+      }
+      function save(next) {
+        if (saving) return;
+        saving = true; addBtn.disabled = true; note.textContent = t('lf.tags.saving');
+        api.setImageTags(im.id, next).then(function (saved) {
+          tags = saved.slice(); im.tags = saved.slice(); changed = true; input.value = '';
+          drawTags(); note.textContent = t('lf.tags.saved');
+        }, function (e) { note.textContent = t('toast.failed') + ' ' + errText(e); }).then(function () {
+          saving = false; addBtn.disabled = false; input.focus();
+        });
+      }
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+      drawTags();
+      var tagBox = im.sample ? h('p', { class: 'ads-note' }, t('lf.d.sample')) : h('div', { class: 'ads-libdlg__tags' }, [
+        h('h3', { class: 'ads-h3' }, t('lf.tags.title')), list,
+        h('label', { class: 'ads-label', for: 'ads-tag-new' }, t('lf.tags.addLabel')),
+        h('div', { class: 'ads-libdlg__add' }, [input, addBtn]),
+        h('datalist', { id: 'ads-tag-sugg' }, known.map(function (tag) { return h('option', { value: tag }); })),
+        h('p', { class: 'ads-hint', id: 'ads-tag-new-hint' }, t('lf.tags.hintDlg', { max: lr.maxTags })), note]);
       openDialog({
-        title: t('lib.dlg.title'), wide: true,
-        body: h('div', {}, [fileList, skipped && ok.length ? h('p', { class: 'ads-note' }, t('lib.dlg.skip', { n: skipped })) : null,
-          ok.length ? kinds : h('p', { class: 'ads-warn' }, t('lib.dlg.none'))]),
-        actions: [{ label: t(ok.length === 1 ? 'lib.uploadOne' : 'lib.uploadN', { n: ok.length }), value: true, disabled: !ok.length }]
-      }).then(function (yes) { if (yes) upload(ok, kind); });
+        title: t('lf.dlg.title'), wide: true, cancelLabel: 'common.close',
+        body: h('div', { class: 'ads-libdlg' }, [h('div', { class: 'ads-libdlg__media' }, big),
+          h('div', { class: 'ads-libdlg__info' }, [kv(facts), im.url ? h('p', {}, h('a', { class: 'ads-link', href: im.url, target: '_blank', rel: 'noopener' }, t('lf.d.open'))) : null, tagBox])])
+      }).then(function () { if (changed && !stale(tok)) load(im.id); });
+    }
+
+    /* ---- upload: the chosen files with "ready" or the reason, where to save them, then upload ---- */
+    function choose(files) {
+      (usage ? Promise.resolve(usage) : api.libraryUsage().then(null, function () { return null; })).then(function (u) {
+        if (u && !stale(tok)) { usage = u; drawUsage(); }
+        var free = u ? Math.max(0, u.limit - u.used) : Infinity;
+        var list = files.map(function (f, i) {
+          var problem = i >= rules.maxFiles ? { key: 'lib.err.tooMany', vars: { max: rules.maxFiles } } : api.checkImageFile(f);
+          if (!problem && f.size > free) problem = { key: 'lf.dlg.noRoom', vars: { free: fmtBytes(free) } };
+          if (!problem) free -= f.size;
+          return { file: f, problem: problem };
+        });
+        var ok = list.filter(function (x) { return !x.problem; }).map(function (x) { return x.file; });
+        var where = libFolder === 'elements' ? 'elements' : 'uploads', type = '', go = null;
+        var typeSel = select('ads-up-type', [['', t('lf.dlg.typeChoose')]].concat(lr.elementTypes.map(function (ty) { return [ty, t('lf.el.' + ty)]; })), type, function (v) { type = v; upd(); });
+        var typeField = field('lf.dlg.type', typeSel, null, 'ads-up-type');
+        function upd() { typeField.hidden = where !== 'elements'; if (go) go.disabled = !ok.length || (where === 'elements' && !type); }
+        var places = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('lf.dlg.where'))].concat(['uploads', 'elements'].map(function (k) {
+          var r = h('input', { type: 'radio', name: 'ads-up-where', id: 'ads-up-' + k, value: k, checked: k === where });
+          r.addEventListener('change', function () { where = k; upd(); });
+          return h('label', { class: 'ads-option', for: 'ads-up-' + k }, [r, h('span', {}, [h('strong', {}, t('lf.f.' + k)), h('span', { class: 'ads-sub' }, t('lf.dlg.' + k + '.d'))])]);
+        })));
+        var fileList = h('ul', { class: 'ads-filelist' }, list.map(function (x) {
+          return h('li', { class: 'ads-filelist__item' }, [
+            h('span', { class: 'ads-filelist__name' }, x.file.name),
+            h('span', { class: 'ads-filelist__size' }, fmtBytes(x.file.size)),
+            h('span', { class: 'ads-filelist__state ads-filelist__state--' + (x.problem ? 'bad' : 'ok') }, x.problem ? t(x.problem.key, x.problem.vars) : t('lib.dlg.ok'))
+          ]);
+        }));
+        var skipped = list.length - ok.length;
+        upd();
+        openDialog({
+          title: t('lib.dlg.title'), wide: true,
+          body: h('div', {}, [fileList, skipped && ok.length ? h('p', { class: 'ads-note' }, t('lib.dlg.skip', { n: skipped })) : null,
+            ok.length ? places : h('p', { class: 'ads-warn' }, t('lib.dlg.none')), ok.length ? typeField : null]),
+          actions: [{ label: t(ok.length === 1 ? 'lib.uploadOne' : 'lib.uploadN', { n: ok.length }), value: 'go', disabled: !ok.length }],
+          onOpen: function (dlg, btns) { go = btns.go || null; upd(); }
+        }).then(function (v) {
+          if (v === 'go') upload(ok, where === 'elements' ? { folder: 'elements', elementType: type } : { folder: 'uploads' });
+        });
+      });
     }
     // One file after the other. The progress shows in whichever Library view is on screen.
-    function upload(files, kind) {
-      var biz = ctx.business, done = 0, failed = [];
+    function upload(files, place) {
+      var biz = ctx.business, done = 0, failed = [], full = false;
       libJob = { n: 1, total: files.length };
       function step(i) {
         if (i >= files.length) return finish();
         libJob.n = i + 1; libSync();
-        return api.uploadImage(biz, files[i], kind).then(function (im) { cacheImages([im]); done++; }, function () { failed.push(files[i].name); })
+        return api.uploadImage(biz, files[i], place).then(function (im) { cacheImages([im]); done++; },
+          function (e) { failed.push(files[i].name); if (e && e.key === 'lf.err.full') full = true; })
           .then(function () { return step(i + 1); });
       }
       function finish() {
         libJob = null; libSync();
         if (!failed.length) toast(t('lib.done', { n: done }));
         else toast(t('lib.doneFailed', { n: done, f: failed.length, names: failed.slice(0, 3).join(', ') + (failed.length > 3 ? ', …' : '') }), 'act');
+        if (full) toast(t('lf.err.full'), 'act');
+        // The folder the pictures went to opens, so the new ones are in view.
+        var key = place.folder === 'elements' ? 'el:' + (place.elementType || 'none') : place.folder;
+        libOpen[place.folder] = true; libOpen[key] = true;
         if (libView && !stale(libView.tok)) libView.load();
       }
       step(0);
@@ -1971,7 +2362,7 @@
     aiLast = { prompt: o.prompt, aspect: o.aspect, quality: o.quality, refs: o.refs.slice() };
     aiJob = { business: biz }; libSync();
     toast(t('aimg.started'));
-    api.generateImage(biz, o).then(function (r) {
+    roomForAi().then(function () { return api.generateImage(biz, o); }).then(function (r) {
       aiJob = null; libSync();
       cacheImages([r.image]);
       if (libView && !stale(libView.tok)) libView.load();
@@ -2353,7 +2744,7 @@
         var bad = api.checkImageFile(f);
         if (bad) { toast(f.name + ': ' + t(bad.key, bad.vars), 'act'); return; }
         upBtn.disabled = true;
-        api.uploadImage(ctx.business, f, g.pictureKind).then(function (im) { cacheImages([im]); setPicture(im.id); },
+        api.uploadImage(ctx.business, f, groupPlace(g)).then(function (im) { cacheImages([im]); setPicture(im.id); },
           function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); }).then(function () { upBtn.disabled = false; });
       });
       function title() { head.textContent = s.id ? s.code + ' — ' + s.name : t('sty.new'); }
@@ -2481,7 +2872,7 @@
         if (i >= items.length) return finish();
         var x = items[i], g = groupById(x.style.groupId);
         styJob.n = i + 1; stySync();
-        return api.uploadImage(biz, x.file, g ? g.pictureKind : 'picture').then(function (im) {
+        return api.uploadImage(biz, x.file, groupPlace(g)).then(function (im) {
           cacheImages([im]);
           return api.saveStyle({ id: x.style.id, imageId: im.id }).then(function () {
             x.style.imageId = im.id; done++;
@@ -2715,7 +3106,7 @@
         if (bad) { pstatus.textContent = f.name + ': ' + t(bad.key, bad.vars); return; }
         uploading = true; upBtn.disabled = true; if (saveBtn) saveBtn.disabled = true;
         pstatus.textContent = t('pd.uploading');
-        api.uploadImage(biz, f, 'picture', { title: p.name }).then(function (im) {
+        api.uploadImage(biz, f, { folder: 'products' }, { title: p.name }).then(function (im) {
           cacheImages([im]); imageId = im.id; drawPhoto(); pstatus.textContent = t('pd.uploaded');
         }, function (e) { pstatus.textContent = t('toast.failed') + ' ' + errText(e); }).then(function () {
           uploading = false; upBtn.disabled = false; if (saveBtn) saveBtn.disabled = false;
@@ -3123,7 +3514,7 @@
       confirmDialog({ title: t('reset.title'), message: t('reset.text'), confirmLabel: t('reset.confirm'), danger: true }).then(function (ok) {
         if (!ok) return;
         // The demo uploads are gone too: rebuild the image cache from scratch.
-        api.resetDemo().then(function () { return api.listImages(); }).then(function (list) {
+        api.resetDemo().then(function () { return api.listImages(undefined, { archived: true }); }).then(function (list) {
           imageCache = {}; cacheImages(list); toast(t('reset.done')); refresh();
         });
       });
@@ -3165,7 +3556,8 @@
       api.setMode('mock'); liveFailed = true;
       return api.getSettings();
     });
-    Promise.all([settingsP, api.listImages()]).then(function (r) {
+    // Archived pictures too, so posts that use one still show it until it is deleted.
+    Promise.all([settingsP, api.listImages(undefined, { archived: true })]).then(function (r) {
       settings = r[0];
       cacheImages(r[1]);
       main = $('#ads-main'); shell = $('#ads-shell'); scrim = $('#ads-scrim'); toastBox = $('#ads-toasts'); sidebar = $('#ads-sidebar'); assistant = $('#ads-assistant');
