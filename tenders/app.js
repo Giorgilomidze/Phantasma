@@ -8,9 +8,14 @@
  * on the website's origin, so the website's login is this login. Charts are inline SVG drawn here.
  * Source: D:\Web Development\Tender Portal\app\demo\app.js (the copy in tenders/ is generated).
  *
+ * Local preview (python app\build_demo.py --local, folder preview_demo\): <html data-mode="local">.
+ * Then the JSON comes from local-data/ next to the pages (fetch, so it needs http://, not file://),
+ * there is no sign-in, and the test page my-company.html exists. The website build never sets the flag.
+ *
  * Rules kept here: facts only (counts, sums, dates, prices; no scores or labels about companies);
  * every tender links to its original record; documents link to the state's copy; text from the
- * data goes into the page with textContent, never as HTML.
+ * data goes into the page with textContent, never as HTML. Every widget fed by optional data
+ * (enrichment, supplier widgets) is left out when its data is missing, so older JSON keeps working.
  */
 (function () {
   'use strict';
@@ -33,6 +38,8 @@
   const GOOGLE_CLIENT_ID = '396544181713-ecijt1nf7u1qs4tej5n51vh7p4uu7m66.apps.googleusercontent.com';
   const OTHER_LOGIN = '../services.html';     // the website's own login dialog (email, LinkedIn)
   let sb = null;                              // the supabase-js client, made in boot()
+  const LOCAL = document.documentElement.getAttribute('data-mode') === 'local';   // laptop preview only
+  const LOCAL_DATA = 'local-data/';
 
   /* ------------------------------------------------------------------ DOM helpers */
 
@@ -86,6 +93,7 @@
   const NF0 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
   const NF1 = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const NF2 = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const NFQ = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 });          // quantities
   const isNum = (n) => typeof n === 'number' && isFinite(n);
   const int = (n) => (isNum(n) ? NF0.format(n) : DASH);
   const one = (n) => (isNum(n) ? NF1.format(n) : DASH);
@@ -137,9 +145,11 @@
   function closesIn(iso) {
     const t = deadlineMs(iso);
     if (t === null) return '';
-    const days = Math.floor((t - Date.now()) / 864e5);
-    if (days < 0) return 'closed';
+    if (t <= Date.now()) return 'closed';
+    const ge = (ms) => Math.floor((ms + 4 * 3600e3) / 864e5);   // calendar day in Georgian time (UTC+4)
+    const days = ge(t) - ge(Date.now());
     if (days === 0) return 'closes today';
+    if (days === 1) return 'closes tomorrow';
     return 'closes in ' + plural(days, 'day');
   }
   function discount(est, offer) {
@@ -153,6 +163,16 @@
      file that is missing and for one the bucket's policy hides from this account. */
   const cache = {};
   function load(path) {
+    if (!cache[path] && LOCAL) {               // local preview: the files next to the pages
+      cache[path] = fetch(LOCAL_DATA + path, { cache: 'no-cache' }).then((res) => {
+        if (!res.ok) {
+          const err = new Error('HTTP ' + res.status + ' for ' + LOCAL_DATA + path);
+          err.status = res.status;
+          throw err;
+        }
+        return res.json();
+      });
+    }
     if (!cache[path]) {
       cache[path] = sb.storage.from(BUCKET).download(path).then((res) => {
         if (res.error) {
@@ -204,10 +224,27 @@
 
   /* Lookups from summary.json (labels of categories, statuses, procedures) */
   const L = { cat: {}, status: {}, proc: {}, order: {} };
+  const TL = { tags: {}, details: {}, stages: {} };   // English for requirement tags (summary.json labels)
   function lookups(S) {
     S.categories.forEach((c) => { L.cat[c.k] = c; });
     S.statuses.forEach((x, i) => { L.status[x.k] = x; L.order[x.k] = i; });
     S.procedures.forEach((x) => { L.proc[x.k] = x; });
+    if (S.labels) Object.keys(TL).forEach((k) => { TL[k] = S.labels[k] || {}; });
+  }
+  /** A requirement tag [tag, detail, value, stage(s)] -> 'Certificate · ISO 9001', 'Lab test' ... */
+  function tagText(g) {
+    if (g[0] === 'standard' && g[1] === 'regulation') return 'Regulation' + (g[2] ? ' · ' + g[2] : '');
+    const name = TL.tags[g[0]] || String(g[0] || '').replace(/_/g, ' ');
+    const det = g[1] ? TL.details[g[1]] || g[1] : '';
+    if (g[2]) return name + (det && (g[0] === 'guarantee' || g[0] === 'experience') ? ' (' + det + ')' : '') + ' · ' + g[2];
+    return det ? name + ' · ' + det : name;
+  }
+  function stageText(st) {
+    return (Array.isArray(st) ? st : st ? [st] : []).map((x) => TL.stages[x] || x).join(', ');
+  }
+  function tagChip(g) {
+    const stage = stageText(g[3]);
+    return h('span', { class: 'chip chip--tag', title: stage ? 'Asked ' + stage : null }, tagText(g));
   }
   const catLabel = (k) => (L.cat[k] ? L.cat[k].label : k === 'other' ? 'Other categories' : k || DASH);
   function statusText(k) {
@@ -238,9 +275,9 @@
     add(LEAD, kids);
     LEAD.hidden = !kids;
   }
-  function section(title, kids, cls) {
+  function section(title, kids, cls, anchor) {
     const id = nextId('s');
-    return h('section', { class: 'block ' + (cls || ''), 'aria-labelledby': id }, [h('h2', { id: id, text: title }), kids]);
+    return h('section', { class: 'block ' + (cls || ''), id: anchor || null, 'aria-labelledby': id }, [h('h2', { id: id, text: title }), kids]);
   }
   function card(title, sub, cls) {
     const id = nextId('c');
@@ -271,6 +308,16 @@
   function fail(err) {
     console.error(err); // eslint-disable-line no-console
     clear(APP);
+    if (LOCAL) {
+      add(APP, h('div', { class: 'note' }, [
+        h('p', { text: 'The local data could not be read.' }),
+        h('p', { class: 'small', text: location.protocol === 'file:'
+          ? 'Open the preview through a local web server: python -m http.server 8765 -d preview_demo, then http://localhost:8765/.'
+          : 'Run python app\\build_demo.py --local again, then reload.' }),
+        h('p', { class: 'small muted', text: String((err && err.message) || err) }),
+      ]));
+      return;
+    }
     if (noAccess(err)) {
       add(APP, h('div', { class: 'note' }, [
         h('p', { text: 'Your account doesn\'t have access yet.' }),
@@ -447,6 +494,189 @@
         h('tbody', null, rows.map((r) => h('tr', null, r.map((v, i) => h('td', { class: cols[i].num ? 'num' : null }, v))))),
       ])),
     ]);
+  }
+
+  /** A small legend: [[swatch node, text]] */
+  function legend(items) {
+    return h('p', { class: 'legend' }, items.map((x) => h('span', { class: 'legend__i' }, [x[0], x[1]])));
+  }
+  function swatch(kind) {
+    const svg = s('svg', { class: 'legend__s', width: 18, height: 12, 'aria-hidden': 'true', focusable: 'false' });
+    if (kind === 'low') svg.appendChild(s('circle', { class: 'db-low', cx: 9, cy: 6, r: 5 }));
+    else if (kind === 'avg') svg.appendChild(s('circle', { class: 'db-avg', cx: 9, cy: 6, r: 4.5 }));
+    else if (kind === 'ref') svg.appendChild(s('line', { class: 'db-ref', x1: 9, x2: 9, y1: 0, y2: 12 }));
+    else if (kind === 'busy' || kind === 'week') svg.appendChild(s('rect', { class: 'tl-week' + (kind === 'busy' ? ' tl-week--busy' : ''), x: 4, y: 1, width: 10, height: 10 }));
+    else svg.appendChild(s('rect', { class: 'tl-bar' + (kind === 'contract' ? ' tl-bar--contract' : ''), x: 1, y: 2, width: 16, height: 8, rx: 2, ry: 2 }));
+    return svg;
+  }
+
+  /**
+   * Two values per row on one shared "% of the estimate" scale: the lowest offer (dot) and the average
+   * offer (ring), joined by a line; the dashed line is 100% = the estimate. Positions are percentages,
+   * so the rows need no redraw. rows: [{label (text or node), lang, low, avg, text, sub, href, tip}]
+   */
+  function dumbbell(box, rows) {
+    const vals = [];
+    rows.forEach((r) => { [r.low, r.avg].forEach((v) => { if (isNum(v)) vals.push(v); }); });
+    if (!vals.length) return;
+    const lo = Math.min(80, Math.floor(Math.min.apply(null, vals) / 10) * 10);
+    const hi = Math.max(100, Math.ceil(Math.max.apply(null, vals) / 10) * 10);
+    const x = (v) => (5 + ((v - lo) / (hi - lo)) * 90).toFixed(2) + '%';
+    const ol = h('ol', { class: 'bars dumbbell' });
+    rows.forEach((r) => {
+      const track = s('svg', { class: 'dumbbell__track', width: '100%', height: 16, 'aria-hidden': 'true', focusable: 'false' });
+      track.appendChild(s('line', { class: 'db-ref', x1: x(100), x2: x(100), y1: 0, y2: 16 }));
+      if (isNum(r.low) && isNum(r.avg)) track.appendChild(s('line', { class: 'db-span', x1: x(r.low), x2: x(r.avg), y1: 8, y2: 8 }));
+      if (isNum(r.avg)) track.appendChild(s('circle', { class: 'db-avg', cx: x(r.avg), cy: 8, r: 4.5 }));
+      if (isNum(r.low)) track.appendChild(s('circle', { class: 'db-low', cx: x(r.low), cy: 8, r: 5 }));
+      const label = typeof r.label === 'object' ? r.label : r.lang ? ka(r.label) : r.label;
+      const kids = [
+        h('span', { class: 'bars__label' }, [label, r.sub ? h('span', { class: 'bars__sub', text: r.sub }) : null]),
+        h('span', { class: 'bars__value', text: r.text }),
+        track,
+      ];
+      const row = r.href ? h('a', { class: 'bars__row', href: r.href }, kids) : h('div', { class: 'bars__row' }, kids);
+      if (r.tip) tip(row, r.tip);
+      ol.appendChild(h('li', null, row));
+    });
+    box.appendChild(ol);
+    const step = hi - lo <= 60 ? 10 : hi - lo <= 120 ? 20 : 50;
+    const ticks = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
+    if (ticks.indexOf(100) < 0) ticks.push(100);
+    const axis = s('svg', { class: 'dumbbell__axis', width: '100%', height: 18, 'aria-hidden': 'true', focusable: 'false' });
+    ticks.forEach((v) => axis.appendChild(s('text', { class: 'ch-tick', x: x(v), y: 13, 'text-anchor': 'middle' }, v + '%')));
+    box.appendChild(axis);
+  }
+
+  /* Days and weeks for the obligations timeline: whole days since 1 Jan 1970 (UTC), weeks Monday to
+     Sunday (1 Jan 1970 was a Thursday, so week w starts on day 7w - 3) */
+  const DAY_MS = 864e5;
+  function dayNo(iso) {
+    const p = String(iso || '').slice(0, 10).split('-');
+    return Math.floor(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2])) / DAY_MS);
+  }
+  const isoDay = (d) => new Date(d * DAY_MS).toISOString().slice(0, 10);
+  const weekOf = (d) => Math.floor((d + 3) / 7);
+  const weekStart = (w) => w * 7 - 3;
+  /** How many windows run in each week: {first, last, n: {week: count}, max} */
+  function weekLoad(list) {
+    const n = {};
+    let first = Infinity;
+    let last = -Infinity;
+    let max = 0;
+    list.forEach((o) => {
+      const a = weekOf(o.s);
+      const b = weekOf(o.e);
+      first = Math.min(first, a);
+      last = Math.max(last, b);
+      for (let w = a; w <= b; w += 1) {
+        n[w] = (n[w] || 0) + 1;
+        if (n[w] > max) max = n[w];
+      }
+    });
+    return { first: first, last: last, n: n, max: max };
+  }
+
+  /**
+   * Obligations timeline. list: [{s, e (day numbers), kind, no (tender page or null), aria, tip}].
+   * Top strip: one column per week, its height = windows running that week; weeks with 2 or more are
+   * orange (and shaded behind the bars). Below: one bar per window, packed into rows; bars link to the
+   * tender. With more than 40 rows only the strip is drawn (the table view lists every window).
+   */
+  function timeline(box, list, wl) {
+    const lanes = [];
+    list.slice().sort((a, b) => a.s - b.s || a.e - b.e).forEach((o) => {
+      let i = lanes.findIndex((end) => end < o.s);
+      if (i < 0) { i = lanes.length; lanes.push(o.e); } else lanes[i] = o.e;
+      o.lane = i;
+    });
+    const withBars = lanes.length <= 40;
+    const bh = lanes.length <= 12 ? 12 : 7;
+    const gap = lanes.length <= 12 ? 5 : 3;
+    let lastW = 0;
+    function draw() {
+      if (!document.body.contains(box)) return false;
+      const W = Math.floor(box.clientWidth || box.getBoundingClientRect().width) || (lastW ? 0 : 560);
+      if (!W || W === lastW) return true;
+      lastW = W;
+      clear(box);
+      const d0 = weekStart(wl.first);
+      const d1 = weekStart(wl.last + 1);
+      const X = (d) => ((d - d0) / (d1 - d0)) * W;
+      const PAD = 16;                                  // label row for "today"
+      const SH = 40;                                   // the week strip, below PAD
+      const top = PAD + SH + 10;                       // first bar row
+      const lanesH = withBars ? lanes.length * (bh + gap) : 0;
+      const H = top + lanesH + 34;                     // + month and year labels
+      const svg = s('svg', { class: 'chart tl', width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'group', 'aria-label': 'Obligations timeline, ' + day(isoDay(d0)) + ' to ' + day(isoDay(d1 - 1)) });
+      // months: grid lines and labels (the year under January and under the first label)
+      let y = new Date(d0 * DAY_MS).getUTCFullYear();
+      let m = new Date(d0 * DAY_MS).getUTCMonth();
+      let lastX = -Infinity;
+      for (;;) {
+        const d = Math.floor(Date.UTC(y, m, 1) / DAY_MS);
+        if (d > d1) break;
+        if (d >= d0) {
+          const gx = Math.round(X(d)) + 0.5;
+          svg.appendChild(s('line', { class: 'ch-grid', x1: gx, x2: gx, y1: PAD, y2: top + lanesH }));
+          if (gx - lastX >= 30 && gx < W - 22) {
+            svg.appendChild(s('text', { class: 'ch-xl', x: gx + 3, y: top + lanesH + 15 }, MONTHS[m]));
+            if (m === 0 || lastX === -Infinity) svg.appendChild(s('text', { class: 'ch-xs', x: gx + 3, y: top + lanesH + 29 }, String(y)));
+            lastX = gx;
+          }
+        }
+        m += 1;
+        if (m === 12) { m = 0; y += 1; }
+      }
+      // weeks: shading behind the bars and the strip on top
+      for (let w = wl.first; w <= wl.last; w += 1) {
+        const c = wl.n[w] || 0;
+        if (!c) continue;
+        const x0 = X(weekStart(w));
+        const bw = Math.max(1, X(weekStart(w + 1)) - x0 - (W / (wl.last - wl.first + 1) > 4 ? 1 : 0));
+        if (c >= 2 && withBars) svg.appendChild(s('rect', { class: 'tl-busy', x: x0, y: top - 5, width: bw, height: lanesH + 5 }));
+        const hh = Math.max(3, (c / wl.max) * (SH - 6));
+        svg.appendChild(s('rect', { class: 'tl-week' + (c >= 2 ? ' tl-week--busy' : ''), x: x0, y: PAD + SH - hh, width: bw, height: hh }));
+      }
+      svg.appendChild(s('line', { class: 'ch-base', x1: 0, x2: W, y1: PAD + SH + 0.5, y2: PAD + SH + 0.5 }));
+      if (withBars) {
+        list.forEach((o) => {
+          const x0 = X(o.s);
+          const rect = s('rect', { class: 'tl-bar' + (o.kind === 'contract' ? ' tl-bar--contract' : ''), x: x0, y: top + o.lane * (bh + gap), width: Math.max(2, X(o.e + 1) - x0), height: bh, rx: 2, ry: 2 });
+          const g = o.no ? s('a', { href: tenderUrl(o.no), class: 'tl-item', 'aria-label': o.aria }, rect) : s('g', { class: 'tl-item' }, rect);
+          tip(g, o.tip);
+          svg.appendChild(g);
+        });
+      }
+      const today = Math.floor(Date.now() / DAY_MS);
+      if (today >= d0 && today < d1) {
+        const tx = Math.round(X(today)) + 0.5;
+        svg.appendChild(s('line', { class: 'tl-today', x1: tx, x2: tx, y1: PAD - 3, y2: top + lanesH }));
+        svg.appendChild(s('text', { class: 'ch-xs tl-today__t', x: tx + (tx > W - 40 ? -3 : 3), y: 11, 'text-anchor': tx > W - 40 ? 'end' : 'start' }, 'today'));
+      }
+      box.appendChild(svg);
+      return true;
+    }
+    draw();
+    redraws.push(draw);
+    if (window.ResizeObserver) new ResizeObserver(() => draw()).observe(box);
+    if (window.requestAnimationFrame) requestAnimationFrame(() => draw());   // the box is attached by then
+    return withBars;
+  }
+
+  /** A table with "show more" and, where a column has sort, sortable headers */
+  function pagedTable(box, cols, rows, caption, limit, sort) {
+    const st = { sort: sort ? sort[0] : null, dir: sort ? sort[1] : 'asc', limit: limit, step: 100, caption: caption };
+    function render(o) {
+      const x = o || {};
+      dataTable(box, cols, rows, Object.assign({}, st, { focusSort: x.focusSort, focusRow: x.focusRow }), (ch) => {
+        if (ch.sort) { st.sort = ch.sort; st.dir = ch.dir; }
+        if (ch.limit) st.limit = ch.limit;
+        render(ch);
+      });
+    }
+    render();
   }
 
   /* ------------------------------------------------------------------ sortable table */
@@ -643,6 +873,33 @@
       grid.appendChild(c.el);
     }
 
+    // Market comparison: offers against the estimate, the winning discount, bidders per tender
+    // rows: [key, label, tenders with offers, lowest %, average %, discount %, its tenders, bidders, its tenders]
+    if (V.market && V.market.rows && V.market.rows.length) {
+      const M = V.market;
+      const isCat = M.by === 'category';
+      const name = (x) => (isCat ? catLabel(x[0]) : x[0] + ' ' + (x[1] || ''));
+      const c = card('Market comparison', 'Offers as a share of the buyer\'s estimate, averaged over the tenders with offers (GEL). 100% = the estimate.' + (isCat ? '' : ' By main CPV class.'));
+      dumbbell(c.body, M.rows.map((x) => ({
+        label: isCat ? catLabel(x[0]) : h('span', null, [x[0] + ' ', ka(x[1])]),
+        low: x[3], avg: x[4], text: 'lowest ' + pct(x[3]) + ' · average ' + pct(x[4]),
+        sub: plural(x[2], 'tender') + ' with offers' + (isNum(x[7]) ? ' · ' + one(x[7]) + ' bidders per tender' : '') +
+          (isNum(x[5]) ? ' · average discount ' + pct(x[5]) : ''),
+        href: listUrl(isCat ? { cat: x[0] } : withBase({ cpv: x[0] })),
+        tip: [name(x), 'Lowest offer: ' + pct(x[3]) + ' of the estimate', 'Average offer: ' + pct(x[4]) + ' of the estimate',
+          isNum(x[5]) ? 'Average discount: ' + pct(x[5]) + ' (' + plural(x[6], 'tender') + ')' : 'Average discount: not known yet',
+          isNum(x[7]) ? one(x[7]) + ' bidders per tender (' + plural(x[8], 'tender') + ')' : ''].filter(Boolean),
+      })));
+      c.body.appendChild(legend([[swatch('low'), 'lowest offer'], [swatch('avg'), 'average offer'], [swatch('ref'), '100% = the estimate']]));
+      c.el.appendChild(para('Average discount = how far the winning price was below the estimate: the contract value on the results tab, else the winner\'s last offer (consolidated CON tenders left out). Bidders per tender counts every tender with bidding closed, also those without bids.', 'card__foot muted small'));
+      c.el.appendChild(tableView([{ label: isCat ? 'Category' : 'CPV class' }, { label: 'Tenders with offers', num: true },
+        { label: 'Lowest offer, % of estimate', num: true }, { label: 'Average offer, % of estimate', num: true },
+        { label: 'Average discount', num: true }, { label: 'Bidders per tender', num: true }],
+      M.rows.map((x) => [isCat ? catLabel(x[0]) : [x[0] + ' ', ka(x[1])], int(x[2]), pct(x[3]), pct(x[4]),
+        isNum(x[5]) ? pct(x[5]) + ' (' + int(x[6]) + ')' : DASH, isNum(x[7]) ? one(x[7]) + ' (' + int(x[8]) + ')' : DASH])));
+      grid.appendChild(c.el);
+    }
+
     // By status (lifecycle order)
     if (V.status.length) {
       const c = card('By status', 'Where each tender stood when it was collected.');
@@ -708,6 +965,50 @@
       })));
       c.el.appendChild(tableView([{ label: 'Procedure' }, { label: 'Tenders', num: true }, { label: 'Estimated value', num: true }],
         V.proc.map((x) => [procText(x[0]), int(x[1]), lari(x[2])])));
+      grid.appendChild(c.el);
+    }
+
+    // Most-demanded items (price tables): rows [name, unit, tenders, GEL value, quantity]
+    if (V.items && ((V.items.count && V.items.count.length) || (V.items.value && V.items.value.length))) {
+      const I = V.items;
+      const c = card('Most-demanded items', 'Lines of the buyers\' price tables in ' + plural(I.tenders, 'tender') + ', grouped by item name and unit.');
+      const label = (x) => h('span', null, [ka(x[0]), x[1] ? h('span', { class: 'bars__sub' }, ['unit: ', ka(x[1])]) : null]);
+      const amount = (x) => (isNum(x[4]) ? ' · ' + NFQ.format(x[4]) + (x[1] ? ' ' + x[1] : '') : '');
+      if (I.count && I.count.length) {
+        c.body.appendChild(h('h3', { class: 'card__h3', text: 'By number of tenders' }));
+        bars(c.body, I.count.map((x) => ({ label: label(x), value: x[2], text: plural(x[2], 'tender') + amount(x),
+          tip: [{ text: x[0], lang: 'ka' }, plural(x[2], 'tender') + amount(x), isNum(x[3]) ? short(x[3]) + ' in ceiling totals' : ''].filter(Boolean) })));
+      }
+      if (I.value && I.value.length) {
+        c.body.appendChild(h('h3', { class: 'card__h3', text: 'By value' }));
+        bars(c.body, I.value.map((x) => ({ label: label(x), value: x[3], text: short(x[3]) + ' · ' + plural(x[2], 'tender'),
+          tip: [{ text: x[0], lang: 'ka' }, short(x[3]) + ' in ceiling totals', plural(x[2], 'tender')] })));
+      }
+      c.el.appendChild(para('Value = the buyers\' ceiling or estimated totals in GEL (unit price × quantity where the total is blank); a price table filled by the bidders has no prices.', 'card__foot muted small'));
+      c.el.appendChild(tableView([{ label: 'Item' }, { label: 'Unit' }, { label: 'Tenders', num: true }, { label: 'Quantity', num: true }, { label: 'Value', num: true }],
+        (I.count || []).concat((I.value || []).filter((x) => !(I.count || []).some((y) => y[0] === x[0] && y[1] === x[1])))
+          .map((x) => [ka(x[0]), x[1] ? ka(x[1]) : DASH, int(x[2]), isNum(x[4]) ? NFQ.format(x[4]) : DASH, lari(x[3])])));
+      grid.appendChild(c.el);
+    }
+
+    // Requirement tags: what tenders ask suppliers to prove (rows [tag, detail, value, tenders])
+    if (V.tags && V.tags.n) {
+      const G = V.tags;
+      const c = card('What tenders ask suppliers to prove', 'Requirement tags read from the documentation of ' + plural(G.n, 'tender') + ', each counted once per tender.');
+      const share = (n) => plural(n, 'tender') + ' (' + Math.round((n / G.n) * 100) + '%)';
+      const kindOf = (x) => (x[1] ? (TL.details[x[1]] || x[1]).replace(/^./, (ch) => ch.toUpperCase()) + ' certificate' : 'Certificate');
+      [['cert', 'Certificates', (x) => x[2] || kindOf(x) + ' (no code named)'],
+        ['test', 'Tests and checks', (x) => TL.tags[x[0]] || x[0]],
+        ['std', 'Standards', (x) => x[2] || DASH]].forEach((grp) => {
+        const rows = G[grp[0]] || [];
+        if (!rows.length) return;
+        c.body.appendChild(h('h3', { class: 'card__h3', text: grp[1] }));
+        bars(c.body, rows.map((x) => ({ label: grp[2](x), value: x[3], text: share(x[3]), tip: [grp[2](x), share(x[3])] })));
+      });
+      c.el.appendChild(para('Read automatically from the tender documents; always check the originals.', 'card__foot muted small'));
+      c.el.appendChild(tableView([{ label: 'Group' }, { label: 'Tag' }, { label: 'Tenders', num: true }],
+        [].concat.apply([], [['cert', 'Certificates'], ['test', 'Tests and checks'], ['std', 'Standards']].map((grp) =>
+          (G[grp[0]] || []).map((x) => [grp[1], tagText(x), int(x[3])])))));
       grid.appendChild(c.el);
     }
 
@@ -936,6 +1237,7 @@
         open ? h('span', { class: 'tag tag--open', text: 'open for bids' }) : null,
         h('a', { class: 'chip', href: listUrl({ cat: t.cat }) }, catLabel(t.cat)),
         h('span', { class: 'chip' }, t.proc.k),
+        t.cx ? h('a', { class: 'tag tag--cx tag--cx' + t.cx.level, href: '#requirements', title: 'How this is scored: see Requirements' }, 'Requirements: ' + t.cx.label) : null,
       ]),
       h('div', { class: 'actions' }, [
         h('a', { class: 'btn btn--primary', href: t.src, rel: 'noopener', target: '_blank' }, 'Open the original record'),
@@ -959,6 +1261,11 @@
     t.facts.forEach((f) => facts.push([f[0], ka(f[1])]));
     if (t.desc) facts.push(['Additional information', ka(t.desc, 'pre')]);
     APP.appendChild(section('Key facts', h('dl', { class: 'facts panel' }, facts.map((f) => [h('dt', { text: f[0] }), h('dd', null, f[1])]))));
+
+    // Deadlines: delivery / service / contract terms as written, and the windows they give signed contracts
+    if (t.deadlines && ((t.deadlines.terms || []).length || (t.deadlines.windows || []).length)) {
+      APP.appendChild(section('Deadlines', deadlinesBox(t.deadlines)));
+    }
 
     // Bids
     const bidsBox = h('div');
@@ -1035,10 +1342,26 @@
     }
     APP.appendChild(section('Winner and contracts', win));
 
-    // Requirements: "must be proven" first, then every item by clause
+    // Requirements: complexity and tags (when computed), "must be proven" first, then every item by clause
     const rq = h('div');
+    if (t.cx) {
+      const cx = t.cx;
+      rq.appendChild(h('div', { class: 'panel cx' }, [
+        h('p', { class: 'cx__head' }, [
+          h('span', { class: 'tag tag--cx tag--cx' + cx.level, text: 'Requirements complexity: ' + cx.label }),
+          isNum(cx.points) ? h('span', { class: 'muted', text: ' ' + plural(cx.points, 'point') }) : null,
+        ]),
+        cx.reasons && cx.reasons.length ? h('p', null, ['Scored here: ', cx.reasons.join(' · ')]) : null,
+        h('p', { class: 'small muted', text: (cx.rule_short || 'Points for each kind of proof the tender asks for (lab tests, expertise, certificates, standards …), counted once.') +
+          ' It describes this tender\'s requirements, never a company.' }),
+        cx.rule ? h('details', { class: 'tableview' }, [h('summary', { text: 'The full rule' }), h('p', { class: 'small', text: cx.rule })]) : null,
+      ]));
+    }
     if (t.req) {
       rq.appendChild(h('p', null, [plural(t.req.n, 'item') + ' read from the tender documentation; ', h('strong', { text: int(t.req.proving.length) + ' must be proven' }), ' (lab tests, expertise, certificates, inspections, samples). Read automatically: always check the originals.']));
+      if (t.req.tags && t.req.tags.length) {
+        rq.appendChild(h('div', { class: 'reqtags' }, [h('h3', { text: 'What this tender asks suppliers to hold or prove' }), h('p', null, t.req.tags.map(tagChip))]));
+      }
       const prove = h('div', { class: 'panel panel--accent' }, [h('h3', { text: 'Must be proven' })]);
       if (t.req.proving.length) t.req.proving.forEach((r) => prove.appendChild(reqItem(r, true)));
       else prove.appendChild(para('No item of a proving kind was found.'));
@@ -1063,7 +1386,13 @@
     } else {
       rq.appendChild(para('Requirements are not read yet for this tender. They come from the tender documentation, which the portal reads in a later data run.'));
     }
-    APP.appendChild(section('Requirements', rq));
+    APP.appendChild(section('Requirements', rq, null, 'requirements'));
+
+    // What it usually costs: this tender's price-table lines with other buyers' unit prices for the same item
+    if (t.prices && t.prices.rows && t.prices.rows.length) APP.appendChild(section('What it usually costs', pricesBox(t.prices)));
+
+    // Similar past tenders: same buyer first, then the closest CPV match
+    if (t.similar && t.similar.length) APP.appendChild(section('Similar past tenders', similarBox(t)));
 
     // Documents: links to the state's copy only
     const docs = h('div');
@@ -1081,15 +1410,118 @@
   }
 
   function reqItem(r, withClause) {
+    const tags = r.tags || [];
+    const shown = tags.map((g) => g[2]).filter(Boolean);       // a code shown as a tag is not repeated below
+    const std = r.std.filter((x) => shown.indexOf(x) < 0);
     return h('div', { class: 'req' }, [
       withClause ? h('span', { class: 'req__ref', text: 'Clause ' + (r.ref || DASH) }) : null,
       h('span', { class: 'req__kind', text: r.kind_en || '' }),
+      tags.length ? h('span', { class: 'req__tags' }, tags.map(tagChip)) : null,
       r.lead ? h('div', { class: 'req__lead' }, ['Lead line: ', ka(r.lead)]) : null,
       h('div', { class: 'req__text' }, ka(r.text)),
-      (r.std.length || r.bodies.length || r.regs.length) ? h('div', null, [
-        r.std.map((x) => chip(x)), r.bodies.map((x) => chip(ka(x), null, 'chip--body')), r.regs.map((x) => chip(x)),
+      (std.length || r.bodies.length || r.regs.length) ? h('div', null, [
+        std.map((x) => chip(x)), r.bodies.map((x) => chip(ka(x), null, 'chip--body')), r.regs.map((x) => chip(x)),
       ]) : null,
     ]);
+  }
+
+  const OB_KIND = { delivery: 'Delivery', service: 'Service or works', contract: 'Contract in force', warranty: 'Warranty' };
+  const OB_BASIS = { stated: 'dates printed on the contract', absolute: 'the tender\'s own end date', relative: 'contract date + the tender\'s term' };
+  /* How the term was found (deadlines.confidence, README "Enrichment contract") */
+  function confText(c) {
+    if (!isNum(c)) return '';
+    return c >= 0.85 ? 'the term as stated' : c >= 0.65 ? 'picked out of a longer clause'
+      : c >= 0.45 ? 'from the contract draft: check it' : 'a schedule word without a date: check it';
+  }
+  function termText(d) {
+    const extra = d.term && isNum(d.days) && !/calendar day/.test(d.term) ? ' (' + plural(d.days, 'calendar day') + ')' : '';
+    if (d.start && d.end) return day(d.start) + ' to ' + day(d.end);
+    if (d.end) return 'until ' + day(d.end) + (d.term ? '; ' + d.term + extra : '');
+    if (d.start) return 'from ' + day(d.start) + (d.term ? '; ' + d.term + extra : '');
+    return d.term ? d.term + extra : 'see the text as written';
+  }
+
+  /** Deadlines block of a tender page: {terms: [...], windows: [...], windows_n} (build_demo.py deadlines_json) */
+  function deadlinesBox(D) {
+    const box = h('div');
+    const terms = D.terms || [];
+    if (terms.length) {
+      box.appendChild(h('ul', { class: 'terms' }, terms.map((d) => h('li', { class: 'panel' }, [
+        h('p', { class: 'terms__head' }, [h('strong', { text: d.kind_en + ': ' }), termText(d)]),
+        d.schedule || d.period ? h('p', { class: 'small' }, ['Schedule: ', d.schedule || '', d.schedule && d.period ? ', ' : '', d.period ? ka(d.period) : null]) : null,
+        d.text ? h('blockquote', { class: 'terms__text' }, ka(d.text)) : null,
+        h('p', { class: 'small muted' }, ['As written in ', d.from_ka ? ka(d.from) : d.from || 'the documentation', confText(d.conf) ? ' · ' + confText(d.conf) : '']),
+      ]))));
+    }
+    const wins = D.windows || [];
+    if (wins.length) {
+      box.appendChild(h('h3', { text: 'Windows of the signed contracts' }));
+      box.appendChild(h('ul', { class: 'plain terms__windows' }, wins.slice(0, 5).map((w) => h('li', null, [
+        w.c ? h('a', { href: companyUrl(w.c) }, ka(w.cn || w.c)) : w.cn ? ka(w.cn) : 'Supplier',
+        w.reg ? [' · contract ', ka(w.reg)] : null, w.date ? ' of ' + day(w.date) : null, ': ',
+        h('strong', { text: (OB_KIND[w.kind] || w.kind) + ' ' + day(w.start) + ' to ' + day(w.end) }),
+        h('span', { class: 'muted small', text: ' (' + (w.basis_en || OB_BASIS[w.basis] || w.basis) + ')' }),
+      ]))));
+      if ((D.windows_n || wins.length) > 5) box.appendChild(para('And ' + plural((D.windows_n || wins.length) - 5, 'more contract') + '; see the suppliers\' pages.', 'small muted'));
+    }
+    box.appendChild(para('Read automatically from the record and its documents; always check the original.', 'small muted'));
+    return box;
+  }
+
+  /** "What it usually costs": rows [item, unit, quantity, this tender's unit price, price kind,
+      other tenders' lowest, median, highest, tenders] */
+  function pricesBox(P) {
+    const box = h('div');
+    const cur = P.cur || 'GEL';
+    box.appendChild(h('p', null, [plural(P.n, 'line') + ' in this tender\'s price table' + ((P.files || []).length > 1 ? 's' : '') + '; ',
+      h('strong', { text: int(P.compared) + ' with unit prices for the same item in other tenders' }), ' (same name and unit).']));
+    const tb = h('div');
+    box.appendChild(tb);
+    pagedTable(tb, [
+      { key: 'i', label: 'Item', cls: 'wide', first: 'asc', sort: (r) => r[0], cell: (r) => ka(r[0]) },
+      { key: 'u', label: 'Unit', sort: null, cell: (r) => (r[1] ? ka(r[1]) : DASH) },
+      { key: 'q', label: 'Quantity', num: true, first: 'desc', sort: (r) => r[2], cell: (r) => (isNum(r[2]) ? NFQ.format(r[2]) : DASH) },
+      { key: 'p', label: 'This tender', num: true, first: 'desc', sort: (r) => r[3], cell: (r) => (isNum(r[3]) ? [money(r[3], cur), r[4] === 'ceiling' ? h('span', { class: 'muted small', text: ' ceiling' }) : null] : DASH) },
+      { key: 'r', label: 'Other tenders: lowest to highest', num: true, first: 'desc', sort: (r) => r[5], cell: (r) => (isNum(r[5]) ? (r[5] === r[7] ? money(r[5], cur) : money(r[5], cur) + ' to ' + money(r[7], cur)) : DASH) },
+      { key: 'm', label: 'Median', num: true, first: 'desc', sort: (r) => r[6], cell: (r) => money(r[6], cur) },
+      { key: 'n', label: 'Tenders', num: true, first: 'desc', sort: (r) => r[8] || null, cell: (r) => (r[8] ? int(r[8]) : DASH) },
+    ], P.rows, 'Price table lines', 50, P.compared ? ['n', 'desc'] : null);    // compared lines first
+    const files = P.files || [];
+    box.appendChild(h('p', { class: 'small muted' }, ['Unit prices are the ceiling or estimated prices buyers wrote in their price tables, not offers. ',
+      files.length ? ['Price table: ', files.map((f, i) => [i ? ', ' : '', h('a', { href: f.url, rel: 'noopener', target: '_blank', lang: 'ka', text: f.name })]), ' (the state\'s copy).'] : null]));
+    return box;
+  }
+
+  /** "Similar past tenders" of a tender page (build_demo.py similar_json) */
+  const MATCH = ['same category', 'same CPV class', 'shared CPV code', 'same main CPV code'];
+  function similarBox(t) {
+    const rows = t.similar;
+    const box = h('div');
+    const discs = rows.map((r) => r.disc).filter(isNum).sort((a, b) => a - b);
+    const mid = discs.length ? (discs.length % 2 ? discs[(discs.length - 1) / 2] : (discs[discs.length / 2 - 1] + discs[discs.length / 2]) / 2) : null;
+    const ns = rows.map((r) => r.n).filter(isNum);
+    const same = rows.filter((r) => r.sb).length;
+    box.appendChild(h('p', { class: 'summary' }, [plural(rows.length, 'tender'),
+      same ? ' (' + int(same) + ' of the same buyer)' : '',
+      isNum(mid) ? ' · lowest offers a median ' + pct(mid) + ' below the estimate' : '',
+      ns.length ? ' · ' + one(ns.reduce((a, b) => a + b, 0) / ns.length) + ' bidders on average' : '']));
+    const tb = h('div');
+    dataTable(tb, [
+      { key: 'no', label: 'Tender', cls: 'wide', cell: (r) => [h('a', { href: tenderUrl(r.no), text: r.no }), ' ', ka(r.t),
+        h('span', { class: 'muted small', text: ' · ' + (MATCH[r.m] || '') }), r.sb ? h('span', { class: 'tag tag--req', text: 'same buyer' }) : null] },
+      { key: 'b', label: 'Buyer', cls: 'wide', cell: (r) => (r.b ? h('a', { href: buyerUrl(r.b) }, ka(r.bn)) : DASH) },
+      { key: 'v', label: 'Estimated value', num: true, cell: (r) => money(r.v, r.cur) },
+      { key: 'l', label: 'Lowest offer', num: true, cell: (r) => money(r.low, r.cur) },
+      { key: 'a', label: 'Average offer', num: true, cell: (r) => money(r.avg, r.cur) },
+      { key: 'd', label: 'Lowest below the estimate', num: true, cell: (r) => pct(r.disc) },
+      { key: 'n', label: 'Bidders', num: true, cell: (r) => int(r.n) },
+      { key: 'w', label: 'Winner', cls: 'wide', cell: (r) => (r.w ? [h('a', { href: companyUrl(r.w[0]) }, ka(r.w[1])), isNum(r.w[2]) ? h('span', { class: 'muted small', text: ' · ' + short(r.w[2]) }) : null,
+        r.wn > 1 ? h('span', { class: 'muted small', text: ' +' + (r.wn - 1) + ' more' }) : null] : h('span', { class: 'muted', text: 'not known yet' })) },
+      { key: 'c', label: 'Bidding closed', cell: (r) => day(r.d) },
+    ], rows, { caption: 'Similar past tenders' });
+    box.appendChild(tb);
+    box.appendChild(para('Past = bidding closed before this tender\'s deadline. Order: the same buyer first, then the closest CPV match (main code, a shared code, the same class, the same category), newest first. Offers are the last offers on each tender\'s bids tab; the winner\'s value is the contract value where it is published.', 'small muted'));
+    return box;
   }
 
   /* ------------------------------------------------------------------ companies */
@@ -1195,6 +1627,9 @@
       if (c.cats.length) {
         APP.appendChild(section('Categories', h('p', null, c.cats.map((x) => chip(catLabel(x[0]) + ' · ' + int(x[1]), listUrl({ company: id, cat: x[0] }))))));
       }
+      // Obligations over time (contracts won: delivery / service windows, else the contract dates)
+      const obs = obligationsBox(c.ob, B);
+      if (obs) APP.appendChild(section('Obligations over time', obs));
       // Their tenders
       const mine = res[2].rows.filter((r) => (r.bi || []).some((b) => b[0] === id) || (r.w || []).some((w) => w[0] === id));
       mine.forEach((r) => {
@@ -1240,6 +1675,55 @@
       }
       APP.appendChild(para('Facts from public records: counts, sums and dates. No scores or ratings.', 'small muted'));
     });
+  }
+
+  /**
+   * Obligations timeline of a company page. ob: [[contract no, tender page or null, buyer page or null,
+   * start, end, kind, basis, GEL value, tender number as text, buyer name without a page]]
+   * (build_demo.py obligation_rows). Facts only: dates of the contracts it won, no score.
+   */
+  function obligationsBox(ob, B) {
+    const list = (ob || []).map((o) => {
+      const x = { reg: o[0], no: o[1], b: o[2], start: o[3], end: o[4], kind: o[5], basis: o[6], v: o[7], tn: o[8] || o[1],
+        bn: o[9] || (o[2] && B[o[2]] ? B[o[2]].name : null), s: dayNo(o[3]), e: dayNo(o[4]) };
+      const what = (OB_KIND[x.kind] || x.kind) + ': ' + day(x.start) + ' to ' + day(x.end);
+      x.aria = 'Contract ' + (x.reg || x.tn || '') + ', ' + what;
+      x.tip = [x.reg || x.tn || 'Contract', x.bn ? { text: x.bn, lang: 'ka' } : '', what, 'From ' + (OB_BASIS[x.basis] || x.basis), isNum(x.v) ? short(x.v) : ''].filter(Boolean);
+      return x;
+    }).filter((x) => isFinite(x.s) && isFinite(x.e) && x.e >= x.s);
+    if (!list.length) return null;
+    const wl = weekLoad(list);
+    const busy = Object.keys(wl.n).map(Number).filter((w) => wl.n[w] >= 2).sort((a, b) => a - b);
+    let peak = null;
+    busy.forEach((w) => { if (peak === null || wl.n[w] > wl.n[peak]) peak = w; });
+    const box = h('div');
+    box.appendChild(h('p', { class: 'summary' }, [plural(list.length, 'contract window'), ' · ',
+      busy.length ? plural(busy.length, 'week') + ' with 2 or more running at once (most: ' + int(wl.n[peak]) + ', week of ' + day(isoDay(weekStart(peak))) + ')' : 'no week with 2 or more at once']));
+    const chart = h('div', { class: 'tl-box' });
+    box.appendChild(chart);
+    const withBars = timeline(chart, list, wl);
+    const hasContract = list.some((x) => x.kind === 'contract');
+    box.appendChild(legend([withBars ? [swatch('bar'), 'delivery or service window'] : null,
+      withBars && hasContract ? [swatch('contract'), 'contract in force (no delivery term known)'] : null,
+      [swatch('week'), 'week with 1 running'], [swatch('busy'), 'week with 2 or more at once']].filter(Boolean)));
+    const orphans = list.filter((x) => !x.no).length;
+    box.appendChild(para('Top strip: how many windows run in each week. ' +
+      (withBars ? 'Below it, one bar per contract won: ' : 'Too many overlap to draw one bar each; "Show as table" lists every contract. Each window is ') +
+      'the delivery or service window where the contract or the tender states one, otherwise the contract\'s validity.' +
+      (orphans ? ' ' + plural(orphans, 'contract') + ' under consolidated tenders announced before this demo\'s window ' + (orphans === 1 ? 'has' : 'have') + ' no tender page here.' : '') +
+      ' Dates as published; facts only, no score.', 'small muted'));
+    const rows = list.slice().sort((a, b) => a.s - b.s || a.e - b.e);
+    box.appendChild(tableView([{ label: 'Contract' }, { label: 'Tender' }, { label: 'Buyer' }, { label: 'From' }, { label: 'To' }, { label: 'What' }, { label: 'Dates from' }, { label: 'Value', num: true }],
+      rows.map((x) => [x.reg ? ka(x.reg) : DASH, x.no ? h('a', { href: tenderUrl(x.no), text: x.no }) : x.tn || DASH,
+        x.b && B[x.b] ? h('a', { href: buyerUrl(x.b) }, ka(x.bn)) : x.bn ? ka(x.bn) : DASH, day(x.start), day(x.end),
+        OB_KIND[x.kind] || x.kind, OB_BASIS[x.basis] || x.basis, lari(x.v)])));
+    if (busy.length) {
+      box.appendChild(h('details', { class: 'tableview' }, [
+        h('summary', { text: 'Weeks with 2 or more at once (' + int(busy.length) + ')' }),
+        h('p', { class: 'small' }, busy.map((w, i) => (i ? ', ' : '') + day(isoDay(weekStart(w))) + ' (' + wl.n[w] + ')').join('')),
+      ]));
+    }
+    return box;
   }
 
   /* ------------------------------------------------------------------ buyers */
@@ -1337,6 +1821,117 @@
       }
       APP.appendChild(para('Facts from public records: counts, sums and dates.', 'small muted'));
     });
+  }
+
+  /* ------------------------------------------------------------------ my company (local preview only) */
+
+  const CODE_TAGS = ['certificate', 'standard', 'licence', 'building_class'];   // the value is a code or class
+  function refLinks(refs, titles) {
+    return refs.map((no, i) => [i ? ', ' : '', h('a', { href: tenderUrl(no), text: no, title: (titles && titles[no]) || null })]);
+  }
+
+  /* The gap analysis of a test company (app/my_company.py; my_company.json exists only in the local
+     preview): its history, the tags of the tenders it won, and for every open tender in its
+     categories what is asked and whether its certificates or past wins cover it. */
+  function pageMyCompany() {
+    if (!LOCAL) {
+      notFound('This test page exists only in the local preview.');
+      return Promise.resolve();
+    }
+    return Promise.all([load('summary.json'), load('my_company.json')]).then((res) => {
+      const S = res[0];
+      const M = res[1];
+      lookups(S);
+      const co = M.company;
+      setTitle(['My company (test): ', ka(co.name)], 'My company');
+      setLead([co.how === 'set' ? 'Set with app\\my_company.py' + (co.set_at ? ' on ' + day(local10(co.set_at)) : '') + '. '
+        : 'No company set yet, so this shows the company with the most wins. ',
+      'Change it with python app\\my_company.py --set <company id> (the id in a company page\'s address), add certificates with --cert "ISO 9001", then run python app\\build_demo.py --local again.']);
+      clear(APP);
+      const open = M.open.filter((o) => isOpen(o.d));
+      add(APP, h('dl', { class: 'kpis' }, [
+        kpi('Tenders entered', int(M.kpi.e), 'with a bid on record'),
+        kpi('Won', int(M.kpi.w), 'contracts on record'),
+        kpi('Value won', M.kpi.wv === null ? DASH : short(M.kpi.wv), 'contract value, GEL'),
+        kpi('Your certificates', int(M.certs.length), 'in the test profile'),
+        kpi('Open tenders', int(open.length), 'in your categories'),
+        kpi('With requirement tags', int(open.filter((o) => o.tagged).length), 'of those open tenders'),
+      ]));
+      APP.appendChild(h('div', { class: 'actions' }, [h('a', { class: 'btn btn--ghost btn--small', href: companyUrl(co.id), text: 'The company\'s public page' })]));
+
+      APP.appendChild(section('Your certificates', M.certs.length ? h('p', null, M.certs.map((x) => chip(x)))
+        : para(['None in the test profile yet. Add one: ', h('code', { text: 'python app\\my_company.py --cert "ISO 9001"' })])));
+
+      // Open tenders in its categories: what is asked, covered or missing
+      const ob = h('div');
+      if (!M.tags_ready) ob.appendChild(para('Requirement tags are not computed yet (app\\run_enrich.py), so nothing can be compared. The open tenders are listed; their gaps show after the next data run.', 'note'));
+      if (!open.length) ob.appendChild(para('No tender in your categories is open for bids right now.'));
+      open.forEach((o) => {
+        const id = nextId('o');
+        const gaps = o.need.filter((n) => n.how === 'gap').length;
+        const card2 = h('article', { class: 'panel need-card', 'aria-labelledby': id }, [
+          h('h3', { id: id, class: 'need-card__title' }, h('a', { href: tenderUrl(o.no) }, [o.no + ' · ', ka(o.t)])),
+          h('p', { class: 'small muted' }, [o.b ? h('a', { href: buyerUrl(o.b) }, ka(o.bn)) : null, o.b ? ' · ' : '', isNum(o.v) ? lari(o.v) + ' estimated · ' : '',
+            h('strong', { text: closesIn(o.d) }), ' (' + dayTime(o.d) + ')', o.src ? [' · ', h('a', { href: o.src, rel: 'noopener', target: '_blank', text: 'original record' })] : null]),
+          o.cx ? h('p', null, h('span', { class: 'tag tag--cx tag--cx' + o.cx[0], text: 'Requirements: ' + o.cx[1] })) : null,
+        ]);
+        if (!o.tagged) {
+          card2.appendChild(para(o.read ? 'Requirements read; tags not computed yet.' : 'Requirements not read yet: the documents come in a later data run.', 'small muted'));
+        } else if (!o.need.length) {
+          card2.appendChild(para('Nothing to hold or prove was found in its requirements (guarantees and warranty aside).', 'small'));
+        } else {
+          card2.appendChild(h('p', { class: 'need__sum' }, [plural(o.need.length, 'thing') + ' to hold or prove · ', h('strong', { text: plural(gaps, 'gap') }), ' · ' + int(o.need.length - gaps) + ' covered']));
+          card2.appendChild(h('ul', { class: 'need' }, o.need.map((n) => h('li', { class: 'need__i need__i--' + (n.how === 'gap' ? 'gap' : 'ok') }, [
+            h('span', { class: 'need__mark', 'aria-hidden': 'true', text: n.how === 'gap' ? '✕' : '✓' }),
+            h('span', { class: 'need__body' }, [
+              h('span', { class: 'visually-hidden', text: n.how === 'gap' ? 'Gap. ' : 'Covered. ' }),
+              'Required: ', h('strong', { text: tagText(n.g) }), stageText(n.g[3]) ? h('span', { class: 'muted', text: ' (' + stageText(n.g[3]) + ')' }) : null, '. ',
+              n.how === 'gap' ? (CODE_TAGS.indexOf(n.g[0]) >= 0 && n.g[2] ? 'Not in your certificates and not in any tender you won.' : 'Not asked in any tender you won.')
+                : n.how === 'cert' ? ['In your certificates: ', h('strong', { text: n.cert }), '.', n.refs.length ? [' Also asked in tenders you won: ', refLinks(n.refs, M.titles), n.more ? ' and ' + n.more + ' more' : '', '.'] : null]
+                  : ['Asked in tenders you won; reuse from ', refLinks(n.refs, M.titles), n.more ? ' and ' + n.more + ' more' : '', '.'],
+            ]),
+          ]))));
+        }
+        ob.appendChild(card2);
+      });
+      APP.appendChild(section('Open tenders in your categories (' + int(open.length) + ')', ob));
+
+      // Tags of the tenders it won
+      const wt = h('div');
+      if (!M.tags_ready) wt.appendChild(para('Shown once requirement tags are computed.'));
+      else if (!M.won_tags.length) wt.appendChild(para('None of the tenders won so far has requirement tags yet (documents not read, or nothing to prove).'));
+      else {
+        wt.appendChild(h('ul', { class: 'wontags' }, M.won_tags.map((w) => h('li', null, [tagChip(w.g), ' ',
+          h('span', { class: 'small' }, ['in ' + plural(w.refs.length, 'won tender') + ': ', refLinks(w.refs.slice(0, 12), M.titles), w.refs.length > 12 ? ' and ' + (w.refs.length - 12) + ' more' : ''])]))));
+      }
+      APP.appendChild(section('What the tenders you won asked for', wt));
+
+      // History: every tender entered
+      const hb = h('div');
+      if (M.history.length) {
+        pagedTable(hb, [
+          { key: 'no', label: 'Number', first: 'asc', sort: (r) => r[0], cell: (r) => h('a', { href: tenderUrl(r[0]), text: r[0] }) },
+          { key: 't', label: 'Title', cls: 'wide', sort: null, cell: (r) => ka(r[1]) },
+          { key: 'b', label: 'Buyer', cls: 'wide', sort: null, cell: (r) => (r[2] ? h('a', { href: buyerUrl(r[2]) }, ka(r[3])) : DASH) },
+          { key: 'v', label: 'Estimated value', num: true, first: 'desc', sort: (r) => r[4], cell: (r) => lari(r[4]) },
+          { key: 'o', label: 'Your last offer', num: true, first: 'desc', sort: (r) => r[5], cell: (r) => money(r[5]) },
+          { key: 'd', label: 'Below the estimate', num: true, first: 'desc', sort: (r) => r[6], cell: (r) => pct(r[6]) },
+          { key: 'r', label: 'Result', first: 'asc', sort: (r) => r[7], cell: (r) => (r[7] === 'won' ? h('span', { class: 'tag tag--won', text: 'won' + (isNum(r[8]) ? ' · ' + short(r[8]) : '') })
+            : r[7] === 'other' ? 'another company won' : h('span', { class: 'muted', text: WINNER_HINT[r[7]] || DASH })) },
+          { key: 'g', label: 'Tags read', sort: null, cell: (r) => (r[10] ? 'yes' : h('span', { class: 'muted', text: 'not yet' })) },
+          { key: 'a', label: 'Announced', first: 'desc', sort: (r) => r[9], cell: (r) => day(r[9]) },
+        ], M.history, 'Tenders entered', 50, null);
+      } else {
+        hb.appendChild(para('No tender entered on record.'));
+      }
+      APP.appendChild(section('Your history: tenders entered (' + int(M.history.length) + ')', hb));
+      APP.appendChild(para('Test page, local only. Certificate and standard codes match exactly (ISO 9001:2015 counts as ISO 9001); other requirements match by kind. Read automatically: check the originals.', 'small muted'));
+    });
+  }
+  /** '2026-11-08T09:12:00+00:00' -> '2026-11-08' in Georgian time (falls back to the first 10 characters) */
+  function local10(ts) {
+    const t = Date.parse(ts);
+    return isNaN(t) ? String(ts || '').slice(0, 10) : new Date(t + 4 * 3600e3).toISOString().slice(0, 10);
   }
 
   /* ------------------------------------------------------------------ sign-in */
@@ -1437,11 +2032,16 @@
 
   const PAGES = {
     dashboard: pageDashboard, tenders: pageTenders, tender: pageTender, companies: pageCompanies,
-    company: pageCompany, buyers: pageBuyers, buyer: pageBuyer,
+    company: pageCompany, buyers: pageBuyers, buyer: pageBuyer, mycompany: pageMyCompany,
   };
   function boot() {
     const run = PAGES[PAGE];
     if (!run || !APP) return;
+    if (LOCAL) {                                // laptop preview: local files, no sign-in
+      load('summary.json').then(dates, () => {});
+      Promise.resolve().then(run).catch(fail);
+      return;
+    }
     if (!window.supabase || !window.supabase.createClient) {
       fail(new Error('The sign-in library (supabase-js) did not load.'));
       return;

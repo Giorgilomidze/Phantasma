@@ -13,6 +13,8 @@
   --accent-deep: #b8420a;
   --rule: #ddd8cf;
   --ok: #1f7a4d;
+  --act: #b3261e;
+  --partner: #0e4f6b;
   --r: 10px;
   --r-sm: 6px;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
@@ -235,3 +237,70 @@ a.bars__row:hover .ch-mark, a.bars__row:focus-visible .ch-mark { fill: var(--acc
 .docs li:first-child, .notes li:first-child { border-top: 0; }
 .cols { columns: 2 280px; column-gap: 32px; padding-left: 18px; margin: 0; }
 .cols li { break-inside: avoid; margin-bottom: 6px; overflow-wrap: anywhere; }
+
+/* ---------- supplier widgets (8 Nov 2026): tags, complexity, deadlines, prices, market, timeline, my company */
+.card__h3 { font-family: var(--font-body); font-size: .85rem; font-weight: 600; color: var(--muted); margin: 14px 0 4px; }
+.card__h3:first-child { margin-top: 0; }
+code { font-family: Consolas, 'Courier New', monospace; font-size: .88em; background: var(--surface); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; font-size: .8rem; color: var(--muted); }
+.legend__i { display: inline-flex; align-items: center; gap: 6px; }
+.legend__s { flex: none; }
+
+/* requirement tags and the complexity badge (it describes a tender, never a company) */
+.chip--tag { background: #fff; border-color: #b9b2a6; }
+.req__tags { display: inline; margin-left: 6px; }
+.req__tags .chip { font-size: .75rem; padding: 0 8px; }
+.reqtags h3 { margin-top: .6em; }
+.tag--cx { text-decoration: none; }
+.tag--cx1 { background: var(--surface); color: var(--muted); }
+.tag--cx2 { background: #e5eef2; color: var(--partner); }
+.tag--cx3 { background: #fde9dc; color: var(--accent-deep); }
+a.tag--cx:hover { text-decoration: underline; }
+.badges .tag--cx { font-size: .82rem; padding: 3px 12px; }
+.cx__head { margin-bottom: .4em; }
+.cx__head .tag { margin-left: 0; font-size: .85rem; padding: 3px 12px; }
+
+/* deadlines */
+.terms { list-style: none; margin: 0; padding: 0; }
+.terms > li { margin: 0 0 10px; overflow-wrap: anywhere; }
+.terms__head { margin-bottom: .35em; }
+.terms__text { margin: 0 0 .5em; padding: 6px 12px; border-left: 3px solid var(--rule); background: #fbfaf8; font-size: .9rem; white-space: pre-line; }
+.terms__windows li { padding: 6px 0; border-top: 1px solid var(--rule); overflow-wrap: anywhere; }
+.terms__windows li:first-child { border-top: 0; }
+
+/* market comparison (dot plot on a % of the estimate scale) */
+.dumbbell__track { display: block; height: 16px; grid-column: 1 / -1; overflow: visible; }
+.dumbbell__axis { display: block; height: 18px; overflow: visible; }
+.db-ref { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; opacity: .55; }
+.db-span { stroke: #c9c3b8; stroke-width: 3; stroke-linecap: round; }
+.db-low { fill: var(--accent); stroke: var(--accent-deep); stroke-width: 1; }
+.db-avg { fill: #fff; stroke: var(--ink); stroke-width: 2; }
+a.bars__row:hover .db-low, a.bars__row:focus-visible .db-low { fill: var(--accent-deep); }
+
+/* obligations timeline */
+.tl-box { min-height: 60px; }
+.tl-week { fill: #d6cfc4; }
+.tl-week--busy { fill: var(--accent); }
+.tl-busy { fill: rgba(242, 107, 29, .09); }
+.tl-bar { fill: var(--accent); }
+.tl-bar--contract { fill: #fde9dc; stroke: var(--accent-deep); stroke-width: 1; }
+a.tl-item:hover .tl-bar, a.tl-item:focus .tl-bar { fill: var(--accent-deep); }
+a.tl-item:focus { outline: none; }
+a.tl-item:focus-visible .tl-bar { stroke: var(--ink); stroke-width: 2; }
+.tl-today { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 3; }
+.tl-today__t { fill: var(--ink); }
+
+/* my company (local preview only) */
+.need-card { overflow-wrap: anywhere; }
+.need-card__title { font-family: var(--font-body); font-size: 1rem; margin: 0 0 4px; }
+.need-card__title [lang="ka"] { font-weight: 600; }
+.need__sum { margin: 8px 0 4px; font-size: .92rem; }
+.need { list-style: none; margin: 0; padding: 0; }
+.need__i { display: grid; grid-template-columns: 1.4em minmax(0, 1fr); gap: 6px; padding: 6px 0; border-top: 1px solid var(--rule); font-size: .92rem; }
+.need__i:first-child { border-top: 0; }
+.need__mark { font-weight: 700; text-align: center; }
+.need__i--gap .need__mark { color: var(--act); }
+.need__i--ok .need__mark { color: var(--ok); }
+.wontags { list-style: none; margin: 0; padding: 0; }
+.wontags li { padding: 6px 0; border-top: 1px solid var(--rule); overflow-wrap: anywhere; }
+.wontags li:first-child { border-top: 0; }
