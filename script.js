@@ -1650,7 +1650,12 @@
 
     function boot() {
       const sb = getClient();
-      if (!sb) return;
+      // No supabase-js (CDN blocked): still show the plain "Log in" link, which
+      // the header CSS hides until the state is known (styles section 26).
+      if (!sb) {
+        document.querySelectorAll('.js-auth').forEach((el) => { el.dataset.state = 'out'; });
+        return;
+      }
       sb.auth.onAuthStateChange((event, s) => {
         session = s;
         lastEvent = event;
@@ -2093,8 +2098,9 @@
       if (error) say('error', form.dataset.msgError);
     });
 
-    // Header / nav auth links: signed out → open modal; signed in → follow
-    // the href to the Services page (services.html / services.ka.html).
+    // Auth links: signed out → open modal; signed in → follow the href. Since
+    // 9 Nov 2026 the header / nav ones are hidden when signed in (styles §26),
+    // so only the in-page "Log in" prompts (account, preferences, admin) remain.
     document.querySelectorAll('.js-auth').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (Auth.getSession()) return;

@@ -3331,9 +3331,14 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
    (Supabase; see Auth / bootAuthModal / bootAccountPage in script.js)
    ------------------------------------------------------------------------- */
 
-/* Header link doubles as "Log in" (opens modal) and "Account" (link). */
+/* Header "Log in" (opens the modal) shows for signed-out visitors only.
+   Signed in, the header has no button (owner, 9 Nov 2026: "Manage profile"
+   removed; the Services link leads on). Until Auth knows the session
+   (data-state unset) the slot is invisible but keeps its width: no "Log in"
+   flash, and the header never jumps. Auth.boot() sets "out" without supabase-js. */
 .site-nav__auth { display: none; }
-/* Signed-in state (My profile) keeps the primary button look. */
+.site-header .js-auth:not([data-state="out"]) { visibility: hidden; }
+.site-header .site-nav__auth[data-state="in"] { display: none; } /* no empty row in the menu panel */
 
 /* Modal — same layering conventions as the lightbox (section 17). */
 .auth-modal {
