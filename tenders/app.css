@@ -186,6 +186,14 @@ a.bars__row:hover .ch-mark, a.bars__row:focus-visible .ch-mark { fill: var(--acc
 .listbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--r); padding: 14px 16px; margin: 0 0 12px; }
 @media (min-width: 640px) { .listbar { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
 .summary { font-weight: 600; margin: 4px 0 12px; }
+/* ---------- products (TEN-10): many filters in one box, summary + download on one line */
+.switch + .filters { margin-top: 12px; }
+.filters__grid--products .field--check { align-self: end; min-height: 40px; }
+.listbar__end { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; justify-content: space-between; margin: 4px 0 12px; }
+.listbar__end .summary { margin: 0; }
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-deep); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
+.block { display: block; }
+.ok { color: var(--ok); font-weight: 600; }
 .more { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px 0 0; }
 
 /* ---------- tables (cards on phones) */

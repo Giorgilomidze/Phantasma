@@ -2028,11 +2028,221 @@
     if (foot) foot.textContent = ' Data collected on ' + day(S.collected) + '. Built ' + day(S.built) + '.';
   }
 
+  /* ------------------------------------------------------------------ products (TEN-10, 9 Nov 2026) */
+
+  // products.json rows: [no, seller key, seller, offer date, product as written, spec, maker, unit, quantity,
+  // unit price as written, without VAT, with VAT, won, verified, product key]; tenders: no -> [procedure,
+  // category, codes, buyer key, buyer name, announced]
+  const VERIFIED = {
+    last: 'The table adds up to the bidder\'s last offer',
+    first: 'The table adds up to the bidder\'s first offer (it lowered the price later)',
+    lots: 'All its files together add up to the bid',
+  };
+  function median(a) {
+    if (!a.length) return null;
+    const x = a.slice().sort((p, q) => p - q);
+    const m = x.length >> 1;
+    return x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2;
+  }
+  /** A CSV file for Excel (UTF-8 with BOM, so Georgian opens correctly) */
+  function csvDownload(name, head, rows) {
+    const esc = (v) => {
+      const t = v === null || v === undefined ? '' : String(v);
+      return /[",;\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    };
+    const text = '﻿' + [head].concat(rows).map((r) => r.map(esc).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    const a = h('a', { href: url, download: name });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  function pageProducts() {
+    return Promise.all([load('summary.json'), load('products.json')]).then((res) => {
+      const S = res[0];
+      const P = res[1];
+      lookups(S);
+      const T = P.tenders || {};
+      const all = P.rows.map((r) => {
+        const t = T[r[0]] || [];
+        return {
+          no: r[0], sk: r[1], sn: r[2], d: r[3], n: r[4], sp: r[5], mk: r[6], u: r[7], q: r[8], p: r[9], ex: r[10], inc: r[11],
+          w: r[12], v: r[13], k: r[14], pt: t[0], c: t[1], codes: t[2] || [], bk: t[3], bn: t[4],
+          hay: (r[4] + ' ' + (r[5] || '')).toLowerCase(), sh: (r[2] || '').toLowerCase(), bh: (t[4] || '').toLowerCase(),
+        };
+      });
+      const procs = Array.from(new Set(all.map((x) => x.pt).filter(Boolean))).sort();
+      const cats = Array.from(new Set(all.map((x) => x.c).filter(Boolean)));
+      const views = h('div', { class: 'switch', role: 'group', 'aria-label': 'View' });
+      const form = h('form', { class: 'filters__grid filters__grid--products', role: 'search', on: { submit: (e) => e.preventDefault() } }, [
+        field('Product', h('input', { type: 'search', name: 'q', autocomplete: 'off', spellcheck: 'false' }), 'field--grow'),
+        field('Seller', h('input', { type: 'search', name: 's', autocomplete: 'off', spellcheck: 'false' })),
+        field('Buyer', h('input', { type: 'search', name: 'b', autocomplete: 'off', spellcheck: 'false' })),
+        field('Category', select('c', [['', 'All categories']].concat(cats.map((k) => [k, catLabel(k)])))),
+        field('Code starts with', h('input', { type: 'text', name: 'code', inputmode: 'numeric', autocomplete: 'off', size: 9 })),
+        field('Tender type', select('pt', [['', 'All types']].concat(procs.map((k) => [k, k])))),
+        field('Offered', select('dd', [['', 'Any time'], ['40', 'Last 40 days'], ['90', 'Last 3 months'], ['180', 'Last 6 months']])),
+        field('Prices', select('vat', [['', 'Without VAT'], ['inc', 'With VAT']])),
+        check('Won only', 'w'),
+        check('Verified only', 'v'),
+      ]);
+      const chipBox = h('p', { class: 'small' });
+      const summary = h('p', { class: 'summary', 'aria-live': 'polite' });
+      const dl = h('button', { type: 'button', class: 'btn btn--ghost btn--small', text: 'Download for Excel (CSV)' });
+      const box = h('div');
+      const st = P.stats || {};
+      // folded on phones (ten filters would push the results a screen down), open on wider screens
+      const filters = h('details', { class: 'filters', open: window.matchMedia('(min-width: 640px)').matches ? '' : null },
+        [h('summary', null, 'Filters'), form]);
+      clear(APP);
+      add(APP, [views, filters, para('Prices are as the bidders wrote them; "without VAT" and "with VAT" use the tender\'s VAT clause (18%). ' +
+        'Verified: the bidder\'s table adds up to its bid on the bids tab — ' + int(st.verified) + ' of ' + int(st.tables) + ' tables so far. ' +
+        'Product groups are simple for now (same name, size and unit).', 'small muted'), chipBox, h('p', { class: 'listbar__end' }, [summary, ' ', dl]), box]);
+      let state = {};
+      let limit = 100;
+      const VIEW = [['products', 'Products'], ['offers', 'Offers']];
+      VIEW.forEach((v) => views.appendChild(h('button', {
+        type: 'button', class: 'switch__b', 'data-v': v[0], text: v[1],
+        on: { click: () => { state.view = v[0] === 'products' ? undefined : v[0]; state.sort = undefined; state.dir = undefined; limit = 100; render(); } },
+      })));
+      const F = form.elements;
+      function fromHash() {
+        state = readHash();
+        ['q', 's', 'b', 'code'].forEach((k) => { F[k].value = state[k] || ''; });
+        ['c', 'pt', 'dd', 'vat'].forEach((k) => setControl(F[k], state[k] || ''));
+        F.w.checked = state.w === '1';
+        F.v.checked = state.v === '1';
+      }
+      const price = (x) => (state.vat === 'inc' ? x.inc : x.ex) !== null && (state.vat === 'inc' ? x.inc : x.ex) !== undefined
+        ? (state.vat === 'inc' ? x.inc : x.ex) : x.p;
+      function filtered() {
+        const words = (state.q || '').toLowerCase().split(/\s+/).filter(Boolean);
+        const sw = (state.s || '').toLowerCase().split(/\s+/).filter(Boolean);
+        const bw = (state.b || '').toLowerCase().split(/\s+/).filter(Boolean);
+        const code = (state.code || '').replace(/\D/g, '').replace(/0+$/, '');
+        const since = state.dd ? new Date(Date.now() - Number(state.dd) * DAY_MS).toISOString().slice(0, 10) : '';
+        return all.filter((x) => (!state.k || x.k === state.k)
+          && words.every((w) => x.hay.indexOf(w) >= 0) && sw.every((w) => x.sh.indexOf(w) >= 0) && bw.every((w) => x.bh.indexOf(w) >= 0)
+          && (!state.c || x.c === state.c) && (!state.pt || x.pt === state.pt)
+          && (!code || x.codes.some((c) => String(c).indexOf(code) === 0))
+          && (!since || (x.d && x.d >= since)) && (state.w !== '1' || x.w) && (state.v !== '1' || x.v));
+      }
+      function groups(list) {
+        const m = new Map();
+        list.forEach((x) => {
+          let g = m.get(x.k);
+          if (!g) { g = { k: x.k, names: {}, u: x.u, n: 0, prices: [], won: [], sellers: new Set(), buyers: new Set(), last: '' }; m.set(x.k, g); }
+          g.names[x.n] = (g.names[x.n] || 0) + 1;
+          g.n += 1;
+          const p = price(x);
+          if (isNum(p)) { g.prices.push(p); if (x.w) g.won.push(p); }
+          if (x.sn) g.sellers.add(x.sn);
+          if (x.bn) g.buyers.add(x.bn);
+          if (x.d && x.d > g.last) g.last = x.d;
+        });
+        return Array.from(m.values()).map((g) => {
+          g.name = Object.keys(g.names).sort((a, b) => g.names[b] - g.names[a])[0];
+          g.min = g.prices.length ? Math.min.apply(null, g.prices) : null;
+          g.max = g.prices.length ? Math.max.apply(null, g.prices) : null;
+          g.med = median(g.prices);
+          g.wmin = g.won.length ? Math.min.apply(null, g.won) : null;
+          g.wmax = g.won.length ? Math.max.apply(null, g.won) : null;
+          return g;
+        });
+      }
+      const gel = (n) => (isNum(n) ? '₾' + NF2.format(n) : DASH);
+      const range = (a, b) => (isNum(a) ? (a === b ? gel(a) : gel(a) + ' – ' + gel(b)) : DASH);
+      const COLS_P = [
+        { key: 'name', label: 'Product', cls: 'wide', first: 'asc', sort: (g) => g.name, cell: (g) => h('button', {
+          type: 'button', class: 'linkish', title: 'Show its offers', on: { click: () => { state.k = g.k; state.view = 'offers'; state.sort = undefined; limit = 100; render(); } },
+        }, ka(g.name)) },
+        { key: 'u', label: 'Unit', sort: (g) => g.u, cell: (g) => (g.u ? ka(g.u) : DASH) },
+        { key: 'n', label: 'Offers', num: true, first: 'desc', sort: (g) => g.n, cell: (g) => int(g.n) },
+        { key: 'min', label: 'Lowest', num: true, first: 'asc', sort: (g) => g.min, cell: (g) => gel(g.min) },
+        { key: 'med', label: 'Typical (median)', num: true, first: 'asc', sort: (g) => g.med, cell: (g) => gel(g.med) },
+        { key: 'max', label: 'Highest', num: true, first: 'desc', sort: (g) => g.max, cell: (g) => gel(g.max) },
+        { key: 'won', label: 'Winning', num: true, first: 'asc', sort: (g) => g.wmin, cell: (g) => range(g.wmin, g.wmax) },
+        { key: 'sel', label: 'Sellers', num: true, first: 'desc', sort: (g) => g.sellers.size, cell: (g) => int(g.sellers.size) },
+        { key: 'buy', label: 'Buyers', num: true, first: 'desc', sort: (g) => g.buyers.size, cell: (g) => int(g.buyers.size) },
+        { key: 'last', label: 'Last offer', first: 'desc', sort: (g) => g.last, cell: (g) => (g.last ? day(g.last) : DASH) },
+      ];
+      const COLS_O = [
+        { key: 'd', label: 'Offered', first: 'desc', sort: (x) => x.d, cell: (x) => (x.d ? day(x.d) : DASH) },
+        { key: 'n', label: 'Product as written', cls: 'wide', first: 'asc', sort: (x) => x.n,
+          cell: (x) => [ka(x.n), x.sp ? h('span', { class: 'muted small block' }, ka(x.sp)) : null] },
+        { key: 'q', label: 'Quantity', num: true, first: 'desc', sort: (x) => x.q, cell: (x) => (isNum(x.q) ? NFQ.format(x.q) + (x.u ? ' ' : '') : DASH) + (x.u || '') },
+        { key: 'p', label: 'Unit price', num: true, first: 'asc', sort: (x) => price(x), cell: (x) => gel(price(x)) },
+        { key: 's', label: 'Seller', first: 'asc', sort: (x) => x.sn, cell: (x) => (x.sk ? h('a', { href: companyUrl(x.sk) }, ka(x.sn)) : x.sn ? ka(x.sn) : DASH) },
+        { key: 'w', label: 'Won', first: 'desc', sort: (x) => x.w, cell: (x) => (x.w ? h('span', { class: 'ok', text: '✓ won' }) : '') },
+        { key: 'v', label: 'Verified', first: 'desc', sort: (x) => (x.v ? 1 : 0), cell: (x) => (x.v ? h('span', { class: 'ok', title: VERIFIED[x.v] || '', text: '✓' }) : h('span', { class: 'muted', title: 'The table does not add up to the bid', text: 'no' })) },
+        { key: 'mk', label: 'Maker / country', sort: (x) => x.mk, cell: (x) => (x.mk ? ka(x.mk) : DASH) },
+        { key: 'b', label: 'Buyer', first: 'asc', sort: (x) => x.bn, cell: (x) => (x.bk ? h('a', { href: buyerUrl(x.bk) }, ka(x.bn || x.bk)) : DASH) },
+        { key: 't', label: 'Tender', first: 'desc', sort: (x) => x.no, cell: (x) => [h('a', { href: tenderUrl(x.no), text: x.no }), x.pt ? h('span', { class: 'muted small', text: ' ' + x.pt }) : null] },
+      ];
+      function render(o) {
+        setHash(state);
+        const offers = state.view === 'offers';
+        [].forEach.call(views.children, (b) => b.setAttribute('aria-pressed', String((b.getAttribute('data-v') === 'offers') === offers)));
+        const list = filtered();
+        const G = groups(list);
+        clear(chipBox);
+        if (state.k) {
+          const g = G[0];
+          add(chipBox, ['Product: ', g ? ka(g.name) : state.k, ' ', h('button', { type: 'button', class: 'linkish', text: 'show all products',
+            on: { click: () => { state.k = undefined; limit = 100; render(); } } })]);
+        }
+        const sellers = new Set(list.map((x) => x.sn).filter(Boolean));
+        const ver = list.filter((x) => x.v).length;
+        clear(summary);
+        add(summary, [plural(list.length, 'offer', 'offers'), ' · ', plural(G.length, 'product', 'products'), ' · ',
+          plural(sellers.size, 'seller', 'sellers'), ' · ', (list.length ? Math.round(100 * ver / list.length) : 0) + '% from verified tables']);
+        const cols = offers ? COLS_O : COLS_P;
+        const defSort = offers ? 'd' : 'n';
+        const defDir = (cols.find((c) => c.key === (state.sort || defSort)) || {}).first || 'desc';
+        const opts = o || {};
+        dataTable(box, cols, offers ? list : G, { sort: state.sort || defSort, dir: state.dir || defDir, limit: limit, caption: offers ? 'Offers' : 'Products', focusSort: opts.focusSort, focusRow: opts.focusRow }, (ch) => {
+          if (ch.sort) { state.sort = ch.sort; state.dir = ch.dir; }
+          if (ch.limit) limit = ch.limit;
+          render(ch);
+        });
+        if (!list.length) box.appendChild(para('Nothing matches these filters.', 'note'));
+        dl.onclick = () => {
+          const stamp = new Date().toISOString().slice(0, 10);
+          if (offers) {
+            csvDownload('offers-' + stamp + '.csv', ['Offered', 'Tender', 'Type', 'Category', 'Buyer', 'Seller', 'Product as written', 'Spec', 'Maker / country',
+              'Unit', 'Quantity', 'Unit price as written', 'Without VAT', 'With VAT', 'Won', 'Verified'],
+            list.map((x) => [x.d, x.no, x.pt, catLabel(x.c), x.bn, x.sn, x.n, x.sp, x.mk, x.u, x.q, x.p, x.ex, x.inc, x.w ? 'yes' : '', x.v ? 'yes (' + x.v + ')' : 'no']));
+          } else {
+            csvDownload('products-' + stamp + '.csv', ['Product', 'Unit', 'Offers', 'Lowest', 'Typical (median)', 'Highest', 'Winning lowest', 'Winning highest',
+              'Sellers', 'Buyers', 'Last offer', 'Prices'],
+            G.map((g) => [g.name, g.u, g.n, g.min, g.med, g.max, g.wmin, g.wmax, g.sellers.size, g.buyers.size, g.last, state.vat === 'inc' ? 'with VAT' : 'without VAT']));
+          }
+        };
+      }
+      const onInput = debounce(() => {
+        ['q', 's', 'b', 'code'].forEach((k) => { state[k] = F[k].value.trim() || undefined; });
+        limit = 100;
+        render();
+      }, 200);
+      ['q', 's', 'b', 'code'].forEach((k) => F[k].addEventListener('input', onInput));
+      ['c', 'pt', 'dd', 'vat'].forEach((k) => F[k].addEventListener('change', () => { state[k] = F[k].value || undefined; limit = 100; render(); }));
+      ['w', 'v'].forEach((k) => F[k].addEventListener('change', () => { state[k] = F[k].checked ? '1' : undefined; limit = 100; render(); }));
+      window.addEventListener('hashchange', () => { fromHash(); limit = 100; render(); });
+      fromHash();
+      render();
+    }, (err) => {
+      if (err && [400, 403, 404].indexOf(err.status) >= 0 && LOCAL) throw new Error('No products.json yet: run app\\run_bidprices.py, then build_demo.py --local.');
+      throw err;
+    });
+  }
+
   /* ------------------------------------------------------------------ start */
 
   const PAGES = {
     dashboard: pageDashboard, tenders: pageTenders, tender: pageTender, companies: pageCompanies,
-    company: pageCompany, buyers: pageBuyers, buyer: pageBuyer, mycompany: pageMyCompany,
+    company: pageCompany, buyers: pageBuyers, buyer: pageBuyer, mycompany: pageMyCompany, products: pageProducts,
   };
   function boot() {
     const run = PAGES[PAGE];
