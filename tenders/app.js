@@ -1171,7 +1171,7 @@
         return h('span', { class: 'muted', text: WINNER_HINT[r.wh] || DASH });
       }
       const cols = [
-        { key: 'no', label: 'Number', first: 'asc', sort: (r) => r.no, cell: (r) => h('a', { href: tenderUrl(r.no), text: r.no }) },
+        { key: 'no', label: 'Number', first: 'asc', sort: (r) => r.no, cell: (r) => [watchButton(r.no, r.s, true), h('a', { href: tenderUrl(r.no), text: r.no })] },
         { key: 't', label: 'Title', first: 'asc', cls: 'wide', sort: (r) => r.t, cell: (r) => [ka(r.t), r.rq ? h('span', { class: 'tag tag--req', title: plural(r.rq[0], 'requirement item') + ', ' + int(r.rq[1]) + ' must be proven', text: 'requirements' }) : null] },
         { key: 'b', label: 'Buyer', first: 'asc', cls: 'wide', sort: (r) => r._bn, cell: (r) => (r.b ? h('a', { href: buyerUrl(r.b) }, ka(r._bn)) : DASH) },
         { key: 'c', label: 'Category', first: 'asc', sort: (r) => catLabel(r.c), cell: (r) => catLabel(r.c) },
@@ -1269,6 +1269,7 @@
       h('div', { class: 'actions' }, [
         h('a', { class: 'btn btn--primary', href: t.src, rel: 'noopener', target: '_blank' }, 'Open the original record'),
         h('a', { class: 'btn btn--ghost', href: mail }, 'Ask Phantasma to source this'),
+        watchButton(t.no, t.status.k),
       ]),
       h('p', { class: 'small muted' }, ['The original record is on tenders.procurement.gov.ge (opens in a new tab). The button next to it e-mails Phantasma about this tender.']),
     ]);
@@ -2060,6 +2061,232 @@
     if (foot) foot.textContent = ' Data collected on ' + day(S.collected) + '. Built ' + day(S.built) + '.';
   }
 
+  /* ------------------------------------------------------------------ the bell (10 Nov 2026) */
+  // Owner, 10 Nov: "an alert system; for starting an internal notification: a bell with two tabs. Watchlist:
+  // a tender I tick that is not finished yet, notified on any change or update. Bid opening: newly
+  // announced tenders that interest me." First version: kept in this browser (localStorage) and compared
+  // with alerts.json, i.e. with what each tender looked like at the last data upload.
+  const WATCH_KEY = 'tp_watch_v1';
+  const ALERT_KEY = 'tp_alert_v1';
+  function stored(key, fallback) {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) || 'null');
+      return v && typeof v === 'object' ? v : fallback;
+    } catch (e) { return fallback; }
+  }
+  function keep(key, v) {
+    try {
+      if (v === null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(v));
+    } catch (e) { /* private window: this page only */ }
+    document.dispatchEvent(new CustomEvent('tp:bell'));
+  }
+  const watched = () => stored(WATCH_KEY, {});
+  const interests = () => stored(ALERT_KEY, null);
+  let AL = null;
+  // alerts.json rows: [no, title, status, deadline, bidders, lowest offer, winners, contract value, estimated
+  // value, announced, category, codes, procedure, buyer]
+  function alerts() {
+    if (AL) return Promise.resolve(AL);
+    return load('alerts.json').then((x) => {
+      AL = x;
+      AL.by = {};
+      x.rows.forEach((r) => { AL.by[r[0]] = r; });
+      return AL;
+    });
+  }
+  const FINISHED = ['contract', 'negative', 'failed', 'terminated'];
+  const isFinished = (k) => ((AL && AL.finished) || FINISHED).indexOf(k) >= 0;
+  const snapOf = (r) => ({ s: r[2], d: r[3], n: r[4], low: r[5], w: r[6], cv: r[7], v: r[8] });
+  function changes(snap, r) {
+    const out = [];
+    if (!snap || !r) return out;
+    if (snap.s !== r[2]) out.push('Status: ' + statusText(snap.s) + ' → ' + statusText(r[2]));
+    if (snap.d !== r[3]) out.push('Bid deadline: ' + (snap.d ? dayTime(snap.d) : DASH) + ' → ' + (r[3] ? dayTime(r[3]) : DASH));
+    if (snap.n !== r[4] && isNum(r[4])) out.push(isNum(snap.n) ? 'Bidders: ' + snap.n + ' → ' + r[4] : 'Bids opened: ' + plural(r[4], 'bidder'));
+    if (snap.low !== r[5] && isNum(r[5])) out.push('Lowest offer: ' + money(r[5]));
+    if (snap.w !== r[6] && r[6]) out.push('Winner: ' + r[6]);
+    if (snap.cv !== r[7] && isNum(r[7])) out.push('Contract: ' + money(r[7]));
+    if (snap.v !== r[8] && isNum(r[8]) && isNum(snap.v)) out.push('Estimated value: ' + lari(snap.v) + ' → ' + lari(r[8]));
+    return out;
+  }
+  function setWatch(no, on) {
+    return alerts().then((A) => {
+      const W = watched();
+      if (on && A.by[no]) W[no] = { at: new Date().toISOString(), snap: snapOf(A.by[no]) };
+      else delete W[no];
+      keep(WATCH_KEY, W);
+    });
+  }
+  /** ☆ / ★ for a tender that is not finished (small: in the Tenders list; else a button on the tender page) */
+  function watchButton(no, statusKey, small) {
+    if (isFinished(statusKey) && !watched()[no]) return null;
+    const b = h('button', { type: 'button', class: small ? 'watch watch--small' : 'btn btn--ghost watch' });
+    const paint = () => {
+      const on = !!watched()[no];
+      b.setAttribute('aria-pressed', String(on));
+      b.title = on ? 'Watching: the bell tells you when this tender changes. Click to stop.' : 'Watch this tender: the bell tells you when its status, deadline, bids, winner or contract changes';
+      b.textContent = small ? (on ? '★' : '☆') : (on ? '★ Watching' : '☆ Watch');
+      if (small) b.setAttribute('aria-label', (on ? 'Stop watching ' : 'Watch ') + no);
+    };
+    paint();
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      b.disabled = true;
+      setWatch(no, !watched()[no]).then(() => { b.disabled = false; paint(); }, () => { b.disabled = false; });
+    });
+    if (!small) document.addEventListener('tp:bell', paint);
+    return b;
+  }
+  function interestMatch(I, r) {
+    if (I.types && I.types.length && I.types.indexOf(r[12]) < 0) return false;
+    const codes = (r[11] || '').split(' ');
+    if (I.codes && I.codes.length && !codes.some((c) => I.codes.some((p) => c.indexOf(p) === 0))) return false;
+    return true;
+  }
+  const openMatches = (A, I) => A.rows.filter((r) => r[3] && isOpen(r[3]) && interestMatch(I, r));
+  const interestText = (I) => [I.types.join(', '), I.codes.map((p) => p.padEnd(8, '0')).join(', ')].filter(Boolean).join(' · ');
+  /** Alerts for new tenders like the left filter; what is open now is the baseline, later ones are new */
+  function setInterests(codes, types) {
+    return alerts().then((A) => {
+      const I = { codes: codes.slice(), types: types.slice(), at: new Date().toISOString(), seen: [] };
+      I.seen = openMatches(A, I).map((r) => r[0]);
+      keep(ALERT_KEY, I);
+    });
+  }
+  function bellCounts(A) {
+    const W = watched();
+    const I = interests();
+    return [Object.keys(W).filter((no) => changes(W[no].snap, A.by[no]).length).length,
+      I ? openMatches(A, I).filter((r) => I.seen.indexOf(r[0]) < 0).length : 0];
+  }
+  function bellIcon() {
+    const svg = s('svg', { viewBox: '0 0 24 24', width: '20', height: '20', 'aria-hidden': 'true', focusable: 'false', class: 'bell__i' });
+    svg.appendChild(s('path', { fill: 'currentColor', d: 'M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6v-5a7 7 0 0 0-5.25-6.78V3.5a1.75 1.75 0 0 0-3.5 0v.72A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z' }));
+    return svg;
+  }
+  function mountBell() {
+    const head = document.querySelector('.site-head .wrap');
+    if (!head || document.querySelector('.bellbox')) return;
+    const badge = h('span', { class: 'bell__n', hidden: '' });
+    const btn = h('button', { type: 'button', class: 'bell', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-label': 'Notifications' }, [bellIcon(), badge]);
+    const panel = h('div', { class: 'bellpanel', role: 'dialog', 'aria-label': 'Notifications', tabindex: '-1', hidden: '' });
+    const box = h('div', { class: 'bellbox' }, [btn, panel]);
+    head.insertBefore(box, head.querySelector('.stamp'));
+    let tab = 'watch';
+    function badgeUpdate() {
+      if (!Object.keys(watched()).length && !interests()) {
+        badge.hidden = true;
+        btn.setAttribute('aria-label', 'Notifications');
+        return;
+      }
+      alerts().then((A) => {
+        const c = bellCounts(A);
+        const n = c[0] + c[1];
+        badge.hidden = !n;
+        badge.textContent = n > 99 ? '99+' : String(n);
+        btn.setAttribute('aria-label', 'Notifications' + (n ? ': ' + n + ' new' : ''));
+      }).catch(() => {});
+    }
+    function watchTab(A, body) {
+      const W = watched();
+      const nos = Object.keys(W).sort((a, b) => (changes(W[b].snap, A.by[b]).length ? 1 : 0) - (changes(W[a].snap, A.by[a]).length ? 1 : 0) || (W[b].at > W[a].at ? 1 : -1));
+      if (!nos.length) {
+        add(body, para('No tender watched yet. Press ☆ next to a tender that is not finished (in Tenders, or "☆ Watch" on a tender page); the bell then tells you when its status, deadline, bids, winner or contract changes.', 'small muted'));
+        return;
+      }
+      add(body, h('ul', { class: 'bell__list' }, nos.map((no) => {
+        const r = A.by[no];
+        const ch = changes(W[no].snap, r);
+        return h('li', { class: 'bell__item' + (ch.length ? ' is-new' : '') }, [
+          h('p', { class: 'bell__top' }, [h('a', { href: tenderUrl(no), class: 'bell__no', text: no }), ch.length ? h('span', { class: 'tag tag--won', text: 'changed' }) : null]),
+          r ? h('span', { class: 'bell__t' }, ka(r[1])) : null,
+          h('span', { class: 'bell__meta' }, r ? [statusText(r[2]), r[3] ? ' · deadline ' + dayTime(r[3]) : ''] : 'No longer in the data'),
+          ch.length ? h('ul', { class: 'bell__changes' }, ch.map((x) => h('li', { text: x }))) : null,
+          h('p', { class: 'bell__acts' }, [
+            ch.length && r ? h('button', { type: 'button', class: 'linkish small', text: 'Mark as seen', on: { click: () => { const W2 = watched(); if (W2[no]) { W2[no].snap = snapOf(r); keep(WATCH_KEY, W2); } } } }) : null,
+            h('button', { type: 'button', class: 'linkish small', text: 'Stop watching', on: { click: () => { const W2 = watched(); delete W2[no]; keep(WATCH_KEY, W2); } } }),
+          ]),
+        ]);
+      })));
+      if (nos.some((no) => changes(W[no].snap, A.by[no]).length)) {
+        add(body, h('p', { class: 'bell__all' }, h('button', { type: 'button', class: 'btn btn--ghost btn--small', text: 'Mark all as seen', on: { click: () => {
+          const W2 = watched();
+          Object.keys(W2).forEach((no) => { if (A.by[no]) W2[no].snap = snapOf(A.by[no]); });
+          keep(WATCH_KEY, W2);
+        } } })));
+      }
+    }
+    function openTab(A, body) {
+      const I = interests();
+      if (!I) {
+        add(body, para('Choose tender types or codes in the left panel (Dashboard, Tenders or Products on a wide screen) and press "Alert me about new tenders like this". Tenders that match and open for bids then show here; the new ones are counted on the bell.', 'small muted'));
+        return;
+      }
+      const rows = openMatches(A, I).sort((a, b) => (a[3] < b[3] ? -1 : 1));
+      add(body, h('p', { class: 'small' }, ['Alerts for: ', h('strong', { text: interestText(I) }), ' ',
+        h('button', { type: 'button', class: 'linkish small', text: 'stop', on: { click: () => keep(ALERT_KEY, null) } })]));
+      if (!rows.length) {
+        add(body, para('No tender that matches is open for bids right now.', 'small muted'));
+        return;
+      }
+      add(body, h('ul', { class: 'bell__list' }, rows.slice(0, 100).map((r) => {
+        const fresh = I.seen.indexOf(r[0]) < 0;
+        return h('li', { class: 'bell__item' + (fresh ? ' is-new' : '') }, [
+          h('p', { class: 'bell__top' }, [h('a', { href: tenderUrl(r[0]), class: 'bell__no', text: r[0] }), h('span', { class: 'muted small', text: ' ' + (r[12] || '') }),
+            fresh ? h('span', { class: 'tag tag--open', text: 'new' }) : null]),
+          h('span', { class: 'bell__t' }, ka(r[1])),
+          h('span', { class: 'bell__meta' }, [r[13] ? ka(r[13]) : null, r[13] ? ' · ' : '', closesIn(r[3]) + (isNum(r[8]) ? ' · ' + lari(r[8]) : '')]),
+        ]);
+      })));
+      if (rows.some((r) => I.seen.indexOf(r[0]) < 0)) {
+        add(body, h('p', { class: 'bell__all' }, h('button', { type: 'button', class: 'btn btn--ghost btn--small', text: 'Mark all as seen', on: { click: () => {
+          const I2 = interests();
+          if (I2) { I2.seen = Array.from(new Set(I2.seen.concat(rows.map((r) => r[0])))); keep(ALERT_KEY, I2); }
+        } } })));
+      }
+    }
+    function render() {
+      clear(panel);
+      panel.appendChild(h('p', { class: 'loading', text: 'Loading…' }));
+      alerts().then((A) => {
+        const c = bellCounts(A);
+        clear(panel);
+        const tabs = h('div', { class: 'bellpanel__tabs', role: 'tablist' }, [['watch', 'Watchlist', c[0]], ['open', 'Bid opening', c[1]]].map((x) =>
+          h('button', { type: 'button', role: 'tab', class: 'bellpanel__tab', 'aria-selected': String(tab === x[0]),
+            on: { click: () => { tab = x[0]; render(); } } }, [x[1], x[2] ? h('span', { class: 'bell__n bell__n--in', text: String(x[2]) }) : null])));
+        const body = h('div', { class: 'bellpanel__body', role: 'tabpanel' });
+        add(panel, [tabs, body]);
+        if (tab === 'watch') watchTab(A, body); else openTab(A, body);
+        add(body, para('Kept in this browser. Checked against the data uploaded on ' + day(A.made) + '.', 'small muted bell__foot'));
+      }).catch((err) => {
+        clear(panel);
+        panel.appendChild(para('The alerts could not be loaded (' + ((err && err.message) || err) + ').', 'small'));
+      });
+    }
+    function openPanel() {
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      render();
+      panel.focus();
+    }
+    function closePanel() {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    btn.addEventListener('click', () => (panel.hidden ? openPanel() : closePanel()));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !panel.hidden) { closePanel(); btn.focus(); }
+    });
+    document.addEventListener('click', (e) => {   // a click elsewhere closes it (a re-drawn button inside does not)
+      if (!panel.hidden && document.contains(e.target) && !box.contains(e.target)) closePanel();
+    });
+    document.addEventListener('tp:bell', () => { badgeUpdate(); if (!panel.hidden) render(); });
+    window.addEventListener('storage', (e) => {
+      if (e.key === WATCH_KEY || e.key === ALERT_KEY) { badgeUpdate(); if (!panel.hidden) render(); }
+    });
+    badgeUpdate();
+  }
+
   /* ------------------------------------------------------------------ left filter (10 Nov 2026) */
   // Owner, 10 Nov: "a left side filter, frozen while the page scrolls: codes and sub codes, and the type
   // of the tender (NAT, SPA, B2B, CON, GEO, DEP ...)". A sticky panel left of the content on wide screens
@@ -2153,8 +2380,24 @@
       box.checked = side.types.indexOf(x.k) >= 0;
       return h('label', { class: 'side__label side__type', title: procText(x.k) }, [box, h('span', { class: 'side__code', text: x.k }), h('span', { class: 'side__n', text: int(x.n) })]);
     }));
+    const alertLine = h('div', { class: 'side__alert' });   // the bell's "Bid opening" interests
+    function paintAlert() {
+      clear(alertLine);
+      const I = interests();
+      const key = (c, t) => JSON.stringify([c.slice().sort(), t.slice().sort()]);
+      const same = I && key(I.codes, I.types) === key(side.codes, side.types);
+      if (sideOn() && !same) {
+        alertLine.appendChild(h('button', { type: 'button', class: 'btn btn--ghost btn--small side__alertbtn',
+          on: { click: () => setInterests(side.codes, side.types) } }, [bellIcon(), 'Alert me about new tenders like this']));
+      }
+      if (I) {
+        alertLine.appendChild(h('p', { class: 'small muted' }, [same ? 'Alerts on for this filter ' : 'Alerts on: ' + interestText(I) + ' ',
+          h('button', { type: 'button', class: 'linkish small', text: 'stop', on: { click: () => keep(ALERT_KEY, null) } })]));
+      }
+    }
+    document.addEventListener('tp:bell', paintAlert);
     const aside = h('aside', { class: 'side', 'aria-label': 'Filter by tender type and code' }, [
-      h('div', { class: 'side__head' }, [h('h2', { class: 'side__title', text: 'Filter' }), clearBtn]), sum,
+      h('div', { class: 'side__head' }, [h('h2', { class: 'side__title', text: 'Filter' }), clearBtn]), sum, alertLine,
       h('h3', { class: 'side__h', text: 'Tender type' }), types,
       h('h3', { class: 'side__h', text: 'Codes and sub-codes' }), find, tree,
     ]);
@@ -2169,6 +2412,7 @@
     function paint() {
       sum.textContent = sideSummary();
       clearBtn.hidden = !sideOn();
+      paintAlert();
       clear(note);
       note.hidden = !sideOn();
       if (sideOn()) {
@@ -2492,6 +2736,7 @@
     const run = PAGES[PAGE];
     if (!run || !APP) return;
     if (LOCAL) {                                // laptop preview: local files, no sign-in
+      mountBell();
       load('summary.json').then(dates, () => {});
       Promise.resolve().then(run).catch(fail);
       return;
@@ -2508,6 +2753,7 @@
         return null;
       }
       userBar(session.user);
+      mountBell();
       load('summary.json').then(dates, () => {});   // a failed download is reported by the page itself
       return run();
     }).catch(fail);
