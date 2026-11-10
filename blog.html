@@ -105,6 +105,11 @@
         <nav class="blog-sidebar__nav">
           <p class="blog-sidebar__label eyebrow">Cases</p>
           <ol class="blog-sidebar__list">
+            <li><a href="#case-ai-advertising-platform" class="blog-sidebar__item" data-target="case-ai-advertising-platform">AI Advertising Platform</a></li>
+            <li><a href="#case-tender-analytics" class="blog-sidebar__item" data-target="case-tender-analytics">Tender Analytics Platform</a></li>
+            <li><a href="#case-ai-career-platform" class="blog-sidebar__item" data-target="case-ai-career-platform">AI CV Reading &amp; Job Matching</a></li>
+            <li><a href="#case-amazon-listing-monitor" class="blog-sidebar__item" data-target="case-amazon-listing-monitor">Amazon Listing Monitor</a></li>
+            <li><a href="#case-comfort-option-website" class="blog-sidebar__item" data-target="case-comfort-option-website">Comfort Option Website</a></li>
             <li><a href="#case-ecommerce-cost-engine" class="blog-sidebar__item" data-target="case-ecommerce-cost-engine">E-commerce Cost Engine</a></li>
             <li><a href="#case-mining-operational-intelligence" class="blog-sidebar__item" data-target="case-mining-operational-intelligence">Industrial Scale-Up & Operational Intelligence</a></li>
             <li><a href="#case-monolith-recovery" class="blog-sidebar__item" data-target="case-monolith-recovery">Monolith → Microservices Recovery</a></li>
@@ -118,6 +123,218 @@
 
       <!-- Articles -->
       <div class="blog-articles">
+
+        <!-- New cases, 10 Nov 2026 (owner): our own platforms and a client website.
+             Facts only from the project records (Phantasma Library); no invented metrics. -->
+        <article class="blog-article" id="case-ai-advertising-platform">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Marketing · AI</p>
+            <h2 class="blog-article__title">AI Advertising Platform</h2>
+            <p class="blog-article__outcome">From a shop's stock file to on-brand ad pictures with exact Georgian text, and campaigns that never go live without approval.</p>
+            <dl class="blog-article__meta">
+              <dt>Built</dt><dd>Oct – Nov 2026</dd>
+              <dt>Status</dt><dd>Live, invite-only</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">A web platform, built in-house, that runs Facebook and Instagram advertising for product brands from one place: the product catalogue, a picture library, AI-generated ad pictures in the brand's own styles, a post composer, and campaign set-up with spending limits and approvals. The interface works in English and Georgian.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">Small marketing teams spend most of their week on repetitive production: product photos, price banners, the same post in several formats, and a manual check before anything is paid for. General AI image tools help little in Georgia: they do not render Georgian script reliably and they ignore a brand's visual rules.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Products are imported from the shop's own Excel or CSV stock file (name, quantity, price in GEL); every row is checked and skipped rows are listed by their row number. Each product carries photos and a short note for the AI. Pictures live in a library with folders (uploads, design elements such as price tags and frames, AI-generated, products, archive), tags and a tag filter; archived pictures are removed automatically after 30 days. The brand's picture styles are kept as rules and options that the team edits in the browser, imported from its existing prompt library in Excel. The composer assembles the prompt from those rules, sends the product photo and the chosen style pictures to Google's Gemini image models, and then draws the Georgian product name onto the picture itself, picking a light or dark colour from the banner's brightness, so the text is always exact. Campaigns are set up in a five-step wizard with daily and total budget limits, a typed confirmation before anything goes live and a log of every change; they are validated against Meta's Marketing API in dry-run mode before any money is spent. Access is members-only and enforced in the database (row-level security) and in the server functions, not just in the browser.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">Products, pictures and campaigns sit in one searchable place instead of folders, chats and spreadsheets. Georgian text on ad pictures is always correct. Nothing is published or spent without an explicit approval, and every change leaves a record. Built-in limits (30 AI pictures a day, 50 MB of library storage per person) keep running costs predictable.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Google Gemini image models</li>
+              <li class="blog-tag">Meta Marketing API</li>
+              <li class="blog-tag">Supabase (PostgreSQL, Auth, Storage)</li>
+              <li class="blog-tag">Row-level security</li>
+              <li class="blog-tag">Edge Functions (TypeScript)</li>
+              <li class="blog-tag">SheetJS</li>
+              <li class="blog-tag">Vanilla JavaScript</li>
+            </ul>
+          </section>
+        </article>
+
+        <article class="blog-article" id="case-tender-analytics">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Web development · Public procurement</p>
+            <h2 class="blog-article__title">Tender Analytics Platform</h2>
+            <p class="blog-article__outcome">900+ public tenders and 3,800+ documents turned into requirements, deadlines and prices a bidder can act on.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">28,642</span>
+              <span class="blog-article__kpi-label">requirement items extracted</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Built</dt><dd>Nov 2026</dd>
+              <dt>Access</dt><dd>Paid service, sign-in only</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">A web platform for companies that bid in Georgian public procurement. It collects every tender in four categories (furniture, food, hygiene, construction materials) from the state procurement system, reads all of its documents, and turns them into requirements, deadlines, typical prices and competitor histories. It is built as a paid service: data is shown only after sign-in and is kept in private storage.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">To find the few tenders worth bidding on, and the price that wins, a bidder has to read each tender's technical specification, price tables and contract draft, often several PDFs and spreadsheets per tender. Past winning prices are scattered across thousands of files. Doing this by hand for hundreds of tenders a month is not possible.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">A resumable collector downloads tenders, bids, contracts and documents in small, polite overnight batches. A document reader (PDF, Word, Excel) extracts each requirement, tags it (for example standards, certificates, laboratory tests), rates the tender's complexity and finds similar past tenders. Bidders' own price tables are read line by line and checked against the bid total. The site offers a dashboard, a tender list with filters, a page per tender (requirements, deadlines, similar tenders, typical prices, market comparison), company and buyer pages with contract timelines, and a Products page with every bidder's line prices. Sign-in with Google; the data sits in private cloud storage that only signed-in users can read.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">The full six-month window was collected, plus older tenders: 900+ tenders, with the documents of 920 of them read (3,827 files, 28,642 requirement items, no failures), and 442 companies and 517 buyers profiled. Checked against an expert's own labelling, the reader found 77 of 79 requirements in full and the other 2 in part. Product prices: 855 bidders' files from the last three months, 408 price tables read and 4,084 offer lines; 305 of the tables (75%) add up to the bid total.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Python</li>
+              <li class="blog-tag">PDF / Word / Excel parsing</li>
+              <li class="blog-tag">Supabase (Auth, Storage)</li>
+              <li class="blog-tag">Google sign-in</li>
+              <li class="blog-tag">Static site generation</li>
+            </ul>
+          </section>
+        </article>
+
+        <article class="blog-article" id="case-ai-career-platform">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Careers · AI</p>
+            <h2 class="blog-article__title">AI CV Reading &amp; Job Matching</h2>
+            <p class="blog-article__outcome">A job seeker uploads a CV once; the platform reads it, scores every vacancy against it and applies only where the client agrees.</p>
+            <dl class="blog-article__meta">
+              <dt>Built</dt><dd>Sep – Nov 2026</dd>
+              <dt>Status</dt><dd>Live</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">Personal Career Strategist is an online career service. The client signs in with Google, LinkedIn or email, uploads a CV and answers a preferences questionnaire. The platform reads the CV with AI, finds and scores vacancies, and prepares applications that are sent only after the client ticks them. A client dashboard and an admin panel with live chat run the service day to day.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">Job seekers lose hours every week scanning job boards and rewriting the same CV, and many applications go to roles that never fitted. A service that does this for them has to be quick, show why a vacancy fits, and handle personal data with care.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">CV reading: the text is taken out of the PDF in the browser and the name and contact details are removed first; only then does Claude (Anthropic) sort the rest into experience, education, skills and languages. The client sees the result and can turn it into a one-page CV (PDF or JPG). Matching: every vacancy gets a 0–100 score from six weighted factors (job title 45, skills 20, seniority 15, location 10, salary 5, language 5); an unknown salary or language counts half. The dashboard lists companies first, each with its matched vacancies, deadlines and status (chosen, sent, deadline passed, employer replied), plus a 23-question preferences form and downloadable vacancy lists. Applications go out only for vacancies the client approved, and sent ones are locked. The admin panel shows every client's plan, searches and profile completeness, and offers live chat. Plans are paid through a hosted checkout.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">The service page shows the live funnel from vacancies found to applications sent. Personal data never reaches the AI model with the client's name or contacts attached, and no application goes out without the client's own approval.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Claude API (Anthropic)</li>
+              <li class="blog-tag">Supabase (Auth, PostgreSQL, Storage, Edge Functions)</li>
+              <li class="blog-tag">Google / LinkedIn sign-in</li>
+              <li class="blog-tag">Python pipeline</li>
+              <li class="blog-tag">Flitt payments</li>
+              <li class="blog-tag">Vanilla JavaScript</li>
+            </ul>
+          </section>
+        </article>
+
+        <article class="blog-article" id="case-amazon-listing-monitor">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">E-commerce · Amazon</p>
+            <h2 class="blog-article__title">Amazon Listing Monitor</h2>
+            <p class="blog-article__outcome">Every product a seller has on amazon.de checked daily, with each change to titles, images and A+ content logged and reported.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">935</span>
+              <span class="blog-article__kpi-label">products checked every day</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>In production</dt><dd>Since Sep 2026</dd>
+              <dt>Run time</dt><dd>~40 min per day</dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">A read-only monitoring pipeline for a German publisher of gifts and stationery that sells on amazon.de. Every day it pulls what Amazon currently shows for each product, stores a snapshot, logs every change, and writes the result into the team's Google Sheet, with an email summary or alert. It never changes anything on Amazon.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">Listing content on Amazon can change without notice: titles, bullet points, images, A+ content and variations are altered by catalogue updates. The seller's team had no way to notice, and checking by hand in Seller Central was not repeatable for about 1,000 products.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">Python on an existing Azure server, with a SQLite database that keeps daily snapshots and a permanent change log. Amazon's Selling Partner API supplies catalogue data, A+ content, seller reports and image dates; requests go in small batches to stay within Amazon's limits and resume automatically after a failure. A self-hosted n8n workflow runs the check every day at 18:00 Berlin time, writes a per-product tab and a per-SKU tab into the Google Sheet with the changes since the last run marked, and sends the email summary or alert. Three handover documents cover the business logic, the technical set-up and day-to-day operation.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">935 products (1,873 SKUs) are checked in about 40 minutes per run, with all 935 completed and no failures in the last five recorded runs. A+ content is tracked on 780 of the 935 products. The team sees exactly what changed and when, at no running cost beyond the existing Azure server and Google Workspace.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Python</li>
+              <li class="blog-tag">Amazon Selling Partner API</li>
+              <li class="blog-tag">SQLite</li>
+              <li class="blog-tag">n8n (self-hosted)</li>
+              <li class="blog-tag">Google Sheets</li>
+              <li class="blog-tag">Azure</li>
+            </ul>
+          </section>
+        </article>
+
+        <article class="blog-article" id="case-comfort-option-website">
+          <header class="blog-article__header">
+            <p class="eyebrow blog-article__industry">Web development · Smart buildings</p>
+            <h2 class="blog-article__title">Comfort Option Website</h2>
+            <p class="blog-article__outcome">A trilingual site that explains a smart-access system in three steps and turns visitors into quote requests.</p>
+            <div class="blog-article__kpi">
+              <span class="blog-article__kpi-num">3</span>
+              <span class="blog-article__kpi-label">languages: Georgian, English, Russian</span>
+            </div>
+            <dl class="blog-article__meta">
+              <dt>Client</dt><dd>Comfort Option</dd>
+              <dt>Live at</dt><dd><a href="https://comfort-option.ge/en" target="_blank" rel="noopener">comfort-option.ge</a></dd>
+            </dl>
+          </header>
+
+          <section class="blog-section">
+            <h3 class="blog-section__h">Executive Summary</h3>
+            <p class="blog-section__p">Comfort Option equips homes, apartment buildings and business centres with smart access: video doorbells, entrance doors, parking barriers and elevators, all opened from one mobile app. Our team designed and built the company's website.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">The Challenge</h3>
+            <p class="blog-section__p">The product combines hardware, installation and an app, and it is bought by very different people: homeowners, residents of apartment buildings, business centres and developers. The site had to explain it quickly, in the languages its customers use, and lead every visitor to a concrete quote request.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technical Solution</h3>
+            <p class="blog-section__p">One fast page in Georgian, English and Russian: an overview of the devices, a three-step "how it works", a section per customer type, and live numbers from the client's own system (buildings, residents, devices), refreshed every hour. A short quote form asks for the project type, the devices needed and the number of flats or offices; phone, WhatsApp, Viber and Telegram links sit next to it. App Store and Google Play links, app screenshots in light and dark mode, the privacy-policy and account-deletion pages that the app stores require, and a sign-in for existing customers complete it.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Business Impact</h3>
+            <p class="blog-section__p">The page stays current on its own: its counters read from the live system every hour, so no one has to update them by hand. Every visitor, whichever language they choose, ends at the same short quote request or a messenger of their choice.</p>
+          </section>
+          <section class="blog-section">
+            <h3 class="blog-section__h">Technology Stack</h3>
+            <ul class="blog-tags" aria-label="Technologies used">
+              <li class="blog-tag">Georgian / English / Russian</li>
+              <li class="blog-tag">Live data from the client's system</li>
+              <li class="blog-tag">Quote request form</li>
+              <li class="blog-tag">App Store / Google Play links</li>
+            </ul>
+          </section>
+        </article>
 
         <!-- Case 1 -->
         <article class="blog-article" id="case-ecommerce-cost-engine">
