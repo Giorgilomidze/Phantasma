@@ -152,6 +152,14 @@
     if (days === 1) return 'closes tomorrow';
     return 'closes in ' + plural(days, 'day');
   }
+  /** ' · 23 days to bid' (announcement to deadline, calendar days), '' when a date is missing */
+  function toBid(announced, deadline) {
+    const a = deadlineMs(announced);
+    const d = deadlineMs(deadline);
+    if (a === null || d === null || d < a) return '';
+    const ge = (ms) => Math.floor((ms + 4 * 3600e3) / 864e5);
+    return ' · ' + plural(ge(d) - ge(a), 'day') + ' to bid';
+  }
   function discount(est, offer) {
     return isNum(est) && est > 0 && isNum(offer) ? Math.round(((est - offer) / est) * 1000) / 10 : null;
   }
@@ -1042,7 +1050,7 @@
       rows.forEach((r) => {
         r._bn = B[r.b] ? B[r.b].name : '';
         r._w = (r.w || []).map((w) => (C[w[0]] ? C[w[0]].name : w[0]));
-        r._hay = [r.no, r.t, r._bn, r._w.join(' '), r.k].join(' ').toLowerCase();
+        r._hay = [r.no, r.t, r._bn, r._w.join(' '), (r.bi || []).map((b) => (C[b[0]] ? C[b[0]].name : '')).join(' '), r.k].join(' ').toLowerCase();
         r._so = L.order[r.s] === undefined ? 99 : L.order[r.s];
       });
 
@@ -1050,7 +1058,7 @@
       const sorts = [['a', 'desc', 'Newest first'], ['a', 'asc', 'Oldest first'], ['d', 'asc', 'Deadline, soonest first'],
         ['v', 'desc', 'Highest estimated value'], ['v', 'asc', 'Lowest estimated value'], ['n', 'desc', 'Most bidders'],
         ['n', 'asc', 'Fewest bidders'], ['no', 'asc', 'Number']];
-      const q = h('input', { type: 'search', name: 'q', autocomplete: 'off', spellcheck: 'false', placeholder: 'Number, title, buyer, winner or CPV code' });
+      const q = h('input', { type: 'search', name: 'q', autocomplete: 'off', spellcheck: 'false', placeholder: 'Number, title, buyer, bidder, winner or CPV code' });
       const num = (name, ph) => h('input', { type: 'number', name: name, min: '0', step: '1', inputmode: 'numeric', placeholder: ph });
       const date = (name) => h('input', { type: 'date', name: name, min: S.period ? S.period[0] : null, max: S.period ? S.period[1] : null });
       const sortSel = select('sort', sorts.map((x) => [x[0] + ':' + x[1], x[2]]));
@@ -1075,8 +1083,9 @@
       const chips = h('div', { class: 'chips', 'aria-live': 'polite' });
       const summary = h('p', { class: 'summary', 'aria-live': 'polite' });
       const tableBox = h('div');
+      let shown = [];
       clear(APP);
-      add(APP, [details, chips, summary, tableBox]);
+      add(APP, [details, chips, h('div', { class: 'listbar__end' }, [summary, csvButton('tenders', () => cols, () => shown)]), tableBox]);
 
       let state = {};
       let limit = 100;
@@ -1150,7 +1159,7 @@
         { key: 'b', label: 'Buyer', first: 'asc', cls: 'wide', sort: (r) => r._bn, cell: (r) => (r.b ? h('a', { href: buyerUrl(r.b) }, ka(r._bn)) : DASH) },
         { key: 'c', label: 'Category', first: 'asc', sort: (r) => catLabel(r.c), cell: (r) => catLabel(r.c) },
         { key: 'v', label: 'Estimated value', num: true, first: 'desc', sort: (r) => r.v, cell: (r) => (isNum(r.v) ? lari(r.v) : isNum(r.vo) ? money(r.vo, r.cur) : DASH) },
-        { key: 's', label: 'Status', first: 'asc', sort: (r) => r._so, cell: (r) => statusNode(r.s) },
+        { key: 's', label: 'Status', first: 'asc', sort: (r) => r._so, csv: (r) => statusText(r.s), cell: (r) => statusNode(r.s) },
         { key: 'a', label: 'Announced', first: 'desc', sort: (r) => r.a, cell: (r) => day(r.a) },
         { key: 'd', label: 'Deadline', first: 'asc', sort: (r) => r.d, cell: (r) => [day(r.d), isOpen(r.d) ? h('span', { class: 'tag tag--open', text: 'open' }) : null] },
         { key: 'n', label: 'Bidders', num: true, first: 'desc', sort: (r) => r.n, cell: (r) => (isNum(r.n) ? int(r.n) : unknown()) },
@@ -1186,7 +1195,7 @@
           ]));
         }
         const o = opts || {};
-        dataTable(tableBox, cols, list, { sort: f.sort || 'a', dir: f.dir || 'desc', limit: limit, caption: 'Tenders', focusSort: o.focusSort, focusRow: o.focusRow }, (ch) => {
+        shown = dataTable(tableBox, cols, list, { sort: f.sort || 'a', dir: f.dir || 'desc', limit: limit, caption: 'Tenders', focusSort: o.focusSort, focusRow: o.focusRow }, (ch) => {
           if (ch.sort) { state.sort = ch.sort; state.dir = ch.dir; syncSort(); }
           if (ch.limit) limit = ch.limit;
           render(ch);
@@ -1252,7 +1261,7 @@
       ['Estimated value', [money(t.value, t.currency), t.vat ? h('span', { class: 'muted' }, [' · ', t.vat.en || '', t.vat.en ? ' (' : '', ka(t.vat.ka), t.vat.en ? ')' : '']) : null]],
       ['Announced', dayTime(t.announced)],
       ['Bidding opens', dayTime(t.opens)],
-      ['Bid deadline', [dayTime(t.deadline), t.deadline ? h('span', { class: 'muted', text: ' · ' + (open ? closesIn(t.deadline) : 'closed') }) : null]],
+      ['Bid deadline', [dayTime(t.deadline), t.deadline ? h('span', { class: 'muted', text: ' · ' + (open ? closesIn(t.deadline) : 'closed') + toBid(t.announced, t.deadline) }) : null]],
       ['Procedure', [t.proc.k + (t.proc.en ? ' · ' + t.proc.en : ''), t.proc.ka ? h('span', { class: 'muted' }, [' (', ka(t.proc.ka), ')']) : null]],
       ['Status', [statusNode(t.status.k), t.status.en ? h('span', { class: 'muted' }, [' (', ka(t.status.ka), ')']) : null]],
       ['Category', [catLabel(t.cat), t.main ? h('span', { class: 'muted' }, [' · ', ka(t.main)]) : null]],
@@ -1274,7 +1283,8 @@
       bidsBox.appendChild(h('p', { class: 'summary' }, [plural(t.bids.length, 'bidder'), low ? ' · lowest last offer ' + money(low.last) + (isNum(low.disc) ? ' (' + pct(low.disc) + ' below the estimate)' : '') : '']));
       const box = h('div');
       dataTable(box, [
-        { key: 'c', label: 'Bidder', cls: 'wide', cell: (b) => [h('a', { href: companyUrl(b.c) }, ka(b.name)), b.won ? h('span', { class: 'tag tag--won', text: 'winner' }) : null] },
+        { key: 'c', label: 'Bidder', cls: 'wide', cell: (b) => [h('a', { href: companyUrl(b.c) }, ka(b.name)), b.won ? h('span', { class: 'tag tag--won', text: 'winner' }) : null,
+          b.dq ? h('span', { class: 'tag', title: 'Disqualified (bids tab); the reason, when published, is under "Winner and contracts"', text: 'disqualified' }) : null] },
         { key: 'f', label: 'First offer', num: true, cell: (b) => money(b.first) },
         { key: 'l', label: 'Last offer', num: true, cell: (b) => money(b.last) },
         { key: 'd', label: 'Below the estimate', num: true, cell: (b) => pct(b.disc) },
@@ -1561,6 +1571,10 @@
     const sortSel = form.elements.sort;
     let state = {};
     let limit = 100;
+    let shown = rows;                              // the list as shown (filtered + sorted), for the download
+    const bar = h('div', { class: 'listbar__end' });
+    if (summary.parentNode) summary.parentNode.replaceChild(bar, summary);
+    add(bar, [summary, csvButton(String(caption || 'list').toLowerCase(), () => cols, () => shown)]);
     const defDir = (cols.find((c) => c.key === defSort) || {}).first || 'desc';
     function syncSort() {
       const v = (state.sort || defSort) + ':' + (state.dir || defDir);
@@ -1582,7 +1596,7 @@
       clear(summary);
       add(summary, summarize(list));
       const opts = o || {};
-      dataTable(box, cols, list, { sort: state.sort || defSort, dir: state.dir || defDir, limit: limit, caption: caption, focusSort: opts.focusSort, focusRow: opts.focusRow }, (ch) => {
+      shown = dataTable(box, cols, list, { sort: state.sort || defSort, dir: state.dir || defDir, limit: limit, caption: caption, focusSort: opts.focusSort, focusRow: opts.focusRow }, (ch) => {
         if (ch.sort) { state.sort = ch.sort; state.dir = ch.dir; syncSort(); }
         if (ch.limit) limit = ch.limit;
         render(ch);
@@ -2057,6 +2071,20 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  /** "Download for Excel" for a list: the columns as shown, each as its csv(row) or sort value (full,
+      unformatted), else the cell's text; the rows filtered and sorted as on screen, all of them (not only
+      the first 100). 10 Nov 2026. */
+  function csvButton(name, getCols, getRows) {
+    const text = (c, r) => {
+      const d = h('div', null, c.cell(r));
+      return d.textContent.replace(/\s+/g, ' ').trim();
+    };
+    return h('button', { type: 'button', class: 'btn btn--ghost btn--small', text: 'Download for Excel (CSV)', on: { click: () => {
+      const cols = getCols();
+      csvDownload(name + '-' + new Date().toISOString().slice(0, 10) + '.csv', cols.map((c) => c.label),
+        getRows().map((r) => cols.map((c) => (c.csv ? c.csv(r) : c.sort ? c.sort(r) : text(c, r)))));
+    } } });
   }
 
   function pageProducts() {
