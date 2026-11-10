@@ -806,19 +806,35 @@
       ]);
       clear(APP);
       add(APP, [note, h('div', { class: 'switch', role: 'group', 'aria-label': 'Category' }, buttons), body]);
+      let turn = 0;
       function show() {
         buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-view') === key())));
-        clear(body);
-        redraws = [];
-        dashboard(body, S, key());
+        const mine = ++turn;
+        if (!sideOn()) {
+          clear(body);
+          redraws = [];
+          dashboard(body, S, key());
+          return;
+        }
+        // left filter on: count the dashboard in the browser from the tender list (loaded only now)
+        Promise.all([load('tenders.json'), load('buyers.json'), load('companies.json')]).then((res) => {
+          if (mine !== turn) return;
+          const k = key();
+          const rows = res[0].rows.filter((r) => (k === 'all' || r.c === k) && sideMatch((r.k || '').split(' '), r.p));
+          clear(body);
+          redraws = [];
+          dashboard(body, S, k, viewFromRows(rows, S, byId(res[1].rows), byId(res[2].rows)));
+        }).catch(fail);
       }
+      mountSide(S, show);
       show();
       window.addEventListener('hashchange', () => { state = readHash(); show(); });
     });
   }
 
-  function dashboard(body, S, k) {
-    const V = S.views[k];
+  /** Vx: a view counted in the browser for the left filter (viewFromRows); else the built view of k */
+  function dashboard(body, S, k, Vx) {
+    const V = Vx || S.views[k];
     const K = V.kpi;
     const base = k === 'all' ? {} : { cat: k };
     const withBase = (o) => Object.assign({}, base, o);
@@ -1124,6 +1140,7 @@
         const vmin = f.vmin ? Number(f.vmin) : null;
         const vmax = f.vmax ? Number(f.vmax) : null;
         return rows.filter((r) => {
+          if (sideOn() && !sideMatch((r.k || '').split(' '), r.p)) return false;      // the left filter
           if (f.cat && r.c !== f.cat) return false;
           if (f.status && r.s !== f.status) return false;
           if (f.proc && r.p !== f.proc) return false;
@@ -1207,6 +1224,7 @@
       q.addEventListener('input', debounce(onChange, 160));
       form.addEventListener('reset', () => setTimeout(() => { state = {}; fromHash.call(null); fromForm(); state = {}; sortSel.value = 'a:desc'; limit = 100; render(); }, 0));
       window.addEventListener('hashchange', () => { fromHash(); limit = 100; render(); });
+      mountSide(S, () => { limit = 100; render(); });
       fromHash();
       render();
     });
@@ -2042,6 +2060,203 @@
     if (foot) foot.textContent = ' Data collected on ' + day(S.collected) + '. Built ' + day(S.built) + '.';
   }
 
+  /* ------------------------------------------------------------------ left filter (10 Nov 2026) */
+  // Owner, 10 Nov: "a left side filter, frozen while the page scrolls: codes and sub codes, and the type
+  // of the tender (NAT, SPA, B2B, CON, GEO, DEP ...)". A sticky panel left of the content on wide screens
+  // (CSS: from 1360 px), on the Dashboard, Tenders and Products. One choice for the whole demo, kept in
+  // this browser (localStorage). Codes are prefixes: '391' = 39100000 and everything under it.
+  const SIDE_KEY = 'tp_side_v1';
+  const side = { codes: [], types: [] };
+  function sideLoad() {
+    try {
+      const o = JSON.parse(localStorage.getItem(SIDE_KEY) || '{}');
+      side.codes = Array.isArray(o.codes) ? o.codes.filter((c) => /^\d{2,8}$/.test(c)) : [];
+      side.types = Array.isArray(o.types) ? o.types.filter((c) => /^[A-Z0-9]{2,6}$/.test(c)) : [];
+    } catch (e) { side.codes = []; side.types = []; }
+  }
+  function sideSave() {
+    try { localStorage.setItem(SIDE_KEY, JSON.stringify(side)); } catch (e) { /* private window: this page only */ }
+    document.dispatchEvent(new CustomEvent('tp:side'));
+  }
+  const sideOn = () => side.codes.length > 0 || side.types.length > 0;
+  /** codes: the tender's 8-digit codes; type: NAT, SPA ... */
+  function sideMatch(codes, type) {
+    if (side.types.length && side.types.indexOf(type) < 0) return false;
+    if (side.codes.length && !(codes || []).some((c) => side.codes.some((p) => String(c).indexOf(p) === 0))) return false;
+    return true;
+  }
+  function sideSummary() {
+    if (!sideOn()) return 'All tenders';
+    return [side.types.length ? side.types.join(', ') : null,
+      side.codes.length ? side.codes.map((p) => p.padEnd(8, '0')).slice(0, 3).join(', ') + (side.codes.length > 3 ? ' +' + (side.codes.length - 3) : '') : null]
+      .filter(Boolean).join(' · ');
+  }
+  function mountSide(S, onChange) {
+    sideLoad();
+    const main = document.getElementById('main');
+    if (!main || !S.codes) return;
+    const nodes = S.codes;                                   // [prefix, name, tenders], sorted
+    const have = new Set(nodes.map((x) => x[0]));
+    const kids = {};
+    const roots = [];
+    nodes.forEach((x) => {
+      let p = x[0].slice(0, -1);
+      while (p.length >= 3 && !have.has(p)) p = p.slice(0, -1);
+      if (p.length >= 3) (kids[p] = kids[p] || []).push(x); else roots.push(x);
+    });
+    roots.sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]));   // the big categories first
+    const sum = h('p', { class: 'side__sum' });
+    const clearBtn = h('button', { type: 'button', class: 'linkish small', text: 'Clear', on: { click: () => { side.codes = []; side.types = []; sideSave(); } } });
+    const find = h('input', { type: 'search', class: 'side__find', placeholder: 'Find a code or a word', 'aria-label': 'Find a code or a word', autocomplete: 'off', spellcheck: 'false' });
+    const tree = h('div', { class: 'side__tree' });
+    function toggleCode(p, on) {
+      side.codes = side.codes.filter((c) => c !== p);
+      if (on) side.codes.push(p);
+      sideSave();
+    }
+    function row(x, withKids) {
+      const p = x[0];
+      const box = h('input', { type: 'checkbox', 'data-p': p, on: { change: (e) => toggleCode(p, e.target.checked) } });
+      box.checked = side.codes.indexOf(p) >= 0;
+      const label = h('label', { class: 'side__label' }, [box, h('span', { class: 'side__code', text: p.padEnd(8, '0') }),
+        x[1] ? h('span', { class: 'side__name', lang: 'ka', text: x[1] }) : null, h('span', { class: 'side__n', text: int(x[2]) })]);
+      if (!withKids || !kids[p]) return h('div', { class: 'side__row' }, [h('span', { class: 'side__gap' }), label]);
+      const box2 = h('div', { class: 'side__kids', hidden: '' });
+      const btn = h('button', { type: 'button', class: 'side__tog', 'aria-expanded': 'false', 'aria-label': 'Show the codes under ' + p.padEnd(8, '0'), text: '▸' });
+      let drawn = false;
+      btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        if (open && !drawn) { add(box2, kids[p].map((y) => row(y, true))); drawn = true; }
+        btn.setAttribute('aria-expanded', String(open));
+        btn.textContent = open ? '▾' : '▸';
+        box2.hidden = !open;
+      });
+      const wrap = h('div', { class: 'side__branch' }, [h('div', { class: 'side__row' }, [btn, label]), box2]);
+      if (side.codes.some((c) => c !== p && c.indexOf(p) === 0)) btn.click();   // a chosen code below: open
+      return wrap;
+    }
+    function drawTree() {
+      clear(tree);
+      const q = find.value.trim().toLowerCase();
+      if (!q) { add(tree, roots.map((x) => row(x, true))); return; }
+      const digits = q.replace(/\D/g, '');
+      const hits = nodes.filter((x) => (digits && /^\d+$/.test(q) ? x[0].padEnd(8, '0').indexOf(digits) === 0 || x[0].indexOf(digits.replace(/0+$/, '')) === 0
+        : (x[1] || '').toLowerCase().indexOf(q) >= 0)).slice(0, 80);
+      add(tree, hits.length ? hits.map((x) => row(x, false)) : h('p', { class: 'small muted', text: 'No code matches.' }));
+    }
+    const types = h('div', { class: 'side__types' }, (S.procedures || []).map((x) => {
+      const box = h('input', { type: 'checkbox', on: { change: (e) => {
+        side.types = side.types.filter((t) => t !== x.k);
+        if (e.target.checked) side.types.push(x.k);
+        sideSave();
+      } } });
+      box.checked = side.types.indexOf(x.k) >= 0;
+      return h('label', { class: 'side__label side__type', title: procText(x.k) }, [box, h('span', { class: 'side__code', text: x.k }), h('span', { class: 'side__n', text: int(x.n) })]);
+    }));
+    const aside = h('aside', { class: 'side', 'aria-label': 'Filter by tender type and code' }, [
+      h('div', { class: 'side__head' }, [h('h2', { class: 'side__title', text: 'Filter' }), clearBtn]), sum,
+      h('h3', { class: 'side__h', text: 'Tender type' }), types,
+      h('h3', { class: 'side__h', text: 'Codes and sub-codes' }), find, tree,
+    ]);
+    const note = h('p', { class: 'side-note', hidden: '' });   // narrow screens: the panel is hidden, say so
+    const col = h('div', { class: 'side-main' });             // the page's own content, right of the panel
+    while (main.firstChild) col.appendChild(main.firstChild);
+    main.appendChild(aside);
+    main.appendChild(col);
+    col.insertBefore(note, APP);
+    main.classList.add('with-side');
+    document.body.classList.add('has-side');
+    function paint() {
+      sum.textContent = sideSummary();
+      clearBtn.hidden = !sideOn();
+      clear(note);
+      note.hidden = !sideOn();
+      if (sideOn()) {
+        add(note, ['Filtered (left panel, wide screens): ' + sideSummary() + ' ', h('button', { type: 'button', class: 'linkish', text: 'clear', on: { click: () => { side.codes = []; side.types = []; sideSave(); } } })]);
+      }
+      [].forEach.call(types.querySelectorAll('input'), (b, i) => { b.checked = side.types.indexOf(S.procedures[i].k) >= 0; });
+      [].forEach.call(tree.querySelectorAll('input[data-p]'), (b) => { b.checked = side.codes.indexOf(b.getAttribute('data-p')) >= 0; });
+    }
+    find.addEventListener('input', debounce(drawTree, 150));
+    document.addEventListener('tp:side', () => { paint(); onChange(); });
+    window.addEventListener('storage', (e) => { if (e.key === SIDE_KEY) { sideLoad(); paint(); onChange(); } });   // another tab
+    drawTree();
+    paint();
+  }
+
+  /** The dashboard view (as build_demo.py view_json makes it) counted from tender list rows, for the left
+      filter: KPIs, months, categories, codes, statuses, procedures, top buyers and companies, open tenders.
+      The market comparison, most-demanded items and requirement tags need data the list does not carry,
+      so a filtered dashboard leaves them out. */
+  function viewFromRows(rows, S, B, C) {
+    const months = S.views.all.months.map((m) => m[0]);
+    const pm = {};
+    months.forEach((m) => { pm[m] = [0, 0]; });
+    const inc = (o, k, n) => { o[k] = (o[k] || 0) + n; };
+    const buyers = new Set();
+    const comps = new Set();
+    const cats = {}, catv = {}, cpv = {}, cpvv = {}, st = {}, stv = {}, pr = {}, prv = {}, bn = {}, bv = {}, wonV = {}, wonN = {}, ent = {};
+    const awarded = new Set(S.awarded || []);
+    const names = {};
+    (S.codes || []).forEach((x) => { names[x[0].padEnd(8, '0')] = x[1]; });
+    let value = 0, otherCur = 0, nsum = 0, nn = 0, wsum = 0, wany = false, wonTenders = 0, decided = 0, covered = 0, outside = 0;
+    rows.forEach((r) => {
+      const v = isNum(r.v) ? r.v : 0;
+      value += v;
+      if (!isNum(r.v) && isNum(r.vo)) otherCur += 1;
+      if (r.b) { buyers.add(r.b); inc(bn, r.b, 1); inc(bv, r.b, v); }
+      (r.bi || []).forEach((b) => { comps.add(b[0]); inc(ent, b[0], 1); });
+      const won = r.w && r.w.length;
+      (r.w || []).forEach((w) => {
+        comps.add(w[0]);
+        inc(wonN, w[0], 1);
+        if (isNum(w[1])) { inc(wonV, w[0], w[1]); wsum += w[1]; wany = true; }
+      });
+      if (won) { wonTenders += 1; covered += 1; }
+      if (won || awarded.has(r.s)) decided += 1;
+      if (isNum(r.n)) { nsum += r.n; nn += 1; }
+      const m = r.a ? r.a.slice(0, 7) : null;
+      if (m && pm[m]) { pm[m][0] += 1; pm[m][1] += v; } else outside += 1;
+      inc(cats, r.c, 1); inc(catv, r.c, v);
+      inc(cpv, r.mc || '?', 1); inc(cpvv, r.mc || '?', v);
+      inc(st, r.s, 1); inc(stv, r.s, v);
+      inc(pr, r.p, 1); inc(prv, r.p, v);
+    });
+    const r2 = (x) => Math.round(x * 100) / 100;
+    const enough = decided > 0 && covered / decided >= (S.winner_coverage || 0.5);
+    const cn = (k) => (C[k] ? C[k].name : k);
+    let companies = { by: null, rows: [] };
+    if (wany && enough) {
+      companies = { by: 'value', rows: Object.keys(wonV).sort((a, b) => wonV[b] - wonV[a] || wonN[b] - wonN[a]).slice(0, 10).map((k) => [k, cn(k), wonN[k], r2(wonV[k])]) };
+    } else if (Object.keys(wonN).length && enough) {
+      companies = { by: 'wins', rows: Object.keys(wonN).sort((a, b) => wonN[b] - wonN[a]).slice(0, 10).map((k) => [k, cn(k), wonN[k], null]) };
+    } else if (Object.keys(ent).length) {
+      companies = { by: 'entered', rows: Object.keys(ent).sort((a, b) => ent[b] - ent[a]).slice(0, 10).map((k) => [k, cn(k), ent[k], null]) };
+    }
+    const order = S.categories.map((c) => c.k);
+    const stOrder = S.statuses.map((x) => x.k);
+    const cpvKeys = Object.keys(cpv).sort((a, b) => cpv[b] - cpv[a] || cpvv[b] - cpvv[a]);
+    return {
+      kpi: {
+        tenders: rows.length, value: r2(value), buyers: buyers.size, companies: comps.size,
+        avg_bidders: nn ? Math.round(nsum / nn * 10) / 10 : null, avg_bidders_n: nn,
+        won_value: wany ? r2(wsum) : null, won_n: wonTenders, contracts: wonTenders, other_cur: otherCur, other_cur_contracts: 0,
+      },
+      months: months.map((m) => [m, pm[m][0], r2(pm[m][1])]),
+      months_outside: outside,
+      cats: order.filter((k) => cats[k]).map((k) => [k, cats[k], r2(catv[k])]),
+      cpv: cpvKeys.slice(0, 10).map((k) => [k, names[k] || '', cpv[k], r2(cpvv[k])]),
+      cpv_more: Math.max(0, cpvKeys.length - 10),
+      status: Object.keys(st).sort((a, b) => stOrder.indexOf(a) - stOrder.indexOf(b)).map((k) => [k, st[k], r2(stv[k])]),
+      proc: Object.keys(pr).sort((a, b) => pr[b] - pr[a] || a.localeCompare(b)).map((k) => [k, pr[k], r2(prv[k])]),
+      buyers: Object.keys(bv).sort((a, b) => bv[b] - bv[a] || bn[b] - bn[a]).slice(0, 10).map((k) => [k, B[k] ? B[k].name : k, bn[k], r2(bv[k])]),
+      companies: companies,
+      winners_known: [covered, decided],
+      open: rows.filter((r) => r.d && isOpen(r.d)).sort((a, b) => (a.d < b.d ? -1 : 1)).slice(0, 60)
+        .map((r) => [r.no, r.t, r.b, B[r.b] ? B[r.b].name : null, r.d, isNum(r.v) ? r.v : null]),
+    };
+  }
+
   /* ------------------------------------------------------------------ products (TEN-10, 9 Nov 2026) */
 
   // products.json rows: [no, seller key, seller, offer date, product as written, spec, maker, unit, quantity,
@@ -2151,7 +2366,7 @@
         const bw = (state.b || '').toLowerCase().split(/\s+/).filter(Boolean);
         const code = (state.code || '').replace(/\D/g, '').replace(/0+$/, '');
         const since = state.dd ? new Date(Date.now() - Number(state.dd) * DAY_MS).toISOString().slice(0, 10) : '';
-        return all.filter((x) => (!state.k || x.k === state.k)
+        return all.filter((x) => (!state.k || x.k === state.k) && (!sideOn() || sideMatch(x.codes, x.pt))
           && words.every((w) => x.hay.indexOf(w) >= 0) && sw.every((w) => x.sh.indexOf(w) >= 0) && bw.every((w) => x.bh.indexOf(w) >= 0)
           && (!state.c || x.c === state.c) && (!state.pt || x.pt === state.pt)
           && (!code || x.codes.some((c) => String(c).indexOf(code) === 0))
@@ -2258,6 +2473,7 @@
       ['c', 'pt', 'dd', 'vat'].forEach((k) => F[k].addEventListener('change', () => { state[k] = F[k].value || undefined; limit = 100; render(); }));
       ['w', 'v'].forEach((k) => F[k].addEventListener('change', () => { state[k] = F[k].checked ? '1' : undefined; limit = 100; render(); }));
       window.addEventListener('hashchange', () => { fromHash(); limit = 100; render(); });
+      mountSide(S, () => { limit = 100; render(); });
       fromHash();
       render();
     }, (err) => {

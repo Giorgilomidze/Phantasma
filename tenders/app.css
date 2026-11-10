@@ -312,3 +312,32 @@ a.tl-item:focus-visible .tl-bar { stroke: var(--ink); stroke-width: 2; }
 .wontags { list-style: none; margin: 0; padding: 0; }
 .wontags li { padding: 6px 0; border-top: 1px solid var(--rule); overflow-wrap: anywhere; }
 .wontags li:first-child { border-top: 0; }
+
+/* ---------- left filter (10 Nov 2026, owner): tender type + codes, a sticky panel left of the content.
+   Only from 1360 px wide and only on the pages that use it (body.has-side: Dashboard, Tenders, Products);
+   narrower screens keep the old layout and show .side-note when a filter is on. */
+.side { display: none; }
+.side-note:not([hidden]) { background: #fff7f1; border: 1px solid #f6c9ab; border-radius: var(--r); padding: 8px 12px; margin: 0 0 12px; font-size: .9rem; }
+@media (min-width: 1360px) {
+  body.has-side .wrap { max-width: 1580px; }
+  main.with-side { display: grid; grid-template-columns: 280px minmax(0, 1fr); column-gap: 28px; align-items: start; }
+  main.with-side > .side { display: block; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; margin-top: 18px; }
+  .side-note:not([hidden]) { display: none; }
+}
+.side { background: var(--card); border: 1px solid var(--rule); border-radius: var(--r); padding: 12px 12px 14px; font-size: .86rem; }
+.side__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.side__title { font-size: 1.05rem; margin: 0; }
+.side__sum { margin: 2px 0 6px; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.side__h { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin: 12px 0 6px; }
+.side__types { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.side__find { width: 100%; font-size: .86rem; background: #fff; border: 1px solid #b9b2a6; border-radius: var(--r-sm); padding: 6px 8px; margin: 0 0 6px; }
+.side__row { display: flex; align-items: flex-start; }
+.side__tog, .side__gap { width: 18px; flex: none; }
+.side__tog { border: 0; background: none; padding: 3px 0 0; cursor: pointer; color: var(--muted); font-size: .78rem; line-height: 1.3; }
+.side__tog:hover { color: var(--ink); }
+.side__label { display: flex; align-items: flex-start; gap: 6px; padding: 2px 0; cursor: pointer; flex: 1; min-width: 0; }
+.side__label input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: var(--accent-deep); flex: none; }
+.side__code { font-variant-numeric: tabular-nums; font-weight: 600; flex: none; }
+.side__name { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.side__n { margin-left: auto; padding-left: 4px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.side__kids { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--rule); }
