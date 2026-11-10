@@ -197,7 +197,7 @@ a.bars__row:hover .ch-mark, a.bars__row:focus-visible .ch-mark { fill: var(--acc
 .more { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px 0 0; }
 
 /* ---------- tables (cards on phones) */
-.tablewrap { background: var(--card); border: 1px solid var(--rule); border-radius: var(--r); overflow-x: auto; }
+.tablewrap { position: relative; background: var(--card); border: 1px solid var(--rule); border-radius: var(--r); overflow-x: auto; }   /* relative: hidden labels inside stay in the scroll box */
 .dt { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .dt th, .dt td { padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
 .dt tbody tr:last-child td { border-bottom: 0; }
@@ -368,12 +368,17 @@ a.tl-item:focus-visible .tl-bar { stroke: var(--ink); stroke-width: 2; }
 .bell__acts { margin: 4px 0 0; display: flex; gap: 16px; }
 .bell__all { margin: 8px 0 0; }
 .bell__foot { margin-top: 10px; }
-.watch--small { border: 0; background: none; padding: 0 5px 0 0; cursor: pointer; color: var(--accent-deep); font-size: 1rem; line-height: 1; vertical-align: -1px; }
-.watch--small:hover { color: var(--ink); }
-.side__alert { margin: 0 0 6px; }
+.watch--small { border: 1px solid var(--rule); background: var(--card); width: 34px; height: 34px; border-radius: 999px; cursor: pointer; color: var(--accent-deep); font-size: 1.15rem; line-height: 1; }
+.watch--small:hover { border-color: var(--ink); color: var(--ink); }
+.watch--small[aria-pressed="true"] { background: #fde9dc; border-color: #f6c9ab; }
+.dt td.watchcol, .dt th.watchcol { width: 1%; text-align: center; }
+.dt td.nowrap .cell { white-space: nowrap; }
+.side__alert { margin: 4px 0 8px; padding: 8px 10px; background: var(--surface); border-radius: var(--r-sm); }
+.side__alerthead { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; font-weight: 600; font-size: .84rem; }
+.side__alerthead .bell__i { width: 16px; height: 16px; flex: none; }
+.side__alert .side__alertbtn { margin-top: 6px; }
+.side__alertbtn:disabled { opacity: .55; cursor: not-allowed; }
 .side__alert .small { margin: 4px 0 0; }
-.side__alertbtn { display: inline-flex; align-items: center; gap: 6px; text-align: left; }
-.side__alertbtn .bell__i { width: 16px; height: 16px; flex: none; }
 @media (max-width: 760px) {
   .bellpanel { position: fixed; left: 16px; right: 16px; top: 72px; width: auto; max-height: calc(100vh - 96px); }
 }

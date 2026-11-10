@@ -1171,7 +1171,8 @@
         return h('span', { class: 'muted', text: WINNER_HINT[r.wh] || DASH });
       }
       const cols = [
-        { key: 'no', label: 'Number', first: 'asc', sort: (r) => r.no, cell: (r) => [watchButton(r.no, r.s, true), h('a', { href: tenderUrl(r.no), text: r.no })] },
+        { key: 'watch', label: 'Watch', cls: 'watchcol', noCsv: true, cell: (r) => watchButton(r.no, r.s, true) || h('span', { class: 'muted', title: 'Finished tenders cannot be watched', text: DASH }) },
+        { key: 'no', label: 'Number', first: 'asc', cls: 'nowrap', sort: (r) => r.no, cell: (r) => h('a', { href: tenderUrl(r.no), text: r.no }) },
         { key: 't', label: 'Title', first: 'asc', cls: 'wide', sort: (r) => r.t, cell: (r) => [ka(r.t), r.rq ? h('span', { class: 'tag tag--req', title: plural(r.rq[0], 'requirement item') + ', ' + int(r.rq[1]) + ' must be proven', text: 'requirements' }) : null] },
         { key: 'b', label: 'Buyer', first: 'asc', cls: 'wide', sort: (r) => r._bn, cell: (r) => (r.b ? h('a', { href: buyerUrl(r.b) }, ka(r._bn)) : DASH) },
         { key: 'c', label: 'Category', first: 'asc', sort: (r) => catLabel(r.c), cell: (r) => catLabel(r.c) },
@@ -2191,7 +2192,7 @@
       const W = watched();
       const nos = Object.keys(W).sort((a, b) => (changes(W[b].snap, A.by[b]).length ? 1 : 0) - (changes(W[a].snap, A.by[a]).length ? 1 : 0) || (W[b].at > W[a].at ? 1 : -1));
       if (!nos.length) {
-        add(body, para('No tender watched yet. Press ☆ next to a tender that is not finished (in Tenders, or "☆ Watch" on a tender page); the bell then tells you when its status, deadline, bids, winner or contract changes.', 'small muted'));
+        add(body, para('No tender watched yet. Press ☆ in the "Watch" column of Tenders, or "☆ Watch" on a tender page (tenders that are not finished); the bell then tells you when its status, deadline, bids, winner or contract changes.', 'small muted'));
         return;
       }
       add(body, h('ul', { class: 'bell__list' }, nos.map((no) => {
@@ -2381,17 +2382,23 @@
       return h('label', { class: 'side__label side__type', title: procText(x.k) }, [box, h('span', { class: 'side__code', text: x.k }), h('span', { class: 'side__n', text: int(x.n) })]);
     }));
     const alertLine = h('div', { class: 'side__alert' });   // the bell's "Bid opening" interests
-    function paintAlert() {
+    function paintAlert() {                                   // always visible, so it can be found (owner, 10 Nov)
       clear(alertLine);
       const I = interests();
       const key = (c, t) => JSON.stringify([c.slice().sort(), t.slice().sort()]);
       const same = I && key(I.codes, I.types) === key(side.codes, side.types);
-      if (sideOn() && !same) {
-        alertLine.appendChild(h('button', { type: 'button', class: 'btn btn--ghost btn--small side__alertbtn',
-          on: { click: () => setInterests(side.codes, side.types) } }, [bellIcon(), 'Alert me about new tenders like this']));
+      alertLine.appendChild(h('p', { class: 'side__alerthead' }, [bellIcon(), 'Bid opening alerts']));
+      if (!I || !same) {
+        alertLine.appendChild(h('p', { class: 'small muted', text: sideOn()
+          ? 'The bell will count new tenders like this filter:'
+          : 'Tick a tender type or a code below, then press the button: the bell counts new tenders that match.' }));
+        const btn = h('button', { type: 'button', class: 'btn btn--ghost btn--small side__alertbtn', text: 'Alert me about new tenders like this',
+          on: { click: () => setInterests(side.codes, side.types) } });
+        if (!sideOn()) btn.disabled = true;
+        alertLine.appendChild(btn);
       }
       if (I) {
-        alertLine.appendChild(h('p', { class: 'small muted' }, [same ? 'Alerts on for this filter ' : 'Alerts on: ' + interestText(I) + ' ',
+        alertLine.appendChild(h('p', { class: 'small muted' }, [same ? 'On for this filter. ' : 'On for: ' + interestText(I) + '. ',
           h('button', { type: 'button', class: 'linkish small', text: 'stop', on: { click: () => keep(ALERT_KEY, null) } })]));
       }
     }
@@ -2540,7 +2547,7 @@
       return d.textContent.replace(/\s+/g, ' ').trim();
     };
     return h('button', { type: 'button', class: 'btn btn--ghost btn--small', text: 'Download for Excel (CSV)', on: { click: () => {
-      const cols = getCols();
+      const cols = getCols().filter((c) => !c.noCsv);
       csvDownload(name + '-' + new Date().toISOString().slice(0, 10) + '.csv', cols.map((c) => c.label),
         getRows().map((r) => cols.map((c) => (c.csv ? c.csv(r) : c.sort ? c.sort(r) : text(c, r)))));
     } } });
