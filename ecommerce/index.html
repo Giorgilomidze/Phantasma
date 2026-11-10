@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E-commerce automation - Phantasma</title>
+  <meta name="description" content="Amazon seller data in one place: listings, FBA stock and repeat purchases for several accounts." />
+  <!-- Private service (C7 Ecommerce Platform, 10 Nov 2026): members only, not for search engines. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&amp;display=swap" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&amp;display=swap" /></noscript>
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&amp;display=swap" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&amp;display=swap" /></noscript>
+
+  <!-- Site tokens (colours, spacing, type) + this app's own styles (classes prefixed ecm-) -->
+  <link rel="stylesheet" href="../styles.css?v=20261109d" />
+  <link rel="stylesheet" href="./app.css?v=20261110b" />
+</head>
+<body class="ecm-body">
+  <a class="skip-link" href="#ecm-main">Skip to content</a>
+
+  <!-- Login gate: shown until the session and the access check are confirmed. Fails closed. -->
+  <div id="ecm-gate" class="ecm-gate" aria-live="polite">
+    <div class="ecm-card ecm-gate__card"><p>Loading…</p></div>
+  </div>
+
+  <div id="ecm-app" class="ecm-app" hidden>
+    <header class="ecm-topbar">
+      <button type="button" id="ecm-menu-btn" class="ecm-iconbtn ecm-topbar__menu" aria-expanded="false" aria-controls="ecm-sidebar" aria-label="Menu">&#9776;</button>
+      <span class="ecm-topbar__brand">E-commerce automation</span>
+      <span class="ecm-badge" title="At most 100 rows per data set and marketplace (decision ED-05)">Test mode</span>
+      <div class="ecm-topbar__ctx">
+        <label class="visually-hidden" for="ecm-account">Amazon account</label>
+        <select id="ecm-account" class="ecm-input ecm-input--bar"></select>
+      </div>
+      <div class="ecm-topbar__end">
+        <span class="ecm-topbar__user" id="ecm-user"></span>
+        <button type="button" id="ecm-signout" class="ecm-btn ecm-btn--ghost ecm-btn--small">Sign out</button>
+      </div>
+    </header>
+
+    <aside id="ecm-sidebar" class="ecm-sidebar" aria-label="Main">
+      <nav aria-label="Sections"><ul id="ecm-nav" class="ecm-nav"></ul></nav>
+      <nav class="ecm-sidebar__out" aria-label="Solve Phantasma">
+        <a class="ecm-nav__link" href="../services.html">← All services</a>
+        <a class="ecm-nav__link" href="../index.html">Home page</a>
+      </nav>
+    </aside>
+
+    <main id="ecm-main" class="ecm-main" tabindex="-1"></main>
+    <div id="ecm-scrim" class="ecm-scrim" hidden></div>
+    <div id="ecm-toasts" class="ecm-toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+  </div>
+
+  <noscript><p class="ecm-card ecm-gate__card">This tool needs JavaScript.</p></noscript>
+
+  <!-- supabase-js (UMD), same version as the main site; reads the shared session -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+  <script src="./app.js?v=20261110b"></script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+/* =========================================================================
+   E-commerce automation (/ecommerce/) — C7 Ecommerce Platform, 10 Nov 2026.
+   Uses the site tokens from ../styles.css; every class is prefixed ecm-.
+   1. Shell  2. Sidebar + nav  3. Main, cards, headings  4. Buttons + inputs
+   5. Tables + tools  6. Settings parts  7. Status chips, toasts, gate
+   8. Responsive  9. Reduced motion
+   ========================================================================= */
+
+/* 1. Shell ---------------------------------------------------------------- */
+.ecm-body [hidden] { display: none !important; }   /* the gate / app / scrim switch must win over display rules */
+.ecm-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: var(--type-body-sm); }
+.ecm-app { display: grid; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: auto 1fr; min-height: 100vh; }
+.ecm-topbar {
+  grid-column: 1 / -1; position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-2) var(--space-5); background: var(--surface-raised); border-bottom: 1px solid var(--rule);
+}
+.ecm-topbar__brand { font-family: var(--font-display); font-size: var(--type-h3); font-weight: 600; }
+.ecm-topbar__menu { display: none; }
+.ecm-topbar__ctx { margin-left: var(--space-4); }
+.ecm-topbar__end { margin-left: auto; display: flex; align-items: center; gap: var(--space-3); }
+.ecm-topbar__user { color: var(--ink-soft); font-size: var(--type-caption); }
+.ecm-badge {
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--surface-soft);
+  color: var(--watch); font-size: var(--type-caption); font-weight: 500;
+}
+
+/* 2. Sidebar + nav --------------------------------------------------------- */
+.ecm-sidebar {
+  position: sticky; top: var(--ecm-top, 56px); align-self: start; height: calc(100vh - var(--ecm-top, 56px)); overflow-y: auto;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: var(--space-4) var(--space-3); background: var(--surface); border-right: 1px solid var(--rule);
+}
+.ecm-nav { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.ecm-nav__link {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+  color: var(--ink); text-decoration: none;
+}
+.ecm-nav__link:hover { background: var(--surface-soft); }
+.ecm-nav__link[aria-current="page"] { background: var(--ink); color: var(--bg); }
+.ecm-nav__link:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.ecm-nav__soon { font-size: var(--type-eyebrow); color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; }
+.ecm-nav__link[aria-current="page"] .ecm-nav__soon { color: var(--bg); }
+.ecm-sidebar__out { display: grid; gap: var(--space-1); padding-top: var(--space-4); border-top: 1px solid var(--rule); }
+
+/* 3. Main, cards, headings ------------------------------------------------- */
+.ecm-main { padding: var(--space-5) var(--space-6) var(--space-8); min-width: 0; }
+.ecm-main:focus { outline: none; }
+.ecm-h1 { font-family: var(--font-display); font-size: var(--type-h2); font-weight: 600; margin: 0 0 var(--space-2); }
+.ecm-h2 { font-family: var(--font-display); font-size: var(--type-h3); font-weight: 600; margin: 0 0 var(--space-3); }
+.ecm-lede { color: var(--ink-soft); margin: 0 0 var(--space-5); max-width: 72ch; }
+.ecm-card {
+  background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md);
+  padding: var(--space-5); margin-bottom: var(--space-5);
+}
+.ecm-card--soft { background: var(--surface); }
+.ecm-note { color: var(--ink-soft); font-size: var(--type-caption); margin: var(--space-2) 0 0; }
+.ecm-empty { padding: var(--space-6); text-align: center; color: var(--ink-soft); }
+.ecm-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+
+/* 4. Buttons + inputs ------------------------------------------------------ */
+.ecm-btn {
+  display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); border: 1px solid transparent;
+  font: inherit; font-weight: 500; text-decoration: none; line-height: 1.3;
+}
+.ecm-btn--primary { background: var(--accent); color: var(--ink); }
+.ecm-btn--primary:hover { filter: brightness(0.96); }
+.ecm-btn--ghost { background: transparent; color: var(--ink); border-color: var(--rule); }
+.ecm-btn--ghost:hover { background: var(--surface-soft); }
+.ecm-btn--danger { background: transparent; color: var(--act); border-color: var(--act); }
+.ecm-btn--small { padding: var(--space-1) var(--space-3); font-size: var(--type-caption); }
+.ecm-btn[disabled], .ecm-btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+.ecm-btn:focus-visible, .ecm-iconbtn:focus-visible, .ecm-input:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.ecm-iconbtn { background: transparent; border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: var(--space-1) var(--space-2); font: inherit; cursor: pointer; color: var(--ink); }
+.ecm-input {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3); min-width: 0;
+}
+.ecm-input--bar { padding: var(--space-1) var(--space-2); max-width: 280px; }
+.ecm-field { display: grid; gap: var(--space-1); margin-bottom: var(--space-4); }
+.ecm-field > label, .ecm-field > legend { font-weight: 500; }
+.ecm-field fieldset { border: 0; padding: 0; margin: 0; }
+.ecm-hint { color: var(--ink-soft); font-size: var(--type-caption); }
+.ecm-form { max-width: 640px; }
+.ecm-form .ecm-input { width: 100%; box-sizing: border-box; }
+.ecm-radios { display: flex; gap: var(--space-4); }
+.ecm-radios label { display: inline-flex; gap: var(--space-2); align-items: center; font-weight: 400; }
+.ecm-error { color: var(--act); font-weight: 500; margin: var(--space-2) 0 0; }
+.ecm-ok { color: var(--ok); font-weight: 500; }
+
+/* 5. Tables + tools -------------------------------------------------------- */
+.ecm-tools { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-bottom: var(--space-3); }
+.ecm-tools__count { color: var(--ink-soft); font-size: var(--type-caption); margin-left: auto; }
+.ecm-tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface-raised); }
+.ecm-table { border-collapse: collapse; width: 100%; font-size: var(--type-caption); }
+.ecm-table th, .ecm-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+.ecm-table thead th { position: sticky; top: 0; background: var(--surface); font-weight: 600; white-space: nowrap; }
+.ecm-table td.is-num, .ecm-table th.is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ecm-table td.is-wide { min-width: 260px; max-width: 420px; }
+.ecm-table tbody tr:hover { background: var(--surface); }
+.ecm-sort { all: unset; cursor: pointer; display: inline-flex; gap: var(--space-1); align-items: center; }
+.ecm-sort:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.ecm-sort__arrow { color: var(--ink-soft); font-size: var(--type-eyebrow); }
+.ecm-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--type-caption); }
+.ecm-table td { white-space: nowrap; }
+.ecm-table td.is-wide { white-space: normal; }
+
+/* 6. Settings parts -------------------------------------------------------- */
+.ecm-accounts { display: grid; gap: var(--space-3); }
+.ecm-account { border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-4); background: var(--bg); }
+.ecm-account.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.ecm-account__head { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: baseline; justify-content: space-between; }
+.ecm-account__name { font-weight: 600; font-size: var(--type-body); }
+.ecm-account__meta { color: var(--ink-soft); font-size: var(--type-caption); display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-2) 0; }
+.ecm-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0; padding: 0; list-style: none; }
+.ecm-chip { padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--surface-soft); font-size: var(--type-caption); }
+.ecm-soon { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); }
+.ecm-soon__card { border: 1px dashed var(--rule); border-radius: var(--radius-md); padding: var(--space-4); background: var(--bg); display: grid; gap: var(--space-2); }
+.ecm-soon__name { font-weight: 600; }
+.ecm-progress { height: 8px; border-radius: var(--radius-sm); background: var(--surface-soft); overflow: hidden; margin: var(--space-2) 0 var(--space-3); }
+.ecm-progress > span { display: block; height: 100%; background: var(--ok); width: 0; transition: width 0.4s ease; }
+
+/* 7. Status chips, toasts, gate -------------------------------------------- */
+.ecm-st { display: inline-block; padding: 0 var(--space-2); border-radius: var(--radius-sm); font-size: var(--type-caption); font-weight: 600; white-space: nowrap; }
+.ecm-st--ok, .ecm-st--done { background: color-mix(in oklch, var(--ok) 14%, var(--bg)); color: var(--ok); }
+.ecm-st--error { background: color-mix(in oklch, var(--act) 14%, var(--bg)); color: var(--act); }
+.ecm-st--waiting, .ecm-st--running, .ecm-st--queued, .ecm-st--new { background: color-mix(in oklch, var(--watch) 14%, var(--bg)); color: var(--watch); }
+.ecm-st--no_data, .ecm-st--cancelled, .ecm-st--disabled { background: var(--surface-soft); color: var(--ink-soft); }
+.ecm-toasts { position: fixed; right: var(--space-5); bottom: var(--space-5); display: grid; gap: var(--space-2); z-index: 60; max-width: min(420px, calc(100vw - 32px)); }
+.ecm-toast { background: var(--ink); color: var(--bg); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); box-shadow: var(--shadow-lightbox); }
+.ecm-toast--act { background: var(--act); }
+.ecm-gate { min-height: 100vh; display: grid; place-items: center; padding: var(--space-5); }
+.ecm-gate__card { max-width: 480px; text-align: center; }
+.ecm-scrim { position: fixed; inset: 0; background: rgb(20 33 61 / 0.35); z-index: 25; }
+
+/* 8. Responsive ------------------------------------------------------------ */
+@media (max-width: 1023px) {
+  .ecm-app { grid-template-columns: minmax(0, 1fr); }
+  .ecm-topbar__menu { display: inline-block; }
+  .ecm-sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; height: auto; width: 260px; z-index: 30;
+    transform: translateX(-100%); transition: transform 0.2s ease;
+  }
+  .ecm-app.is-nav-open .ecm-sidebar { transform: none; }
+  .ecm-main { padding: var(--space-4) var(--space-4) var(--space-7); }
+}
+@media (max-width: 599px) {
+  .ecm-topbar { padding: var(--space-2) var(--space-4); }
+  .ecm-topbar__ctx { margin-left: 0; width: 100%; order: 5; }
+  .ecm-input--bar { max-width: none; width: 100%; }
+  .ecm-topbar__user { display: none; }
+  .ecm-card { padding: var(--space-4); }
+}
+
+/* 9. Reduced motion --------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .ecm-sidebar, .ecm-progress > span { transition: none; }
+}
