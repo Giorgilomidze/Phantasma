@@ -514,8 +514,8 @@
      4. Router and shell
      --------------------------------------------------------------------- */
   var NAV = [
-    ['dashboard', 'nav.dashboard', false], ['campaigns', 'nav.campaigns', false], ['posts', 'nav.posts', false],
-    ['images', 'nav.images', false], ['styles', 'sty.nav', false], ['products', 'nav.products', false], ['rotation', 'nav.rotation', true],
+    ['dashboard', 'nav.dashboard', false], ['campaigns', 'nav.campaigns', false], ['posts', 'nav.posts', false], ['approvals', 'ap.nav', false],
+    ['images', 'nav.images', false], ['styles', 'sty.nav', false], ['brands', 'br.nav', false], ['products', 'nav.products', false], ['rotation', 'nav.rotation', true],
     ['settings', 'nav.settings', false], ['audit', 'nav.audit', true]
   ];
   function buildNav() {
@@ -542,6 +542,9 @@
     });
     var tok = viewTok;
     main.scrollTop = 0; window.scrollTo(0, 0);
+    // No company yet (D-49): the Library and Settings work; the other pages offer "Create a company".
+    var navItem = NAV.filter(function (n) { return n[0] === name; })[0];
+    if (!hasCompany() && name !== 'images' && name !== 'settings') return viewNoCompany(navItem ? navItem[1] : 'nav.dashboard');
     if (name === 'campaigns' && parts[1] === 'new') return viewWizard(tok);
     if (name === 'campaigns') return viewCampaigns(tok);
     if (name === 'posts' && parts[1]) return viewComposer(tok, parts[1]);
@@ -550,6 +553,8 @@
     if (name === 'styles') return viewStyles(tok);
     if (name === 'products') return viewProducts(tok);
     if (name === 'settings') return viewSettings();
+    if (name === 'approvals') return viewApprovals(tok);
+    if (name === 'brands') return viewBrands(tok);
     var soon = NAV.filter(function (n) { return n[0] === name && n[2]; })[0];
     if (soon) {
       return render(h('div', {}, [pageHead(soon[1]), emptyState('soon.title', 'soon.text', h('a', { class: 'ads-btn ads-btn--primary', href: '#/dashboard' }, t('nav.dashboard')))]), soon[1]);
@@ -902,6 +907,11 @@
     return w;
   }
   function viewWizard(tok) {
+    // A company made in the tool has no ad account yet (connections per company come with ADS-39).
+    if (!accounts(ctx.business).length) {
+      return render(h('div', {}, [pageHead('wiz.title'), emptyState('co.noAccount.title', 'co.noAccount.text',
+        h('a', { class: 'ads-btn ads-btn--primary', href: '#/settings' }, t('nav.settings')), { name: bizName(ctx.business) })]), 'wiz.title');
+    }
     if (!wizard || wizard.business !== ctx.business) wizard = newWizard();
     var w = wizard, L = settings.limits, live = liveMode();
     var body = h('div', {}, skeleton(4));
@@ -1776,6 +1786,7 @@
      --------------------------------------------------------------------- */
   var LIB_FOLDERS = ['uploads', 'elements', 'ai', 'products', 'archive']; // shortcut row + folder list, in order
   var LIB_AI_ROOM = 1.5 * 1048576; // free storage an AI picture needs (they are 0.3-0.7 MB, a post picture twice)
+  var libCompany = 'auto'; // Company filter (11 Nov 2026, D-48): 'auto' = the top-bar company, a company id, 'shared' (no company) or 'all'
   var libFolder = 'all';  // shortcut: 'all' or one of LIB_FOLDERS
   var libSub = null;      // inside Elements: the element type on screen ('price_tag' ... 'none'), else null
   var libTags = [];       // tag filter: a picture shows when it has all of these
@@ -1791,6 +1802,25 @@
     libView.status.textContent = libJob ? t('lib.progress', { n: libJob.n, total: libJob.total }) : aiJob ? t('aimg.working') : '';
   }
   function hasFiles(e) { var ty = e.dataTransfer && e.dataTransfer.types; return !!ty && [].indexOf.call(ty, 'Files') !== -1; }
+  // The Company filter as list arguments: b for api.listImages (undefined = every company) and
+  // shared = keep only pictures without a company. Without a company 'auto' means shared.
+  function libScope() {
+    var c = libCompany;
+    if (c !== 'auto' && c !== 'shared' && c !== 'all' && !settings.businesses.some(function (b) { return b.id === c; })) c = libCompany = 'auto';
+    if (c === 'auto') return hasCompany() ? { b: ctx.business, shared: false } : { b: undefined, shared: true };
+    if (c === 'all') return { b: undefined, shared: false };
+    if (c === 'shared') return { b: undefined, shared: true };
+    return { b: c, shared: false };
+  }
+  // The company a new picture gets (upload, AI): the filtered company, else the top-bar company;
+  // null = shared (sample mode only until ADS-37: the database needs a company today).
+  function libTarget() {
+    var sc = libScope();
+    if (sc.b) return sc.b;
+    if (sc.shared && !liveMode()) return null;
+    return hasCompany() ? ctx.business : null;
+  }
+  function coName(id) { return id ? bizName(id) : t('lf.co.shared'); }
   // The folder a picture shows in: the Archive while archived, else its own.
   function libPlace(im) { return im.archivedAt ? 'archive' : im.folder || (im.kind === 'element' ? 'elements' : 'uploads'); }
   // "Elements › Price Tag", "AI Generated" ... (the picture's own folder, also while archived).
@@ -1862,6 +1892,7 @@
     render(h('div', {}, [
       pageHead('nav.images', [upBtn, h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { openAiDialog(); } }, t('lib.ai')), editBtn, soonBtn('lib.drive')]),
       liveMode() ? null : h('p', { class: 'ads-warn' }, t('lib.mockNote')),
+      libCompanyBar(),
       picker, drop, storage, status, body
     ]), 'nav.images');
     libView = { tok: tok, status: status, load: load };
@@ -1871,9 +1902,11 @@
     // focus: true = the page heading (the focused card is gone), 'bar' = the Edit bar (its button was
     // switched off while working), a picture id = that picture's card.
     function load(focus) {
-      api.listImages(ctx.business, { strict: true, archived: true }).then(function (list) {
+      var sc = libScope();
+      api.listImages(sc.b, { strict: true, archived: true }).then(function (list) {
         if (stale(tok)) return;
         cacheImages(list);
+        if (sc.shared) list = list.filter(function (x) { return !x.sample && !x.business; });
         all = list.filter(function (x) { return !x.sample; });
         samples = list.filter(function (x) { return x.sample; });
         // Ticks of pictures that are gone, and tags nobody carries any more, are dropped.
@@ -1902,6 +1935,17 @@
         h('span', { class: 'ads-storage__bar', 'aria-hidden': 'true' }, fill),
         pct >= 100 ? h('span', { class: 'ads-storage__warn' }, t('lf.storage.full')) : null
       ]);
+    }
+
+    // Company filter (D-48): on its own line, always visible (the folder row hides when nothing shows).
+    function libCompanyBar() {
+      var opts = [['auto', hasCompany() ? t('lf.co.auto', { name: bizName(ctx.business) }) : t('lf.co.autoNone')]];
+      settings.businesses.forEach(function (b) { if (b.id !== ctx.business) opts.push([b.id, b.name]); });
+      if (!liveMode()) opts.push(['shared', t('lf.co.shared')]);
+      opts.push(['all', t('lf.co.all')]);
+      var sel = select('ads-lib-co', opts, libCompany, function (v) { libCompany = v; libSel = {}; libFolder = 'all'; libSub = null; ui = null; load(); });
+      return h('div', { class: 'ads-cofilter' }, [h('label', { class: 'ads-label', for: 'ads-lib-co' }, t('co.filter')), sel,
+        h('p', { class: 'ads-hint' }, t(liveMode() ? 'lf.co.hintLive' : 'lf.co.hint'))]);
     }
 
     /* ---- the page: shortcut row + tag filter, active tags, Edit bar, folders, samples ---- */
@@ -2068,6 +2112,7 @@
       var img = imageEl(im.id, 'ads-libitem__img');
       if (img.tagName === 'IMG') img.alt = ''; // the name is said once, by the card
       var info = h('div', { class: 'ads-libitem__body' }, [
+        libCompany === 'all' && !im.sample ? h('span', { class: 'ads-cotag' }, coName(im.business)) : null,
         facts.length ? h('span', { class: 'ads-sub' }, facts.join(' · ')) : null,
         im.archivedAt ? h('span', { class: 'ads-sub ads-sub--act' }, t('lf.deletesOn', { date: fmtDate(purgeDay(im)) }))
           : im.createdAt ? h('span', { class: 'ads-sub' }, fmtDateTime(im.createdAt)) : null
@@ -2236,6 +2281,7 @@
       var facts = [[t('lf.d.name'), title]];
       if (size.length) facts.push([t('lf.d.size'), size.join(' · ')]);
       facts.push([t('lf.d.source'), t('lf.src.' + (im.sample ? 'sample' : im.source === 'ai' ? 'ai' : 'upload'))]);
+      facts.push([t('lf.d.company'), coName(im.business)]);
       if (!im.sample) facts.push([t('lf.d.folder'), im.archivedAt ? t('lf.d.from', { folder: folderLabel(im) }) : folderLabel(im)]);
       if (im.createdAt) facts.push([t('lf.d.added'), fmtDateTime(im.createdAt)]);
       if (im.archivedAt) facts.push([t('lf.d.archived'), t('lf.d.deletes', { date: fmtDate(purgeDay(im), true) })]);
@@ -2333,7 +2379,7 @@
     }
     // One file after the other. The progress shows in whichever Library view is on screen.
     function upload(files, place) {
-      var biz = ctx.business, done = 0, failed = [], full = false;
+      var biz = libTarget(), done = 0, failed = [], full = false;
       libJob = { n: 1, total: files.length };
       function step(i) {
         if (i >= files.length) return finish();
@@ -2377,7 +2423,7 @@
   function openAiDialog() {
     if (!liveMode()) { toast(t('aimg.err.mock'), 'act'); return; }
     if (aiJob) { toast(t('aimg.busy'), 'act'); return; }
-    var biz = ctx.business, remaining = null, go = null;
+    var biz = libTarget(), remaining = null, go = null;
     var o = { prompt: aiLast.prompt, aspect: aiLast.aspect, quality: aiLast.quality, refs: aiLast.refs.slice() };
     var quota = h('p', { class: 'ads-note', 'aria-live': 'polite' }, t('aimg.quota.loading'));
     var ta = h('textarea', { id: 'ads-ai-prompt', class: 'ads-input ads-textarea', rows: '5', maxlength: '2000', placeholder: t('aimg.prompt.ph'), 'aria-describedby': 'ads-ai-prompt-hint' });
@@ -2595,6 +2641,11 @@
     return out;
   }
 
+  // Picture styles belong to one company (ADS-36; shared styles need the database update ADS-37).
+  // The Company filter shows another company's styles; it starts at the top-bar company and goes back
+  // to it when the top-bar company changes.
+  var styCompany = null;
+  function styBiz() { return styCompany && settings.businesses.some(function (b) { return b.id === styCompany; }) ? styCompany : ctx.business; }
   function viewStyles(tok) {
     var live = liveMode(), rules = api.imageRules, ps = null, groups = [], styles = [], loaded = false, seq = 0;
     var cards = {};       // saved option id -> { setImage(id) }: the bulk upload links pictures through it
@@ -2613,6 +2664,12 @@
         h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: whenReady(function () { picker.click(); }) }, t('sty.bulk'))
       ] : []),
       h('p', { class: 'ads-note' }, t('sty.intro')),
+      settings.businesses.length > 1 ? h('div', { class: 'ads-cofilter' }, [
+        h('label', { class: 'ads-label', for: 'ads-sty-co' }, t('co.filter')),
+        select('ads-sty-co', settings.businesses.map(function (b) { return [b.id, b.name + (b.id === ctx.business ? ' ' + t('co.filter.this') : '')]; }), styBiz(), function (v) {
+          styCompany = v === ctx.business ? null : v; route();
+        }),
+        h('p', { class: 'ads-hint' }, t('sty.coHint'))]) : null,
       live ? null : h('p', { class: 'ads-warn' }, t('sty.mock')),
       picker, xls, status, body
     ]), 'sty.nav');
@@ -2622,7 +2679,7 @@
     load();
 
     function load() {
-      Promise.all([api.getPictureSettings(ctx.business), api.listStyleGroups(ctx.business), api.listStyles(ctx.business)]).then(function (r) {
+      Promise.all([api.getPictureSettings(styBiz()), api.listStyleGroups(styBiz()), api.listStyles(styBiz())]).then(function (r) {
         if (stale(tok)) return;
         ps = r[0]; groups = r[1]; styles = r[2]; loaded = true;
         cacheImages(styles.map(function (s) { return s.image; }).filter(Boolean));
@@ -2670,7 +2727,7 @@
       var aspect = select('ads-sty-aspect', aspects.map(function (a) { return [a, styleLabelAspect(a)]; }), aspects.indexOf(s.aspect) !== -1 ? s.aspect : '3:4', function () {});
       var save = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
         save.disabled = true;
-        api.savePictureSettings(ctx.business, { template: tpl.value, rules: rulesBox.value, textAi: tAi.value, textOverlay: tOv.value, aspect: aspect.value })
+        api.savePictureSettings(styBiz(), { template: tpl.value, rules: rulesBox.value, textAi: tAi.value, textOverlay: tOv.value, aspect: aspect.value })
           .then(function (r) { ps = r; toast(t('sty.tpl.saved')); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); })
           .then(function () { save.disabled = false; });
       } }, t('sty.tpl.save'));
@@ -2723,7 +2780,7 @@
       var delBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost', onclick: del }, t('sty.grp.delete'));
       var addBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () {
         var sort = styles.reduce(function (a, s) { return s.groupId === g.id ? Math.max(a, s.sort) : a; }, 0) + 1;
-        var s = { id: null, business: ctx.business, groupId: g.id, code: nextCode(g.prefix), name: '', prompt: '', imageId: null, textColor: null, active: true, sort: sort };
+        var s = { id: null, business: styBiz(), groupId: g.id, code: nextCode(g.prefix), name: '', prompt: '', imageId: null, textColor: null, active: true, sort: sort };
         styles.push(s);
         var card = styleCard(s, g, addBtn);
         grid.appendChild(card); empty.hidden = true;
@@ -2804,7 +2861,7 @@
       var file = h('input', { type: 'file', accept: api.imageRules.accept, hidden: true });
       var upBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () { file.click(); } }, t('sty.upload'));
       var chooseBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--ghost', onclick: function () {
-        chooseLibraryImage(ctx.business, imageId).then(function (id) { if (id) setPicture(id); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+        chooseLibraryImage(styBiz(), imageId).then(function (id) { if (id) setPicture(id); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
       } }, t('sty.choose'));
       var removeBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--small ads-btn--danger-ghost', onclick: function () { setPicture(null); upBtn.focus(); } }, t('sty.removePic'));
       var saveBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: saveCard }, t('sty.save'));
@@ -2815,7 +2872,7 @@
         var bad = api.checkImageFile(f);
         if (bad) { toast(f.name + ': ' + t(bad.key, bad.vars), 'act'); return; }
         upBtn.disabled = true;
-        api.uploadImage(ctx.business, f, groupPlace(g)).then(function (im) { cacheImages([im]); setPicture(im.id); },
+        api.uploadImage(styBiz(), f, groupPlace(g)).then(function (im) { cacheImages([im]); setPicture(im.id); },
           function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); }).then(function () { upBtn.disabled = false; });
       });
       function title() { head.textContent = s.id ? s.code + ' — ' + s.name : t('sty.new'); }
@@ -2837,7 +2894,7 @@
         if (!name.value.trim()) { toast(t('sty.err.name'), 'act'); name.focus(); return; }
         if (!prompt.value.trim()) { toast(t('sty.err.prompt'), 'act'); prompt.focus(); return; } // the database needs a prompt
         saveBtn.disabled = true;
-        api.saveStyle({ id: s.id, business: ctx.business, groupId: g.id, code: c, name: name.value, prompt: prompt.value, imageId: imageId,
+        api.saveStyle({ id: s.id, business: styBiz(), groupId: g.id, code: c, name: name.value, prompt: prompt.value, imageId: imageId,
           textColor: g.nameColor ? (auto.checked ? null : color.value) : undefined, active: active.checked, sort: s.sort }).then(function (r) {
           var wasNew = !s.id;
           Object.keys(r).forEach(function (k) { s[k] = r[k]; });
@@ -2897,7 +2954,7 @@
           err.textContent = bad;
           if (bad) return false;
           var sort = groups.reduce(function (a, g) { return Math.max(a, g.sort); }, 0) + 1;
-          return api.saveStyleGroup({ business: ctx.business, name: v.name, token: v.token, prefix: v.prefix, pictureKind: kind.value, nameColor: false, sort: sort })
+          return api.saveStyleGroup({ business: styBiz(), name: v.name, token: v.token, prefix: v.prefix, pictureKind: kind.value, nameColor: false, sort: sort })
             .then(function (g) { created = g; return true; }, function (e) { err.textContent = errText(e); return false; });
         }
       }).then(function () {
@@ -2937,7 +2994,7 @@
       }).then(function (yes) { if (yes) runBulk(ok); });
     }
     function runBulk(items) {
-      var biz = ctx.business, done = 0, failed = [];
+      var biz = styBiz(), done = 0, failed = [];
       styJob = { key: 'lib.progress', n: 1, total: items.length };
       function step(i) {
         if (i >= items.length) return finish();
@@ -3011,7 +3068,7 @@
     }
     // Missing groups are created (by token), options added or updated by code, nothing is deleted.
     function runImport(lib, withTpl) {
-      var biz = ctx.business, res = { groups: 0, added: 0, updated: 0, tpl: false, failed: [] }, byToken = {}, byCode = {};
+      var biz = styBiz(), res = { groups: 0, added: 0, updated: 0, tpl: false, failed: [] }, byToken = {}, byCode = {};
       groups.forEach(function (g) { byToken[g.token] = g; });
       styles.forEach(function (s) { if (s.id && styleKey(s.code)) byCode[styleKey(s.code)] = s; });
       styJob = { key: 'sty.imp.progress', n: 0, total: lib.groups.reduce(function (a, gr) { return a + gr.options.length + 1; }, 0) + (withTpl ? 1 : 0) };
@@ -3308,17 +3365,30 @@
   /* ---------------------------------------------------------------------
      11. Settings: what is real today, plus placeholders for later rounds
      --------------------------------------------------------------------- */
-  // Connections and API keys, grouped (owner's list V-19). Nothing is saved yet: every key field
-  // is disabled, so nobody pastes a real key into a box that does not keep it.
-  // fields: [label key, input type]. connect: joined by signing in later, not by a key.
+  // Connections and API keys, grouped (owner's list V-19), per company (D-46, 11 Nov 2026): every
+  // company has its own; they will be kept in the advertising platform's own encrypted store, separate
+  // from the other Phantasma services (owner, 11 Nov 2026: also Shopify / Amazon, if ads ever needs them).
+  // Nothing is saved yet: every key field is disabled, so nobody pastes a real key into a box that does
+  // not keep it. fields: [label key, input type]. connect: joined by signing in later, not by a key.
+  // ch / tool: the first-visit ticks that mark a service "Chosen for this company" (listed first).
   var SERVICES = [
     ['social', [
-      { id: 'meta', fields: [['set.f.metaToken', 'password'], ['set.f.appId', 'text'], ['set.f.appSecret', 'password']] },
-      { id: 'whatsapp', fields: [['set.f.phoneId', 'text'], ['set.f.wabaId', 'text'], ['set.f.accessToken', 'password']] },
-      { id: 'tiktok', fields: [['set.f.advertiserId', 'text'], ['set.f.accessToken', 'password']] },
-      { id: 'youtube', connect: 'set.connectYoutube' },
-      { id: 'linkedin', fields: [['set.f.orgId', 'text'], ['set.f.accessToken', 'password']] }
+      { id: 'meta', ch: ['facebook', 'instagram', 'messenger', 'threads'], fields: [['set.f.metaToken', 'password'], ['set.f.appId', 'text'], ['set.f.appSecret', 'password']] },
+      { id: 'whatsapp', ch: ['whatsapp'], fields: [['set.f.phoneId', 'text'], ['set.f.wabaId', 'text'], ['set.f.accessToken', 'password']] },
+      { id: 'tiktok', ch: ['tiktok'], fields: [['set.f.advertiserId', 'text'], ['set.f.accessToken', 'password']] },
+      { id: 'youtube', ch: ['youtube'], connect: 'set.connectYoutube' },
+      { id: 'linkedin', ch: ['linkedin'], fields: [['set.f.orgId', 'text'], ['set.f.accessToken', 'password']] },
+      { id: 'x', ch: ['x'], connect: 'set.connectAccount' },
+      { id: 'pinterest', ch: ['pinterest'], connect: 'set.connectAccount' },
+      { id: 'telegram', ch: ['telegram'], fields: [['set.f.botToken', 'password']] },
+      { id: 'gbp', ch: ['gbp'], connect: 'set.connectAccount' }
     ]],
+    ['stores', [
+      { id: 'shopify', fields: [['set.f.shopDomain', 'text'], ['set.f.accessToken', 'password']] },
+      { id: 'amazon', fields: [['set.f.lwaClientId', 'text'], ['set.f.lwaSecret', 'password'], ['set.f.refreshToken', 'password']] },
+      { id: 'woo', fields: [['set.f.siteUrl', 'url'], ['set.f.consumerKey', 'text'], ['set.f.consumerSecret', 'password']] }
+    ]],
+    ['tools', ['monday', 'clickup', 'notion', 'trello', 'asana', 'slack'].map(function (k) { return { id: k, tool: k, connect: 'set.connectAccount' }; })],
     ['analytics', [{ id: 'ga', fields: [['set.f.measurementId', 'text'], ['set.f.apiSecret', 'password']] }]],
     ['ai', [
       { id: 'openai', fields: [['set.f.apiKey', 'password']] },
@@ -3326,14 +3396,14 @@
       { id: 'claude', fields: [['set.f.apiKey', 'password']] }
     ]],
     ['files', [
-      { id: 'drive', connect: 'set.connectDrive' },
+      { id: 'drive', tool: 'drive', connect: 'set.connectDrive' },
       { id: 'pos', fields: [['set.f.apiUrl', 'url'], ['set.f.apiKey', 'password']] }
     ]]
   ];
 
   function viewSettings() {
     var live = liveMode(), L = settings.limits;
-    var biz = settings.businesses.filter(function (b) { return b.id === ctx.business; })[0] || settings.businesses[0];
+    var biz = settings.businesses.filter(function (b) { return b.id === ctx.business; })[0] || settings.businesses[0] || null;
     function card(id, titleKey, kids, mod) {
       return h('section', { class: 'ads-card' + (mod ? ' ads-card--' + mod : ''), 'aria-labelledby': 'ads-set-' + id },
         [h('h2', { class: 'ads-h2', id: 'ads-set-' + id }, t(titleKey))].concat(kids));
@@ -3358,14 +3428,20 @@
       kids.push(btns(b));
       return h('details', { class: 'ads-svc' }, [
         h('summary', { class: 'ads-svc__sum' }, [h('span', { class: 'ads-svc__name' }, t('set.svc.' + s.id)),
+          chosen(s) ? pill(t('set.chosen'), 'picture') : null,
           pill(t(onServer ? 'set.st.server' : 'set.st.none'), onServer ? 'on' : 'off')]),
         h('div', { class: 'ads-svc__body' }, kids)
       ]);
     }
+    // The services ticked for this company (channels and work tools) come first in their group.
+    function chosen(s) {
+      return !!biz && ((s.ch || []).some(function (c) { return biz.channels.indexOf(c) !== -1; }) || (!!s.tool && biz.tools.indexOf(s.tool) !== -1));
+    }
     var conn = [h('p', {}, t('set.conn.intro')), h('p', { class: 'ads-warn' }, t('set.conn.security'))];
     SERVICES.forEach(function (g) {
+      var list = g[1].filter(chosen).concat(g[1].filter(function (s) { return !chosen(s); }));
       conn.push(h('h3', { class: 'ads-h3 ads-svcgroup' }, t('set.grp.' + g[0])));
-      conn.push(h('div', { class: 'ads-svclist' }, g[1].map(function (s) { return service(s); })));
+      conn.push(h('div', { class: 'ads-svclist' }, list.map(function (s) { return service(s); })));
     });
     var notify = h('fieldset', { class: 'ads-fieldset', disabled: true }, [h('legend', { class: 'visually-hidden' }, t('set.notify'))].concat(['rejected', 'daily', 'lowStock', 'weekly'].map(function (k) {
       var id = 'ads-set-n-' + k;
@@ -3379,12 +3455,9 @@
       pageHead('nav.settings'),
       h('p', { class: 'ads-note' }, t('set.intro')),
       card('account', 'set.account', [h('p', {}, t('set.signedIn', { email: user ? user.email : '' })), btns([soonBtn('set.changePassword'), soonBtn('set.signOutAll')])]),
-      card('business', 'set.business', [
-        kv([[t('set.biz.name'), biz.name], [t('set.biz.accounts'), biz.accounts.map(function (a) { return a.name; }).join(', ')], [t('set.biz.currency'), curCode()]]),
-        h('p', { class: 'ads-note' }, t('set.biz.note')),
-        btns([soonBtn('set.biz.edit'), soonBtn('set.biz.add')])
-      ]),
-      card('conn', 'set.conn', conn),
+      card('companies', 'co.title', companiesCard()),
+      biz ? h('section', { class: 'ads-card', 'aria-labelledby': 'ads-set-conn' },
+        [h('h2', { class: 'ads-h2', id: 'ads-set-conn' }, t('set.connFor', { name: biz.name })), h('p', { class: 'ads-note' }, t('set.conn.perCompany'))].concat(conn)) : null,
       card('limits', 'set.limits', [
         h('p', { class: 'ads-note' }, t(live ? 'set.lim.live' : 'set.lim.mock')),
         kv([[t('set.lim.daily'), money(L.maxDailyBudget)],
@@ -3392,7 +3465,7 @@
           [t('set.lim.days'), t('set.lim.daysN', { n: L.maxDays })]]),
         btns([soonBtn('set.lim.change')])
       ]),
-      card('team', 'set.team', [h('p', {}, t('set.team.members')), h('p', { class: 'ads-note' }, t('set.team.roles')), btns([soonBtn('set.team.invite')])]),
+      card('team', 'set.team', teamCard()),
       card('notify', 'set.notify', [h('p', { class: 'ads-note' }, t('set.notify.note')), notify]),
       card('data', 'set.data', [h('p', { class: 'ads-note' }, t('set.data.note'))].concat(danger), 'danger')
     ]), 'nav.settings');
@@ -3451,6 +3524,7 @@
     var s = q.toLowerCase();
     var has = function (re) { return re.test(s); };
     var biz = ctx.business;
+    if (!hasCompany()) return Promise.resolve({ role: 'bot', text: t('co.first.text') }); // nothing to act on yet (D-49)
     if (has(/pause|stop|შეაჩერ|გააჩერ/)) {
       return api.listCampaigns({ business: biz, status: 'active' }).then(function (rows) {
         if (!rows.length) return { role: 'bot', text: t('ai.noActive') };
@@ -3468,6 +3542,7 @@
       });
     }
     if (has(/campaign|ad\b|ads\b|advert|კამპან|რეკლამ/)) {
+      if (!biz || !accounts(biz).length) return Promise.resolve({ role: 'bot', text: t('co.noAccountAi') }); // a new company has no ad account yet
       return api.listImages(biz).then(function (imgs) {
         cacheImages(imgs);
         var accs = accounts(biz);
@@ -3506,6 +3581,473 @@
   }
 
   /* ---------------------------------------------------------------------
+     12b. Companies, team, approvals board, brands (11 Nov 2026, the owner's voice notes; plan
+          D:\Web Development\Phantasma Library\workstreams\ads-companies-plan-2026-11-11.md, ADS-32...36).
+          An agency's workspace holds several unrelated companies, each with its own settings.
+          SAMPLE MODE until the database update (ADS-37): live mode reads the companies from the
+          database but cannot add or change them, nor the team, here yet; brands and the board use
+          the demo state in both modes (the pages say so).
+     --------------------------------------------------------------------- */
+  // Ticks in a fieldset. options: [[value, label]]. The fieldset gets .values() = the ticked values.
+  function checkGroup(name, legendKey, options, values, hintKey) {
+    var boxes = [];
+    var fs = h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t(legendKey)),
+      hintKey ? h('p', { class: 'ads-hint' }, t(hintKey)) : null,
+      h('div', { class: 'ads-checks' }, options.map(function (o) {
+        var id = name + '-' + o[0];
+        var cb = h('input', { type: 'checkbox', id: id, value: o[0], checked: (values || []).indexOf(o[0]) !== -1 });
+        boxes.push(cb);
+        return h('label', { class: 'ads-option', for: id }, [cb, h('span', {}, o[1])]);
+      }))]);
+    fs.values = function () { return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; }); };
+    return fs;
+  }
+  function formError() { return h('p', { class: 'ads-warn', role: 'alert', hidden: true }); }
+  function showFormError(el, e) { el.textContent = errText(e) || t('toast.failed'); el.hidden = false; }
+  function textArea(id, value, max, rows) {
+    var a = h('textarea', { id: id, class: 'ads-input ads-textarea', maxlength: String(max), rows: String(rows || 3) });
+    a.value = value || '';
+    return a;
+  }
+  function hasCompany() { return !!(ctx.business && settings.businesses.some(function (b) { return b.id === ctx.business; })); }
+
+  // The company form in three parts: the first-visit window shows one part per step, Settings all of
+  // them. c: the company or null. Returns { parts, name (input), read() }.
+  function companyForm(c) {
+    var R = api.workspaceRules;
+    c = c || { name: '', about: '', goal: '', channels: [], tools: [], workType: '', inbox: false };
+    var name = h('input', { type: 'text', id: 'ads-co-name', class: 'ads-input', maxlength: '80', autocomplete: 'organization', value: c.name || '' });
+    var about = textArea('ads-co-about', c.about, R.textMax), goal = textArea('ads-co-goal', c.goal, R.textMax);
+    var channels = checkGroup('ads-co-ch', 'co.channels', R.channels.map(function (k) { return [k, t('ch.' + k)]; }), c.channels, 'co.channels.hint');
+    var tools = checkGroup('ads-co-tl', 'co.tools', R.tools.map(function (k) { return [k, t('tool.' + k)]; }), c.tools, 'co.tools.hint');
+    var work = c.workType || 'both';
+    var inbox = h('input', { type: 'checkbox', id: 'ads-co-inbox', checked: !!c.inbox });
+    return {
+      name: name,
+      parts: [
+        h('div', { class: 'ads-coform__part' }, [
+          field('co.name', name, null, 'ads-co-name'),
+          field('co.about', about, t('co.about.hint'), 'ads-co-about'),
+          field('co.goal', goal, t('co.goal.hint'), 'ads-co-goal')
+        ]),
+        h('div', { class: 'ads-coform__part' }, [channels]),
+        h('div', { class: 'ads-coform__part' }, [
+          radioGroup('ads-co-wt', 'co.work', R.workTypes.map(function (k) { return [k, 'co.wt.' + k, 'co.wt.' + k + '.d']; }), work, function (v) { work = v; }),
+          tools,
+          h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('co.inboxLegend')),
+            h('label', { class: 'ads-option', for: 'ads-co-inbox' }, [inbox, h('span', {}, [h('strong', {}, t('co.inbox')), h('span', { class: 'ads-sub' }, t('co.inbox.d'))])])])
+        ])
+      ],
+      read: function () {
+        return { name: name.value, about: about.value, goal: goal.value, channels: channels.values(), tools: tools.values(), workType: work, inbox: inbox.checked };
+      }
+    };
+  }
+  // After a company was added or changed: settings again, then the top bar and the view.
+  // switchTo: a new company becomes the one selected in the top bar.
+  function companiesChanged(switchTo) {
+    return api.getSettings().then(function (s) {
+      settings = s;
+      if (switchTo) { ctx.business = switchTo; ctx.account = 'all'; campAccount = 'all'; wizard = null; saveCtx(); }
+      buildTopbar(); firstRender = 'focus'; refresh();
+    });
+  }
+  function switchCompany(id) {
+    ctx.business = id; ctx.account = 'all'; campAccount = 'all'; wizard = null; styCompany = null;
+    saveCtx(); buildTopbar(); firstRender = 'focus'; refresh();
+    toast(t('co.switched', { name: bizName(id) }), 'info');
+  }
+  // Settings → Add / Edit company, and "+ Add company" in the top bar. Resolves with the saved company or null.
+  function companyDialog(c) {
+    if (liveMode()) { toast(t('co.err.live'), 'info'); return Promise.resolve(null); }
+    var f = companyForm(c), saved = null, err = formError();
+    return openDialog({
+      title: c ? t('co.editTitle', { name: c.name }) : t('co.addTitle'), wide: true,
+      body: h('div', { class: 'ads-coform' }, [f.parts[0], h('h3', { class: 'ads-h3' }, t('co.step.channels')), f.parts[1],
+        h('h3', { class: 'ads-h3' }, t('co.step.work')), f.parts[2], err]),
+      actions: [{ value: 'save', label: t(c ? 'co.save' : 'co.create') }],
+      onAction: function () {
+        err.hidden = true;
+        var d = f.read(); if (c) d.id = c.id;
+        return api.saveCompany(d).then(function (co) {
+          saved = co;
+          toast(t(c ? 'co.saved' : 'co.created', { name: co.name }), 'info');
+          return companiesChanged(c ? null : co.id);
+        }, function (e) { showFormError(err, e); if (e.key === 'co.err.name' || e.key === 'co.err.taken') f.name.focus(); return false; });
+      },
+      onOpen: function () { f.name.focus(); }
+    }).then(function () { return saved; });
+  }
+  // First visit without a company (owner, 11 Nov 2026): three short steps. "Skip for now" (or closing
+  // the window) opens the empty tool and is remembered; Settings → Companies shows the same form.
+  function openOnboarding() {
+    var f = companyForm(null), step = 0, done = false, closeIt = null, busy = false;
+    var keys = ['co.step.about', 'co.step.channels', 'co.step.work'];
+    var count = h('p', { class: 'ads-onb__count', 'aria-live': 'polite' });
+    var panel = h('div', { class: 'ads-onb__panel' }), err = formError();
+    var back = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { show(step - 1); } }, t('common.back'));
+    var next = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: forward }, t('common.next'));
+    var skip = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { if (closeIt) closeIt(null); } }, t('onb.skip'));
+    function show(i) {
+      step = i; err.hidden = true;
+      panel.innerHTML = ''; panel.appendChild(f.parts[i]);
+      count.textContent = t('onb.stepOf', { n: i + 1, total: keys.length, name: t(keys[i]) });
+      back.hidden = i === 0;
+      next.textContent = t(i === keys.length - 1 ? 'onb.create' : 'common.next');
+      var first = $('input, textarea', panel); if (first) first.focus();
+    }
+    function forward() {
+      if (busy) return;
+      if (step === 0 && !f.name.value.trim()) { showFormError(err, { key: 'co.err.name' }); f.name.focus(); return; }
+      if (step < keys.length - 1) { show(step + 1); return; }
+      busy = true; next.disabled = true;
+      api.saveCompany(f.read()).then(function (co) {
+        done = true;
+        if (closeIt) closeIt('done');
+        toast(t('onb.created', { name: co.name }), 'info');
+        return companiesChanged(co.id);
+      }, function (e) {
+        busy = false; next.disabled = false;
+        showFormError(err, e);
+        if (e.key === 'co.err.name' || e.key === 'co.err.taken') { show(0); showFormError(err, e); f.name.focus(); }
+      });
+    }
+    return openDialog({
+      title: t('onb.title'), wide: true, noCancel: true,
+      body: h('div', { class: 'ads-onb' }, [h('p', {}, t('onb.intro')), count, panel, err,
+        h('div', { class: 'ads-onb__nav' }, [skip, h('span', { class: 'ads-onb__gap' }), back, next])]),
+      onOpen: function (dlg, btns, close) { closeIt = close; show(0); }
+    }).then(function () {
+      if (done) return;
+      return api.skipOnboarding().then(function () {
+        settings.onboarding = { skipped: true };
+        toast(t('onb.skipped'), 'info');
+      });
+    });
+  }
+  // Pages that need a company, while there is none (D-49): one way out, "Create a company".
+  function viewNoCompany(titleKey) {
+    render(h('div', {}, [pageHead(titleKey), emptyState('co.first.title', 'co.first.text',
+      h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { companyDialog(null); } }, t('co.add')))]), titleKey);
+  }
+
+  /* ---- Settings: the Companies card and the Team card ---- */
+  function companiesCard() {
+    var live = liveMode(), list = settings.businesses;
+    var items = list.length ? h('ul', { class: 'ads-colist' }, list.map(function (c) {
+      var cur = c.id === ctx.business;
+      return h('li', { class: 'ads-colist__item' + (cur ? ' is-current' : '') }, [
+        h('div', { class: 'ads-colist__head' }, [h('strong', { class: 'ads-colist__name' }, c.name), cur ? pill(t('co.current'), 'on') : null]),
+        c.about ? h('p', { class: 'ads-colist__about' }, c.about) : null,
+        kv([[t('co.k.channels'), c.channels.length ? c.channels.map(function (k) { return t('ch.' + k); }).join(', ') : t('co.none.dash')],
+          [t('co.k.work'), c.workType ? t('co.wt.' + c.workType) : t('co.none.dash')],
+          [t('set.biz.accounts'), c.accounts.length ? c.accounts.map(function (a) { return a.name; }).join(', ') : t('co.noAccounts')]]),
+        h('div', { class: 'ads-btnrow' }, [
+          live ? soonBtn('co.edit', { small: true }) : h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { companyDialog(c); } }, t('co.edit')),
+          cur ? null : h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { switchCompany(c.id); } }, t('co.switch'))
+        ])
+      ]);
+    })) : h('p', {}, t('co.none.text'));
+    return [h('p', { class: 'ads-note' }, t(live ? 'co.live' : 'co.note')), items,
+      h('div', { class: 'ads-btnrow' }, [live ? soonBtn('co.add') : h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { companyDialog(null); } }, t('co.add'))])];
+  }
+  function roleOptions() { return api.workspaceRules.roles.map(function (r) { return [r, 'role.' + r, 'role.' + r + '.d']; }); }
+  // Invite (m = null) or change a member's role and companies. Resolves true when saved.
+  function memberDialog(m) {
+    if (liveMode()) { toast(t('co.err.live'), 'info'); return Promise.resolve(false); }
+    var ok = false, role = m ? m.role : 'viewer', err = formError();
+    var email = h('input', { type: 'email', id: 'ads-tm-email', class: 'ads-input', maxlength: '200', autocomplete: 'off', spellcheck: 'false', value: m ? m.email : '', disabled: !!m });
+    var cos = settings.businesses.length
+      ? checkGroup('ads-tm-co', 'team.companies', settings.businesses.map(function (b) { return [b.id, b.name]; }), m ? m.companies : [], 'team.companies.hint')
+      : h('p', { class: 'ads-note' }, t('team.noCos'));
+    return openDialog({
+      title: m ? t('team.changeTitle', { email: m.email }) : t('team.inviteTitle'), wide: true,
+      body: h('div', { class: 'ads-coform' }, [field('team.email', email, m ? null : t('team.email.hint'), 'ads-tm-email'),
+        radioGroup('ads-tm-role', 'team.role', roleOptions(), role, function (v) { role = v; }), cos, err]),
+      actions: [{ value: 'save', label: t(m ? 'team.save' : 'team.send') }],
+      onAction: function () {
+        err.hidden = true;
+        var d = { email: email.value, role: role, companies: cos.values ? cos.values() : [] };
+        return (m ? api.updateMember(m.id, d) : api.inviteMember(d)).then(function (x) {
+          ok = true;
+          toast(t(m ? 'team.saved' : 'team.sentSample', { email: x.email }), 'info');
+        }, function (e) { showFormError(err, e); if (!m) email.focus(); return false; });
+      },
+      onOpen: function () { if (!m) email.focus(); }
+    }).then(function () { return ok; });
+  }
+  function teamCard() {
+    var live = liveMode(), box = h('div', {}, skeleton(2));
+    var invite = live ? soonBtn('team.invite') : h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { memberDialog(null).then(function (ok) { if (ok) load(); }); } }, t('team.invite'));
+    function scope(m) { return m.companies.length ? m.companies.map(bizName).join(', ') : t('team.allCos'); }
+    function load() {
+      api.listMembers().then(draw, function () { box.innerHTML = ''; box.appendChild(errorState(load)); });
+    }
+    function draw(list) {
+      box.innerHTML = '';
+      box.appendChild(h('ul', { class: 'ads-team' }, list.map(function (m) {
+        return h('li', { class: 'ads-team__row' }, [
+          h('div', { class: 'ads-team__who' }, [h('strong', { class: 'ads-team__mail' }, m.email + (m.me ? ' ' + t('team.you') : '')),
+            h('span', { class: 'ads-sub' }, t(m.companies.length ? 'team.scopeSome' : 'team.scopeAll', { list: scope(m) }))]),
+          h('div', { class: 'ads-team__tags' }, [pill(t('role.' + m.role), 'role-' + m.role), m.status === 'invited' ? pill(t('team.invited'), 'off') : null]),
+          m.me ? null : h('div', { class: 'ads-team__acts' }, [
+            h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { memberDialog(m).then(function (ok) { if (ok) load(); }); } }, t('team.change')),
+            h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost ads-btn--small', onclick: function () {
+              confirmDialog({ title: t(m.status === 'invited' ? 'team.cancelInvite' : 'team.remove'), message: t('team.removeQ', { email: m.email }), confirmLabel: t('team.removeYes'), danger: true }).then(function (yes) {
+                if (!yes) return;
+                api.removeMember(m.id).then(function () { toast(t('team.removed', { email: m.email }), 'info'); load(); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+              });
+            } }, t(m.status === 'invited' ? 'team.cancelInvite' : 'team.remove'))
+          ])
+        ]);
+      })));
+    }
+    load();
+    return [h('p', { class: 'ads-note' }, t(live ? 'team.live' : 'team.note')), box,
+      h('details', { class: 'ads-details' }, [h('summary', {}, t('team.rolesTitle')),
+        kv(roleOptions().map(function (r) { return [t(r[1]), t(r[2])]; }))]),
+      h('div', { class: 'ads-btnrow' }, [invite])];
+  }
+
+  /* ---- Approvals board (D-52): Waiting for approval / Approved / Running, posts and campaigns ---- */
+  var apKind = 'all';
+  function viewApprovals(tok) {
+    var body = h('div', {}, skeleton(3));
+    var kinds = ['all', 'post', 'campaign'].map(function (k) {
+      return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === apKind), onclick: function () {
+        apKind = k;
+        kinds.forEach(function (b, i) { b.setAttribute('aria-pressed', String(['all', 'post', 'campaign'][i] === apKind)); });
+        load();
+      } }, t('ap.kind.' + k));
+    });
+    render(h('div', {}, [
+      pageHead('ap.nav'),
+      h('p', { class: 'ads-note' }, t('ap.intro', { name: bizName(ctx.business) })),
+      liveMode() ? h('p', { class: 'ads-warn' }, t('ap.sample')) : null,
+      h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('ap.show') }, kinds),
+      body
+    ]), 'ap.nav');
+    load();
+    function load(focusCol) {
+      api.listApprovals({ business: ctx.business, kind: apKind === 'all' ? null : apKind }).then(function (r) {
+        if (stale(tok)) return;
+        body.innerHTML = '';
+        body.appendChild(h('div', { class: 'ads-board' }, ['waiting', 'approved', 'running'].map(function (col) {
+          var items = r[col];
+          return h('section', { class: 'ads-board__col ads-board__col--' + col, 'aria-labelledby': 'ads-ap-' + col }, [
+            h('h2', { class: 'ads-board__title', id: 'ads-ap-' + col, tabindex: '-1' }, [t('ap.col.' + col), h('span', { class: 'ads-board__n' }, num(items.length))]),
+            items.length ? h('ul', { class: 'ads-board__list' }, items.map(function (it) { return card(it, col); })) : h('p', { class: 'ads-note' }, t('ap.empty.' + col))
+          ]);
+        })));
+        if (focusCol) { var hd = $('#ads-ap-' + focusCol, main); if (hd) hd.focus(); }
+      }, function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(function () { load(); })); } });
+    }
+    function card(it, col) {
+      var title = it.kind === 'campaign' ? it.name : it.caption ? (it.caption.length > 110 ? it.caption.slice(0, 110) + '…' : it.caption) : t('ap.noCaption');
+      var meta = it.kind === 'campaign' ? t('ap.budget', { daily: money(it.dailyBudget), days: it.days, total: money(api.total(it)) })
+        : it.when ? t(it.status === 'published' ? 'ap.publishedAt' : 'ap.scheduledAt', { when: fmtDateTime(it.when) }) : '';
+      var acts = [h('a', { class: 'ads-btn ads-btn--ghost ads-btn--small', href: it.kind === 'post' ? '#/posts/' + it.id : '#/campaigns' }, t('ap.open'))];
+      if (col === 'waiting') {
+        acts.unshift(h('button', { type: 'button', class: 'ads-btn ads-btn--primary ads-btn--small', onclick: function () {
+          api.approveItem(it.kind, it.id).then(function () { toast(t('ap.approvedToast', { name: title }), 'info'); load('approved'); },
+            function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+        } }, t('ap.approve')),
+        h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { sendBackDialog(it, title).then(function (ok) { if (ok) load('waiting'); }); } }, t('ap.sendBack')));
+      }
+      var img = it.imageIds && it.imageIds[0] ? imageEl(it.imageIds[0], 'ads-board__img') : null;
+      if (img && img.tagName === 'IMG') img.alt = '';
+      return h('li', { class: 'ads-board__card' }, [
+        img,
+        h('div', { class: 'ads-board__body' }, [
+          h('div', { class: 'ads-board__top' }, [pill(t('ap.one.' + it.kind), it.kind === 'post' ? 'picture' : 'element'), chip(it.status)]),
+          h('p', { class: 'ads-board__name' }, title),
+          meta ? h('p', { class: 'ads-sub' }, meta) : null,
+          it.approval && it.approval.state === 'approved' ? h('p', { class: 'ads-sub' }, t('ap.by', { who: it.approval.by, when: fmtDateTime(it.approval.at) })) : null,
+          h('div', { class: 'ads-btnrow ads-btnrow--tight' }, acts)
+        ])
+      ]);
+    }
+  }
+  function sendBackDialog(it, title) {
+    var note = textArea('ads-ap-note', '', api.workspaceRules.feedbackMax, 3), ok = false;
+    return openDialog({
+      title: t('ap.sendBackTitle'),
+      body: h('div', {}, [h('p', {}, rich(t('ap.sendBackText', { name: title }))), field('ap.note', note, t('ap.note.hint'), 'ads-ap-note')]),
+      actions: [{ value: 'send', label: t('ap.sendBack') }],
+      onAction: function () {
+        return api.sendBack(it.kind, it.id, note.value).then(function () { ok = true; toast(t('ap.sentBackToast'), 'info'); },
+          function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); return false; });
+      },
+      onOpen: function () { note.focus(); }
+    }).then(function () { return ok; });
+  }
+
+  /* ---- Brands (D-53): a company can have several; sample picture + feedback ---- */
+  function viewBrands(tok) {
+    var body = h('div', {}, skeleton(2));
+    var add = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { brandDialog(null).then(function (b) { if (b) load(b.id); }); } }, t('br.new'));
+    render(h('div', {}, [
+      pageHead('br.nav', [add]),
+      h('p', { class: 'ads-note' }, t('br.intro', { name: bizName(ctx.business) })),
+      liveMode() ? h('p', { class: 'ads-warn' }, t('br.sample')) : null,
+      body
+    ]), 'br.nav');
+    load();
+    function load(focusId) {
+      api.listBrands(ctx.business).then(function (list) {
+        if (stale(tok)) return;
+        body.innerHTML = '';
+        if (!list.length) { body.appendChild(emptyState('br.none.title', 'br.none.text', null, { name: bizName(ctx.business) })); return; }
+        body.appendChild(h('ul', { class: 'ads-brands' }, list.map(card)));
+        var el = focusId ? $('.ads-brand__open[data-id="' + focusId + '"]', main) : null;
+        if (el) el.focus();
+      }, function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(function () { load(); })); } });
+    }
+    function card(b) {
+      return h('li', { class: 'ads-brand' }, [
+        swatches(b.colors),
+        h('h2', { class: 'ads-h2 ads-brand__name' }, b.name),
+        b.about ? h('p', { class: 'ads-brand__about' }, b.about) : null,
+        kv([[t('br.k.feel'), b.feel || t('co.none.dash')], [t('br.k.voice'), b.voice || t('co.none.dash')]]),
+        h('p', { class: 'ads-sub' }, t(b.feedback.length === 1 ? 'br.fb1' : 'br.fbN', { n: b.feedback.length }) + ' · ' + t('br.updated', { when: fmtDate(b.updatedAt) })),
+        h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [
+          h('button', { type: 'button', class: 'ads-btn ads-btn--primary ads-btn--small ads-brand__open', 'data-id': b.id, onclick: function () { brandDialog(b).then(function (x) { load(x ? x.id : b.id); }); } }, t('br.open')),
+          h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost ads-btn--small', onclick: function () {
+            confirmDialog({ title: t('br.delete'), message: t('br.deleteQ', { name: b.name }), confirmLabel: t('br.deleteYes'), danger: true }).then(function (yes) {
+              if (!yes) return;
+              api.deleteBrand(b.id).then(function () { toast(t('br.deleted', { name: b.name }), 'info'); load(); }, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+            });
+          } }, t('br.delete'))
+        ])
+      ]);
+    }
+  }
+  function swatches(colors) {
+    return h('div', { class: 'ads-swatches', 'aria-hidden': 'true' }, (colors || []).map(function (c) {
+      var s = h('span', { class: 'ads-swatch' }); s.style.background = c; return s;
+    }));
+  }
+  // Placeholder for the AI sample picture (owner: "placeholders for now"): a mood card drawn from the
+  // brand's colours and name. Returns an <img> (data URL) with a plain description.
+  function brandMoodCard(b) {
+    var cv = document.createElement('canvas'), W = 640, H = 400;
+    cv.width = W; cv.height = H;
+    var x = cv.getContext('2d'), cols = (b.colors && b.colors.length) ? b.colors : ['#EFECE6', '#14213D'];
+    x.fillStyle = cols[0]; x.fillRect(0, 0, W, H);
+    cols.slice(1).forEach(function (c, i) { x.fillStyle = c; x.fillRect(W - (i + 1) * 70, 0, 56, H); });
+    var rgb = parseInt(cols[0].slice(1), 16), lum = ((rgb >> 16) * 299 + ((rgb >> 8) & 255) * 587 + (rgb & 255) * 114) / 1000;
+    x.fillStyle = lum > 150 ? '#14213D' : '#FFFFFF';
+    x.font = '600 40px Georgia, serif'; x.fillText(String(b.name || '').slice(0, 24), 40, 190);
+    x.font = '400 22px sans-serif'; x.fillText(String(b.feel || '').slice(0, 44), 40, 236);
+    x.font = '500 16px sans-serif'; x.fillText(t('br.pic.stamp'), 40, H - 32);
+    return h('img', { class: 'ads-brand__pic', src: cv.toDataURL('image/png'), alt: t('br.pic.alt', { name: b.name }) });
+  }
+  // A brand: the texts, colours, files (placeholders), and the sample picture with feedback.
+  // Resolves with the saved brand (or the brand as it was) or null.
+  function brandDialog(b) {
+    var R = api.workspaceRules, saved = null, err = formError();
+    var biz = b ? b.business : ctx.business;
+    var company = select('ads-br-co', settings.businesses.map(function (x) { return [x.id, x.name]; }), biz, function (v) { biz = v; });
+    var name = h('input', { type: 'text', id: 'ads-br-name', class: 'ads-input', maxlength: '80', autocomplete: 'off', value: b ? b.name : '' });
+    var texts = {};
+    ['about', 'look', 'elements', 'feel', 'voice'].forEach(function (k) { texts[k] = textArea('ads-br-' + k, b ? b[k] : '', R.brandTextMax, k === 'about' ? 3 : 2); });
+    // Colours: a colour picker + its hex code per row; up to R.brandColorsMax.
+    var colors = (b ? b.colors : []).slice(), colBox = h('div', { class: 'ads-colors' });
+    var addCol = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { colors.push('#F26B1D'); drawColors(colors.length - 1); } }, t('br.color.add'));
+    function drawColors(focusIdx) {
+      colBox.innerHTML = '';
+      colors.forEach(function (c, i) {
+        var pick = h('input', { type: 'color', class: 'ads-color__pick', value: c.toLowerCase(), 'aria-label': t('br.color.pick', { n: i + 1 }) });
+        var hex = h('input', { type: 'text', class: 'ads-input ads-color__hex', maxlength: '7', value: c, spellcheck: 'false', 'aria-label': t('br.color.hex', { n: i + 1 }) });
+        pick.addEventListener('input', function () { colors[i] = pick.value.toUpperCase(); hex.value = colors[i]; });
+        hex.addEventListener('change', function () {
+          var v = hex.value.trim().toUpperCase(); if (v && v[0] !== '#') v = '#' + v;
+          if (/^#[0-9A-F]{6}$/.test(v)) { colors[i] = v; pick.value = v.toLowerCase(); hex.value = v; } else hex.value = colors[i];
+        });
+        colBox.appendChild(h('div', { class: 'ads-color' }, [pick, hex,
+          h('button', { type: 'button', class: 'ads-iconbtn', 'aria-label': t('br.color.remove', { n: i + 1 }), onclick: function () { colors.splice(i, 1); drawColors(); addCol.focus(); } }, '✕')]));
+        if (focusIdx === i) hex.focus();
+      });
+      addCol.hidden = colors.length >= R.brandColorsMax;
+    }
+    drawColors();
+    // Sample picture + feedback (needs a saved brand).
+    var sample = h('div', { class: 'ads-brand__sample' });
+    function drawSample(cur) {
+      sample.innerHTML = '';
+      if (!cur) { sample.appendChild(h('p', { class: 'ads-note' }, t('br.pic.saveFirst'))); return; }
+      var picBox = h('div', { class: 'ads-brand__picbox' }, h('p', { class: 'ads-note' }, t('br.pic.none')));
+      var right = textArea('ads-br-right', '', R.feedbackMax, 2), wrong = textArea('ads-br-wrong', '', R.feedbackMax, 2), fbErr = formError();
+      var list = h('ul', { class: 'ads-fblist' });
+      function drawList() {
+        list.innerHTML = '';
+        if (!cur.feedback.length) { list.appendChild(h('li', { class: 'ads-hint' }, t('br.fb.none'))); return; }
+        cur.feedback.forEach(function (f) {
+          list.appendChild(h('li', { class: 'ads-fblist__item' }, [
+            h('p', { class: 'ads-sub' }, t('br.fb.meta', { who: f.user, when: fmtDateTime(f.ts) })),
+            f.right ? h('p', {}, [h('strong', {}, t('br.fb.right') + ': '), f.right]) : null,
+            f.wrong ? h('p', {}, [h('strong', {}, t('br.fb.wrong') + ': '), f.wrong]) : null
+          ]));
+        });
+      }
+      drawList();
+      append(sample, [
+        h('p', { class: 'ads-note' }, t('br.pic.note')),
+        h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [
+          h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { picBox.innerHTML = ''; picBox.appendChild(brandMoodCard(readBrand(cur))); } }, t('br.pic.make'))
+        ]),
+        picBox,
+        field('br.fb.right', right, null, 'ads-br-right'),
+        field('br.fb.wrong', wrong, null, 'ads-br-wrong'),
+        fbErr,
+        h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [h('button', { type: 'button', class: 'ads-btn ads-btn--primary ads-btn--small', onclick: function () {
+          fbErr.hidden = true;
+          api.addBrandFeedback(cur.id, { right: right.value, wrong: wrong.value }).then(function (item) {
+            cur.feedback.unshift(item); right.value = ''; wrong.value = ''; drawList();
+            toast(t('br.fb.saved'), 'info');
+          }, function (e) { showFormError(fbErr, e); right.focus(); });
+        } }, t('br.fb.save'))]),
+        h('h4', { class: 'ads-label' }, t('br.fb.list')),
+        list
+      ]);
+    }
+    function readBrand(cur) {
+      var d = { id: cur ? cur.id : undefined, business: biz, name: name.value, colors: colors.slice() };
+      Object.keys(texts).forEach(function (k) { d[k] = texts[k].value; });
+      return d;
+    }
+    drawSample(b);
+    return openDialog({
+      title: b ? t('br.editTitle', { name: b.name }) : t('br.newTitle'), wide: true, cancelLabel: 'common.close',
+      body: h('div', { class: 'ads-coform' }, [
+        h('div', { class: 'ads-row' }, [field('br.f.name', name, null, 'ads-br-name'), field('br.f.company', company, null, 'ads-br-co')]),
+        field('br.f.about', texts.about, t('br.f.about.hint'), 'ads-br-about'),
+        field('br.f.look', texts.look, t('br.f.look.hint'), 'ads-br-look'),
+        field('br.f.elements', texts.elements, null, 'ads-br-elements'),
+        field('br.f.feel', texts.feel, t('br.f.feel.hint'), 'ads-br-feel'),
+        field('br.f.voice', texts.voice, t('br.f.voice.hint'), 'ads-br-voice'),
+        h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('br.f.colors')), h('p', { class: 'ads-hint' }, t('br.f.colors.hint')), colBox, addCol]),
+        h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('br.f.files')), h('p', { class: 'ads-hint' }, t('br.f.files.hint')),
+          h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [soonBtn('br.f.files.add', { small: true }), soonBtn('br.f.art.add', { small: true })])]),
+        err,
+        h('h3', { class: 'ads-h3' }, t('br.pic.title')),
+        sample
+      ]),
+      actions: [{ value: 'save', label: t('br.save') }],
+      onAction: function () {
+        err.hidden = true;
+        return api.saveBrand(readBrand(saved || b)).then(function (x) {
+          var first = !saved && !b;
+          saved = x;
+          toast(t('br.saved', { name: x.name }), 'info');
+          if (first) { drawSample(x); return false; } // a new brand stays open for its sample picture
+        }, function (e) { showFormError(err, e); if (e.key === 'br.err.name') name.focus(); return false; });
+      },
+      onOpen: function () { name.focus(); }
+    }).then(function () { return saved || b || null; });
+  }
+
+  /* ---------------------------------------------------------------------
      13. Top bar, language, user menu
      --------------------------------------------------------------------- */
   function syncSideToggle() {
@@ -3516,13 +4058,16 @@
   }
   function buildTopbar() {
     syncSideToggle();
-    var biz = $('#ads-biz'), acc = $('#ads-account');
+    var biz = $('#ads-biz'), acc = $('#ads-account'), live = liveMode();
     biz.innerHTML = '';
+    if (!settings.businesses.length) biz.appendChild(h('option', { value: '' }, t('co.noneYet')));
     settings.businesses.forEach(function (b) { biz.appendChild(h('option', { value: b.id }, b.name)); });
-    biz.value = ctx.business;
+    if (!live) biz.appendChild(h('option', { value: '__add' }, t('co.addOption'))); // sample mode until ADS-37
+    biz.value = ctx.business || '';
     fillAccounts();
     $('#ads-user-email').textContent = user ? user.email : '';
-    var live = liveMode(), bd = $('#ads-badge');
+    var bd = $('#ads-badge');
+    $('#ads-newuser').hidden = live; // demo of the first visit: sample mode only
     bd.textContent = t(live ? 'top.badge.live' : 'top.badge.mock');
     bd.classList.toggle('ads-badge--live', live);
     $('#ads-mode').textContent = t(live ? 'menu.modeMock' : 'menu.modeLive');
@@ -3554,12 +4099,21 @@
   function saveCtx() { try { localStorage.setItem('ads_ctx', JSON.stringify(ctx)); } catch (e) { /* ignore */ } }
   function loadCtx() {
     try { var c = JSON.parse(localStorage.getItem('ads_ctx')); if (c && c.business) { ctx.business = c.business; ctx.account = c.account || 'all'; } } catch (e) { /* ignore */ }
-    if (!settings.businesses.some(function (b) { return b.id === ctx.business; })) ctx = { business: settings.businesses[0].id, account: 'all' };
+    if (!settings.businesses.some(function (b) { return b.id === ctx.business; })) ctx = { business: settings.businesses.length ? settings.businesses[0].id : null, account: 'all' };
     if (ctx.account !== 'all' && !accounts(ctx.business).some(function (a) { return a.id === ctx.account; })) ctx.account = 'all';
   }
   function wireShell() {
     $('#ads-biz').addEventListener('change', function (e) {
-      ctx.business = e.target.value; ctx.account = 'all'; campAccount = 'all'; wizard = null; saveCtx(); buildTopbar.fillAccounts(); firstRender = 'focus'; refresh();
+      if (e.target.value === '__add') { e.target.value = ctx.business || ''; companyDialog(null); return; }
+      if (!e.target.value) return;
+      ctx.business = e.target.value; ctx.account = 'all'; campAccount = 'all'; wizard = null; styCompany = null; saveCtx(); buildTopbar.fillAccounts(); firstRender = 'focus'; refresh();
+    });
+    $('#ads-newuser').addEventListener('click', function () {
+      $('#ads-user-menu').hidden = true; $('#ads-user-btn').setAttribute('aria-expanded', 'false');
+      confirmDialog({ title: t('menu.newUser'), message: t('menu.newUser.text'), confirmLabel: t('menu.newUser.yes') }).then(function (ok) {
+        if (!ok) return;
+        api.startEmptyWorkspace().then(function () { location.reload(); });
+      });
     });
     $('#ads-account').addEventListener('change', function (e) { ctx.account = e.target.value; campAccount = 'all'; saveCtx(); refresh(); });
     $('#ads-lang').addEventListener('click', function () {
@@ -3652,6 +4206,7 @@
       $('#ads-gate').hidden = true; $('#ads-app').hidden = false;
       route();
       if (liveFailed) toast(t('mode.liveFailed'), 'act');
+      if (!liveMode() && !settings.businesses.length && !(settings.onboarding && settings.onboarding.skipped)) openOnboarding();
     }).catch(function () { started = false; showGate('error'); });
   }
   function boot() {

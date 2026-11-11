@@ -1,0 +1,92 @@
+{
+  "_note": "MOCK DATA - sample workspace for the prototype (11 Nov 2026): company profiles, team, brands. Not real people.",
+  "profiles": {
+    "edelweiss": {
+      "about": "Mountain hotel in Mestia: rooms, spa, breakfast and guided valley walks.",
+      "goal": "Fill the rooms all year: weekly posts and small promotions on Facebook and Instagram, answer booking messages fast.",
+      "channels": [
+        "facebook",
+        "instagram",
+        "messenger",
+        "whatsapp"
+      ],
+      "tools": [
+        "drive"
+      ],
+      "workType": "both",
+      "inbox": true
+    },
+    "breeze": {
+      "about": "Seaside cafe and restaurant in Batumi.",
+      "goal": "Book more tables: weekly posts and offers on Instagram, Facebook and TikTok.",
+      "channels": [
+        "instagram",
+        "facebook",
+        "tiktok",
+        "whatsapp"
+      ],
+      "tools": [
+        "trello"
+      ],
+      "workType": "social",
+      "inbox": false
+    }
+  },
+  "members": [
+    {
+      "id": "m_nino",
+      "email": "nino.sample@example.com",
+      "role": "approver",
+      "companies": [
+        "edelweiss"
+      ],
+      "status": "active",
+      "addedDaysAgo": 6
+    },
+    {
+      "id": "m_luka",
+      "email": "luka.sample@example.com",
+      "role": "viewer",
+      "companies": [],
+      "status": "active",
+      "addedDaysAgo": 3
+    },
+    {
+      "id": "m_ana",
+      "email": "ana.sample@example.com",
+      "role": "admin",
+      "companies": [
+        "breeze"
+      ],
+      "status": "invited",
+      "addedDaysAgo": 1
+    }
+  ],
+  "brands": [
+    {
+      "id": "br_edel",
+      "business": "edelweiss",
+      "name": "Edelweiss Mountain Hotel",
+      "about": "A warm mountain home in Svaneti: quiet rooms, real food, local guides.",
+      "look": "Snowy peaks, warm wood, real photos of our rooms and the valley. No stock models.",
+      "elements": "Edelweiss flower mark, wooden frame, round price tag.",
+      "feel": "Warm, calm, local, honest.",
+      "voice": "Friendly and short, Georgian first. Invite people to message us. No big promises.",
+      "colors": [
+        "#1F4E5F",
+        "#F7F5F2",
+        "#C8A165",
+        "#14213D"
+      ],
+      "feedback": [
+        {
+          "id": "fb_1",
+          "daysAgo": 2,
+          "user": "owner (sample)",
+          "right": "The wooden frame and the mountain light feel like us.",
+          "wrong": "The people look like stock models; show our real rooms."
+        }
+      ]
+    }
+  ]
+}

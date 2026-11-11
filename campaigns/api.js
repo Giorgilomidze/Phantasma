@@ -33,6 +33,8 @@
    Products in the database (trigger), not here.
    In mock mode, library uploads live in memory only (gone on reload) and the
    stock sits in the demo state in localStorage.
+   11 Nov 2026 (plan ADS-32...36): companies with a profile, team with roles, brands and the
+   approvals board live in the demo state (state.ws) until the database update (ADS-37).
    No secrets belong in this file.
    ========================================================================= */
 (function () {
@@ -187,16 +189,17 @@
   var ready = null;
   function init() {
     if (ready) return ready;
-    var names = ['settings', 'products', 'images', 'insights', 'campaigns', 'posts', 'audit'];
+    var names = ['settings', 'products', 'images', 'insights', 'campaigns', 'posts', 'audit', 'workspace'];
     ready = Promise.all(names.map(fetchJson)).then(function (d) {
-      fixed = { settings: d[0], products: d[1], images: d[2], insights: d[3] };
+      fixed = { settings: d[0], products: d[1], images: d[2], insights: d[3], workspace: d[7] };
       var stored = lsGet();
       if (stored && stored.campaigns && stored.posts && stored.audit) {
         state = stored;
         if (!state.stock) state.stock = []; // demo states saved before 6 Nov 2026
         state.posts.forEach(normPost);      // ... and posts saved with one product / one picture
+        if (!state.ws) { state.ws = seedWorkspace(d[7]); save(); } // ... and before the companies (11 Nov 2026)
       } else {
-        state = { campaigns: seedCampaigns(d[4]), posts: seedPosts(d[5]), audit: seedAudit(d[6]), stock: [] };
+        state = { campaigns: seedCampaigns(d[4]), posts: seedPosts(d[5]), audit: seedAudit(d[6]), stock: [], ws: seedWorkspace(d[7]) };
         save();
       }
     });
@@ -379,6 +382,8 @@
       if (total(n) !== total(c)) parts.push('total: ' + total(c) + ' -> ' + total(n));
       c.name = n.name; c.dailyBudget = n.dailyBudget; c.days = n.days; c.startDate = n.startDate;
       audit('campaign.edit', 'campaign', c.id, parts.join(' | ') + ' | (' + c.status + ')');
+      // A changed campaign needs a new approval (Approvals board, 11 Nov 2026).
+      if (state.ws && state.ws.approvals[c.id]) { delete state.ws.approvals[c.id]; audit('campaign.approval_reset', 'campaign', c.id, 'changed after approval'); }
       save();
       return wait(c);
     });
@@ -528,13 +533,279 @@
     });
   }
 
+  /* ---- workspace: companies, team, brands, approvals (11 Nov 2026, plan ADS-32...36) ----
+     The owner's "company entities": an agency's workspace holds several unrelated companies, each with
+     its own settings. SAMPLE MODE ONLY for now: kept in the demo state (state.ws, localStorage) in both
+     modes until the database update (ADS-37, plan workstreams\ads-companies-plan-2026-11-11.md).
+     Live mode reads the companies from ads_businesses; adding / editing them, the team and brands
+     answer with the key co.err.live there (brands: see listBrands). */
+  var CHANNELS = ['facebook', 'instagram', 'messenger', 'whatsapp', 'youtube', 'tiktok', 'linkedin', 'x', 'threads', 'pinterest', 'telegram', 'gbp'];
+  var WORK_TOOLS = ['monday', 'clickup', 'notion', 'trello', 'asana', 'slack', 'drive'];
+  var WORK_TYPES = ['content', 'social', 'both'];
+  var ROLES = ['viewer', 'approver', 'admin'];
+  var CO_TEXT_MAX = 1000, BRAND_TEXT_MAX = 2000, BRAND_COLORS_MAX = 10, FEEDBACK_MAX = 1000;
+  function only(list, allowed) { return idList(list).filter(function (x) { return allowed.indexOf(x) !== -1; }); }
+  function textOf(v, max) { return String(v == null ? '' : v).trim().slice(0, max); }
+  // One shape for every company, sample or live: { id, name, about, goal, channels, tools, workType,
+  // inbox, accounts: [{ id, name }], currency, pageId, createdAt }.
+  function companyItem(c) {
+    return { id: c.id, name: c.name, about: c.about || '', goal: c.goal || '', channels: only(c.channels, CHANNELS),
+      tools: only(c.tools, WORK_TOOLS), workType: WORK_TYPES.indexOf(c.workType) !== -1 ? c.workType : '', inbox: !!c.inbox,
+      accounts: Array.isArray(c.accounts) ? c.accounts : [], currency: c.currency || null, pageId: c.pageId || null, createdAt: c.createdAt || null };
+  }
+  function seedWorkspace(w) {
+    w = w || {};
+    var now = Date.now();
+    return {
+      companies: fixed.settings.businesses.map(function (b) {
+        return companyItem(Object.assign({ id: b.id, name: b.name, accounts: b.accounts }, (w.profiles || {})[b.id] || {}));
+      }),
+      skipped: false,
+      members: (w.members || []).map(function (m) {
+        return { id: m.id, email: m.email, role: m.role, companies: idList(m.companies), status: m.status, addedAt: new Date(now - (m.addedDaysAgo || 0) * 86400000).toISOString() };
+      }),
+      brands: (w.brands || []).map(function (b) {
+        var x = Object.assign({}, b);
+        x.feedback = (b.feedback || []).map(function (f) { return { id: f.id, ts: new Date(now - (f.daysAgo || 0) * 86400000).toISOString(), user: f.user, right: f.right || '', wrong: f.wrong || '' }; });
+        x.updatedAt = new Date(now - 86400000).toISOString();
+        x.sample = true; // sample brands stay out of live mode (the live Edelweiss is a real company)
+        return x;
+      }),
+      approvals: {} // campaign id -> { state: 'approved' | 'sent_back', by, at, note }
+    };
+  }
+  function companyById(id) { return state.ws.companies.filter(function (c) { return c.id === id; })[0] || null; }
+  function sampleOnly() { return isLive() ? Promise.reject(codeError('co.err.live')) : null; }
+
+  // Create (no id) or update a company. d: { id?, name, about, goal, channels, tools, workType, inbox }.
+  function saveCompany(d) {
+    var stop = sampleOnly(); if (stop) return stop;
+    d = d || {};
+    return init().then(function () {
+      var name = textOf(d.name, 80).replace(/\s+/g, ' ');
+      if (!name) throw codeError('co.err.name');
+      var same = state.ws.companies.filter(function (c) { return c.id !== d.id && c.name.toLowerCase() === name.toLowerCase(); });
+      if (same.length) throw codeError('co.err.taken', { name: name });
+      var fields = { name: name, about: textOf(d.about, CO_TEXT_MAX), goal: textOf(d.goal, CO_TEXT_MAX), channels: only(d.channels, CHANNELS),
+        tools: only(d.tools, WORK_TOOLS), workType: WORK_TYPES.indexOf(d.workType) !== -1 ? d.workType : '', inbox: !!d.inbox };
+      var c = d.id ? companyById(d.id) : null;
+      if (d.id && !c) throw codeError('co.err.gone');
+      if (c) {
+        Object.assign(c, fields);
+        audit('company.updated', 'company', c.id, name);
+      } else {
+        // New ids never reuse a sample id, so old sample campaigns never reappear under a new company.
+        c = companyItem(Object.assign({ id: newId('co'), accounts: [], createdAt: new Date().toISOString() }, fields));
+        state.ws.companies.push(c);
+        audit('company.created', 'company', c.id, name);
+      }
+      save();
+      return wait(c);
+    });
+  }
+  // First visit: "Skip for now" is remembered (the window does not come back by itself).
+  function skipOnboarding() {
+    return init().then(function () { state.ws.skipped = true; save(); return wait({ ok: true }); });
+  }
+  // Demo: the tool as a brand-new user sees it (no companies, no team, no brands, no stock).
+  // "Reset demo data" brings the samples back.
+  function startEmptyWorkspace() {
+    return init().then(function () {
+      state.ws.companies = []; state.ws.members = []; state.ws.brands = []; state.ws.approvals = {}; state.ws.skipped = false;
+      state.stock = [];
+      uploads.forEach(function (u) { try { URL.revokeObjectURL(u.url); } catch (e) { /* ignore */ } });
+      uploads = [];
+      audit('workspace.emptied', 'workspace', null, 'demo: start as a new user');
+      save();
+      return wait({ ok: true });
+    });
+  }
+
+  // Team. The signed-in person is the workspace's Admin (creator). A member: { id, email, role
+  // (viewer | approver | admin), companies: [] = internal (every company) or the chosen ids,
+  // status (invited | active), addedAt, me }.
+  function listMembers() {
+    return init().then(function () {
+      var me = { id: 'me', email: actor, role: 'admin', companies: [], status: 'active', addedAt: null, me: true };
+      return wait([me].concat(isLive() ? [] : state.ws.members));
+    });
+  }
+  function checkMember(d, selfId) {
+    var role = ROLES.indexOf(d.role) !== -1 ? d.role : null;
+    if (!role) throw codeError('team.err.role');
+    var cos = idList(d.companies);
+    if (cos.some(function (id) { return !companyById(id); })) throw codeError('co.err.gone');
+    return { role: role, companies: cos };
+  }
+  function inviteMember(d) {
+    var stop = sampleOnly(); if (stop) return stop;
+    d = d || {};
+    return init().then(function () {
+      var email = textOf(d.email, 200).toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw codeError('team.err.email');
+      if (email === String(actor).toLowerCase() || state.ws.members.some(function (m) { return m.email === email; })) throw codeError('team.err.exists', { email: email });
+      var v = checkMember(d);
+      var m = { id: newId('m'), email: email, role: v.role, companies: v.companies, status: 'invited', addedAt: new Date().toISOString() };
+      state.ws.members.push(m);
+      audit('member.invited', 'member', m.id, email + ' | ' + v.role + ' | ' + (v.companies.length ? v.companies.join(', ') : 'all companies') + ' | (SAMPLE: no e-mail was sent)');
+      save();
+      return wait(m);
+    });
+  }
+  function updateMember(id, d) {
+    var stop = sampleOnly(); if (stop) return stop;
+    return init().then(function () {
+      var m = state.ws.members.filter(function (x) { return x.id === id; })[0];
+      if (!m) throw codeError('team.err.gone');
+      var v = checkMember(d || {});
+      m.role = v.role; m.companies = v.companies;
+      audit('member.changed', 'member', m.id, m.email + ' | ' + v.role + ' | ' + (v.companies.length ? v.companies.join(', ') : 'all companies'));
+      save();
+      return wait(m);
+    });
+  }
+  function removeMember(id) {
+    var stop = sampleOnly(); if (stop) return stop;
+    return init().then(function () {
+      var i = state.ws.members.findIndex(function (x) { return x.id === id; });
+      if (i === -1) throw codeError('team.err.gone');
+      var m = state.ws.members.splice(i, 1)[0];
+      audit('member.removed', 'member', m.id, m.email);
+      save();
+      return wait({ ok: true });
+    });
+  }
+
+  // Brands (a company can have several). Kept in the demo state in BOTH modes until ADS-37, so the
+  // owner can try them with the real company names; the page says so. b: a company id, or none = all.
+  // Brand: { id, business, name, about, look, elements, feel, voice, colors: ['#RRGGBB'], feedback:
+  // [{ id, ts, user, right, wrong }] newest first, updatedAt }.
+  function listBrands(b) {
+    return init().then(function () {
+      return wait(state.ws.brands.filter(function (x) { return (!b || x.business === b) && !(x.sample && isLive()); }));
+    });
+  }
+  function saveBrand(d) {
+    d = d || {};
+    return init().then(function () {
+      var name = textOf(d.name, 80).replace(/\s+/g, ' ');
+      if (!name) throw codeError('br.err.name');
+      if (!d.business) throw codeError('br.err.company');
+      var colors = idList((d.colors || []).map(function (c) { return String(c || '').trim().toUpperCase(); }))
+        .filter(function (c) { return /^#[0-9A-F]{6}$/.test(c); }).slice(0, BRAND_COLORS_MAX);
+      var fields = { business: d.business, name: name, about: textOf(d.about, BRAND_TEXT_MAX), look: textOf(d.look, BRAND_TEXT_MAX),
+        elements: textOf(d.elements, BRAND_TEXT_MAX), feel: textOf(d.feel, BRAND_TEXT_MAX), voice: textOf(d.voice, BRAND_TEXT_MAX),
+        colors: colors, updatedAt: new Date().toISOString() };
+      var x = d.id ? state.ws.brands.filter(function (y) { return y.id === d.id; })[0] : null;
+      if (d.id && !x) throw codeError('br.err.gone');
+      if (x) { Object.assign(x, fields); audit('brand.updated', 'brand', x.id, name); }
+      else { x = Object.assign({ id: newId('br'), feedback: [] }, fields); state.ws.brands.unshift(x); audit('brand.created', 'brand', x.id, name); }
+      save();
+      return wait(x);
+    });
+  }
+  function deleteBrand(id) {
+    return init().then(function () {
+      var i = state.ws.brands.findIndex(function (x) { return x.id === id; });
+      if (i === -1) throw codeError('br.err.gone');
+      audit('brand.deleted', 'brand', id, state.ws.brands[i].name);
+      state.ws.brands.splice(i, 1);
+      save();
+      return wait({ ok: true });
+    });
+  }
+  // What felt right / wrong about a sample picture: kept on the brand, newest first.
+  function addBrandFeedback(id, f) {
+    f = f || {};
+    return init().then(function () {
+      var x = state.ws.brands.filter(function (y) { return y.id === id; })[0];
+      if (!x) throw codeError('br.err.gone');
+      var right = textOf(f.right, FEEDBACK_MAX), wrong = textOf(f.wrong, FEEDBACK_MAX);
+      if (!right && !wrong) throw codeError('br.err.feedback');
+      var item = { id: newId('bf'), ts: new Date().toISOString(), user: actor, right: right, wrong: wrong };
+      x.feedback.unshift(item);
+      audit('brand.feedback', 'brand', x.id, (right ? 'right: ' + right.slice(0, 60) : '') + (wrong ? ' | wrong: ' + wrong.slice(0, 60) : ''));
+      save();
+      return wait(item);
+    });
+  }
+
+  // Approvals board: posts and campaigns of one company (or all) in three columns.
+  // Posts: needs_approval = waiting, approved = approved, scheduled / published = running.
+  // Campaigns: approval comes before switching on (spending): paused without approval = waiting,
+  // paused + approved = approved, in Meta review / active = running.
+  // Item: { kind, id, business, status, name, caption, imageIds, productIds, dailyBudget, days, when, approval }
+  function listApprovals(f) {
+    f = f || {};
+    return init().then(function () {
+      settleReviews();
+      var out = { waiting: [], approved: [], running: [] };
+      function mine(x) { return !f.business || x.business === f.business; }
+      if (f.kind !== 'campaign') {
+        state.posts.filter(mine).forEach(function (p) {
+          var col = p.status === 'needs_approval' ? 'waiting' : p.status === 'approved' ? 'approved' : p.status === 'scheduled' || p.status === 'published' ? 'running' : null;
+          if (col) out[col].push({ kind: 'post', id: p.id, business: p.business, status: p.status, caption: p.caption || '', imageIds: p.imageIds || [], productIds: p.productIds || [],
+            when: p.publishedAt || p.scheduledAt || null, note: p.sentBackNote || '' });
+        });
+      }
+      if (f.kind !== 'post') {
+        state.campaigns.filter(mine).forEach(function (c) {
+          var a = state.ws.approvals[c.id] || null;
+          var col = c.status === 'paused' ? (a && a.state === 'approved' ? 'approved' : a && a.state === 'sent_back' ? null : 'waiting')
+            : c.status === 'active' || c.status === 'in_review' ? 'running' : null;
+          if (col) out[col].push({ kind: 'campaign', id: c.id, business: c.business, status: c.status, name: c.name, caption: c.caption || '', imageIds: c.imageIds || [],
+            dailyBudget: c.dailyBudget, days: c.days, when: c.startDate || null, approval: a });
+        });
+      }
+      return wait(out);
+    });
+  }
+  function approveItem(kind, id) {
+    if (kind === 'post') return movePost(id, 'approved');
+    return init().then(function () {
+      var c = state.campaigns.filter(function (x) { return x.id === id; })[0];
+      if (!c) throw codeError('ap.err.gone');
+      if (c.status !== 'paused') throw codeError('ap.err.status');
+      state.ws.approvals[c.id] = { state: 'approved', by: actor, at: new Date().toISOString(), note: '' };
+      audit('campaign.approved', 'campaign', c.id, c.name);
+      save();
+      return wait(c);
+    });
+  }
+  // Back to the maker with a note (optional for posts, which go back to draft).
+  function sendBack(kind, id, note) {
+    note = textOf(note, FEEDBACK_MAX);
+    if (kind === 'post') {
+      return movePost(id, 'draft').then(function (p) {
+        var x = state.posts.filter(function (y) { return y.id === id; })[0];
+        if (x) { x.sentBackNote = note; if (note) audit('post.sent_back', 'post', id, note); save(); }
+        return p;
+      });
+    }
+    return init().then(function () {
+      var c = state.campaigns.filter(function (x) { return x.id === id; })[0];
+      if (!c) throw codeError('ap.err.gone');
+      state.ws.approvals[c.id] = { state: 'sent_back', by: actor, at: new Date().toISOString(), note: note };
+      audit('campaign.sent_back', 'campaign', c.id, note || '(no note)');
+      save();
+      return wait(c);
+    });
+  }
+
   /* ---- fixed lists ---- */
   function getSettings() {
     return init().then(function () {
-      if (!isLive()) { limitsNow = fixed.settings.limits; return wait(fixed.settings); }
+      if (!isLive()) {
+        limitsNow = fixed.settings.limits;
+        var m = clone(fixed.settings);
+        m.businesses = state.ws.companies.map(companyItem); // the sample workspace's companies (11 Nov 2026)
+        m.onboarding = { skipped: !!state.ws.skipped };
+        return wait(m);
+      }
       return loadLive().then(function (live) {
         var s = clone(fixed.settings); // locations, forbidden words, caption limit stay from the mock file
-        s.live = true; s.businesses = live.businesses; s.currency = live.currency;
+        s.live = true; s.businesses = live.businesses.map(companyItem); s.currency = live.currency;
+        s.onboarding = { skipped: true }; // live companies are made in the database until ADS-37
         Object.keys(live.limits).forEach(function (k) { s.limits[k] = live.limits[k]; });
         limitsNow = clone(s.limits); // updateCampaign checks against the same caps the UI shows
         return s;
@@ -1191,6 +1462,13 @@
     listStyles: listStyles, saveStyle: saveStyle, deleteStyle: deleteStyle,
     getPictureSettings: getPictureSettings, savePictureSettings: savePictureSettings,
     // Edit a campaign that is not running (ADS-19, 7 Nov 2026; mock in both modes)
-    campaignRules: { maxName: CAMP_NAME_MAX }, updateCampaign: updateCampaign
+    campaignRules: { maxName: CAMP_NAME_MAX }, updateCampaign: updateCampaign,
+    // Companies, team, brands, approvals (11 Nov 2026, ADS-32...36; sample mode until ADS-37)
+    workspaceRules: { channels: CHANNELS.slice(), tools: WORK_TOOLS.slice(), workTypes: WORK_TYPES.slice(), roles: ROLES.slice(),
+      textMax: CO_TEXT_MAX, brandTextMax: BRAND_TEXT_MAX, brandColorsMax: BRAND_COLORS_MAX, feedbackMax: FEEDBACK_MAX },
+    saveCompany: saveCompany, skipOnboarding: skipOnboarding, startEmptyWorkspace: startEmptyWorkspace,
+    listMembers: listMembers, inviteMember: inviteMember, updateMember: updateMember, removeMember: removeMember,
+    listBrands: listBrands, saveBrand: saveBrand, deleteBrand: deleteBrand, addBrandFeedback: addBrandFeedback,
+    listApprovals: listApprovals, approveItem: approveItem, sendBack: sendBack
   };
 })();

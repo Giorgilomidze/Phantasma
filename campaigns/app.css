@@ -614,6 +614,78 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-dz__text { margin: 0; flex: 1 1 260px; font-size: var(--type-body-sm); color: var(--ink-soft); }
 
 /* -------------------------------------------------------------------------
+   10b. Companies, first visit, team, approvals board, brands (11 Nov 2026)
+   ------------------------------------------------------------------------- */
+/* Ticks (channels, tools, companies): a grid of the usual option boxes */
+.ads-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: var(--space-2); }
+.ads-checks .ads-option { margin: 0; }
+.ads-coform .ads-fieldset { margin-bottom: var(--space-5); }
+.ads-coform .ads-h3 { margin: var(--space-5) 0 var(--space-3); }
+.ads-coform__part > .ads-field:last-child { margin-bottom: 0; }
+/* First-visit window */
+.ads-onb__count { font-weight: 600; margin: 0 0 var(--space-3); color: var(--accent-deep); }
+.ads-onb__panel { min-height: 200px; }
+.ads-onb__nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--rule); }
+.ads-onb__gap { flex: 1 1 auto; }
+/* Company filter (library, styles) */
+.ads-cofilter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-4); }
+.ads-cofilter .ads-label { margin: 0; }
+.ads-cofilter .ads-input { width: auto; min-width: 220px; max-width: 100%; }
+.ads-cofilter .ads-hint { flex: 1 1 100%; margin: 0; }
+.ads-cotag { align-self: flex-start; display: inline-block; max-width: 100%; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--partner); color: var(--bg); font-size: var(--type-caption); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Settings: companies and team */
+.ads-colist, .ads-team { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.ads-colist__item { border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+.ads-colist__item.is-current { border-color: var(--accent-deep); box-shadow: 0 0 0 1px var(--accent-deep); }
+.ads-colist__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.ads-colist__name { font-size: var(--type-body); }
+.ads-colist__about { margin: 0 0 var(--space-3); color: var(--ink-soft); font-size: var(--type-body-sm); }
+.ads-colist__item .ads-btnrow { margin-top: var(--space-2); }
+.ads-team__row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); align-items: center; padding: var(--space-3) 0; border-bottom: 1px solid var(--rule); }
+@media (min-width: 760px) { .ads-team__row { grid-template-columns: minmax(0, 1fr) auto auto; } }
+.ads-team__who { display: flex; flex-direction: column; min-width: 0; }
+.ads-team__mail { overflow-wrap: anywhere; }
+.ads-team__tags, .ads-team__acts { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ads-chip--role-admin { --c: var(--accent-deep); }
+.ads-chip--role-approver { --c: var(--partner); }
+.ads-chip--role-viewer { --c: var(--ink-soft); }
+.ads-btnrow--tight { margin-top: var(--space-2); }
+/* Approvals board: three columns from 1100px, stacked below */
+.ads-board { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); margin-top: var(--space-4); }
+@media (min-width: 1100px) { .ads-board { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; } }
+.ads-board__col { background: var(--surface); border-radius: var(--radius-md); padding: var(--space-3); border-top: 4px solid var(--rule); min-width: 0; }
+.ads-board__col--waiting { border-top-color: var(--watch); }
+.ads-board__col--approved { border-top-color: var(--partner); }
+.ads-board__col--running { border-top-color: var(--ok); }
+.ads-board__title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--type-body); }
+.ads-board__n { min-width: 28px; padding: 0 var(--space-2); border-radius: 999px; background: var(--surface-raised); font-size: var(--type-caption); text-align: center; }
+.ads-board__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.ads-board__card { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--space-3); background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-3); }
+.ads-board__card > .ads-board__body:first-child { grid-column: 1 / -1; }
+.ads-board__img { width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); }
+.ads-board__body { min-width: 0; }
+.ads-board__top { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin-bottom: var(--space-2); }
+.ads-board__name { margin: 0 0 var(--space-1); font-weight: 500; overflow-wrap: anywhere; }
+.ads-board__body .ads-sub { display: block; }
+/* Brands */
+.ads-brands { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: var(--space-4); }
+.ads-brand { background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-4); min-width: 0; }
+.ads-brand__name { margin: var(--space-3) 0 var(--space-2); }
+.ads-brand__about { margin: 0 0 var(--space-3); font-size: var(--type-body-sm); }
+.ads-swatches { display: flex; gap: var(--space-1); min-height: 28px; }
+.ads-swatch { flex: 1 1 0; max-width: 64px; height: 28px; border-radius: var(--radius-sm); border: 1px solid var(--rule); }
+.ads-colors { display: grid; gap: var(--space-2); margin-bottom: var(--space-2); }
+.ads-color { display: flex; align-items: center; gap: var(--space-2); }
+.ads-color__pick { width: 44px; height: 44px; padding: 2px; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--surface-raised); cursor: pointer; }
+.ads-color__hex { width: 9.5ch; font-family: ui-monospace, monospace; text-transform: uppercase; }
+.ads-brand__sample { border-top: 1px solid var(--rule); padding-top: var(--space-3); }
+.ads-brand__picbox { margin: var(--space-3) 0; }
+.ads-brand__pic { display: block; width: 100%; max-width: 480px; height: auto; border-radius: var(--radius-md); border: 1px solid var(--rule); }
+.ads-fblist { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ads-fblist__item { border-left: 3px solid var(--partner); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ads-fblist__item p { margin: 0 0 var(--space-1); font-size: var(--type-body-sm); }
+
+/* -------------------------------------------------------------------------
    11. Skeleton loading
    ------------------------------------------------------------------------- */
 .ads-skel { display: flex; flex-direction: column; gap: var(--space-3); }
