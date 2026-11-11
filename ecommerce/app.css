@@ -2,7 +2,7 @@
    E-commerce automation (/ecommerce/) — C7 Ecommerce Platform, 10 Nov 2026.
    Uses the site tokens from ../styles.css; every class is prefixed ecm-.
    1. Shell  2. Sidebar + nav  3. Main, cards, headings  4. Buttons + inputs
-   5. Tables + tools  6. Settings parts  7. Status chips, toasts, gate
+   5. Tables + tools  5b. Filter bar, KPI tiles, charts  6. Settings parts  7. Status chips, toasts, gate
    8. Responsive  9. Reduced motion
    ========================================================================= */
 
@@ -107,6 +107,46 @@
 .ecm-table td { white-space: nowrap; }
 .ecm-table td.is-wide { white-space: normal; }
 
+/* 5b. Filter bar, KPI tiles, charts (11 Nov 2026) ------------------------- */
+.ecm-filters {
+  position: sticky; top: var(--ecm-top, 56px); z-index: 5;
+  display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); align-items: center;
+  padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4);
+  background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md);
+}
+.ecm-filters__group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ecm-filters__label { font-size: var(--type-caption); color: var(--ink-soft); }
+.ecm-chip-btn {
+  font: inherit; font-size: var(--type-caption); cursor: pointer; color: var(--ink);
+  padding: var(--space-1) var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--bg);
+}
+.ecm-chip-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.ecm-chip-btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.ecm-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
+.ecm-kpi {
+  display: grid; gap: var(--space-1); align-content: start;
+  padding: var(--space-3) var(--space-4); background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md);
+}
+.ecm-kpi__label { font-size: var(--type-caption); color: var(--ink-soft); }
+.ecm-kpi__value { font-family: var(--font-display); font-size: var(--type-h3); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ecm-kpi__hint { font-size: var(--type-caption); color: var(--ink-soft); }
+.ecm-kpi--up .ecm-kpi__value { color: var(--ok); }
+.ecm-kpi--down .ecm-kpi__value { color: var(--act); }
+.ecm-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+.ecm-chart { margin: 0; padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); min-width: 0; }
+.ecm-chart__title { font-weight: 600; margin-bottom: var(--space-2); }
+.ecm-chart__svg { display: block; width: 100%; height: auto; }
+.ecm-chart__grid { stroke: var(--rule); stroke-width: 1; }
+.ecm-chart__zero { stroke: var(--ink-soft); stroke-width: 1; }
+.ecm-chart__tick { font-size: 11px; fill: var(--ink-soft); font-family: var(--font-body); }
+.ecm-chart__bar:hover, .ecm-chart circle:hover { opacity: 0.75; }
+.ecm-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); list-style: none; margin: 0 0 var(--space-2); padding: 0; font-size: var(--type-caption); }
+.ecm-legend__dot { display: inline-block; width: 10px; height: 10px; margin-right: var(--space-1); border-radius: 2px; vertical-align: middle; }
+.ecm-chart__data { margin-top: var(--space-2); font-size: var(--type-caption); }
+.ecm-chart__data summary { cursor: pointer; color: var(--accent-deep); }
+.ecm-chart__data .ecm-tablewrap { max-height: 280px; overflow: auto; margin-top: var(--space-2); }
+.ecm-section-h { margin-top: var(--space-6); }
+
 /* 6. Settings parts -------------------------------------------------------- */
 .ecm-accounts { display: grid; gap: var(--space-3); }
 .ecm-account { border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-4); background: var(--bg); }
@@ -153,6 +193,7 @@
   .ecm-topbar__ctx { margin-left: 0; width: 100%; order: 5; }
   .ecm-input--bar { max-width: none; width: 100%; }
   .ecm-topbar__user { display: none; }
+  .ecm-filters { position: static; }   /* tall on a phone: not pinned while scrolling */
   .ecm-card { padding: var(--space-4); }
 }
 

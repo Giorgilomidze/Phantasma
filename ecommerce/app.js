@@ -30,7 +30,7 @@
     ['fe', 'Far East (Japan, Australia, Singapore)']
   ];
   var REGION_NAME = { eu: 'Europe', na: 'North America', fe: 'Far East' };
-  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance' };
+  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', inventory_ledger: 'Stock development (ledger)', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance' };
   var STATUS = { queued: 'Waiting', running: 'Loading', waiting: 'Amazon is preparing', done: 'Done', no_data: 'No data', error: 'Error', cancelled: 'Stopped', ok: 'Keys work', new: 'New', disabled: 'Off' };
   var OPEN = { queued: 1, running: 1, waiting: 1 };
 
@@ -47,6 +47,8 @@
   // "EU" = the Pan-European FBA stock, stored once for DE FR IT ES NL SE PL BE (owner decision ED-14, 11 Nov 2026)
   function mpCode(v) { return v === 'EU' ? 'EU pool' : (MP[v] || v || ''); }
   function fbaFbm(v) { if (!v) return ''; return /^AMAZON/i.test(v) ? 'FBA' : (v === 'DEFAULT' ? 'FBM' : v); }
+  // Amazon gives repeat-purchase shares as fractions (0.0122 = 1.22 %), shown as percent
+  function pct100(v) { return v == null ? null : Math.round(v * 10000) / 100; }
   function inbound(r) { var n = (r.inbound_working || 0) + (r.inbound_shipped || 0) + (r.inbound_receiving || 0); return n || (r.inbound_working == null && r.inbound_shipped == null && r.inbound_receiving == null ? null : 0); }
 
   var VIEWS = {
@@ -95,10 +97,10 @@
         { k: 'asin', t: 'ASIN', mono: true },
         { k: 'orders', t: 'Orders', num: true },
         { k: 'unique_customers', t: 'Customers', num: true },
-        { k: 'repeat_customers_pct', t: 'Repeat customers %', num: true },
+        { k: 'repeat_customers_pct', t: 'Repeat customers %', num: true, f: pct100 },
         { k: 'repeat_revenue', t: 'Repeat revenue', num: true },
         { k: 'currency', t: 'Cur.' },
-        { k: 'repeat_revenue_pct', t: 'Repeat revenue %', num: true }
+        { k: 'repeat_revenue_pct', t: 'Repeat revenue %', num: true, f: pct100 }
       ]
     }
   };
@@ -281,40 +283,461 @@
   }
 
   /* 5. Data views --------------------------------------------------------- */
+  // Since 11 Nov 2026 (owner: "more visuals — date-based trends, KPI totals, date filters; stock development"):
+  // each view has one filter bar (marketplace + date range) that drives its KPI tiles, charts and table.
+  // Totals come from ecom_amz_stats (supabase/0036): the server function adds up Amazon's WHOLE files there,
+  // while the row tables keep a test sample of ≤ 100 rows (ED-05). Without 0036 the views count the sample.
+  var statsCache = {};
+  function loadStats(conn, force) {
+    if (!force && statsCache[conn.id]) return statsCache[conn.id];
+    var all = [], page = 1000;
+    function next(from) {
+      return client.from('ecom_amz_stats').select('marketplace_id,dataset,period_start,period_end,dim,metrics')
+        .eq('connection_id', conn.id).order('period_start').range(from, from + page - 1).then(function (r) {
+          if (r.error) return null;                       // table missing (0036 not run): fall back to the sample
+          all = all.concat(r.data || []);
+          return (r.data || []).length === page && all.length < 20000 ? next(from + page) : all;
+        });
+    }
+    statsCache[conn.id] = next(0).catch(function () { return null; });
+    return statsCache[conn.id];
+  }
+
+  function uniq(a) { var s = {}, out = []; a.forEach(function (x) { if (x != null && !s[x]) { s[x] = 1; out.push(x); } }); return out; }
+  function fmtInt(v) { return v == null ? '—' : Number(v).toLocaleString('en-GB', { maximumFractionDigits: 0 }); }
+  function fmtShort(v) {
+    var a = Math.abs(v);
+    if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    if (a >= 1e3) return (v / 1e3).toFixed(a >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k';
+    return String(Math.round(v * 100) / 100);
+  }
+  function pctOf(a, b) { return b ? (a * 100 / b).toFixed(1) + ' %' : '—'; }
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function fmtMonth(m) { var p = String(m).split('-'); return MONTHS[+p[1] - 1] + ' ' + p[0].slice(2); }
+  function fmtDay(d) { var p = String(d).split('-'); return +p[2] + ' ' + MONTHS[+p[1] - 1]; }
+  function isoDay(dt) { return dt.toISOString().slice(0, 10); }
+  // Listing open dates come as "2019-05-02 …", "02.05.2019 …" or "02/05/2019" (EU reports day-first) → "2019-05-02"
+  function dateOfListing(v) {
+    var s = String(v || '').trim(), m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/.exec(s);
+    if (!m) return null;
+    var a = +m[1], b = +m[2], mon = b > 12 ? a : b, day = b > 12 ? b : a;
+    return m[3] + '-' + String(mon).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+  // The newest period per marketplace of one data set (dim '').
+  function latestBy(stats, ds) {
+    var best = {};
+    (stats || []).forEach(function (s) {
+      if (s.dataset !== ds || s.dim) return;
+      var b = best[s.marketplace_id];
+      if (!b || s.period_end > b.period_end) best[s.marketplace_id] = s;
+    });
+    return Object.keys(best).map(function (k) { return best[k]; });
+  }
+  function moneyBy(map) {
+    var keys = Object.keys(map).filter(function (c) { return map[c]; });
+    return keys.length ? keys.map(function (c) { return fmtInt(map[c]) + ' ' + (c === 'null' ? '' : c); }).join(' · ') : '—';
+  }
+
+  // ---- filter bar: marketplace (+ an optional extra select) and a date range with presets
+  function filterBar(opts, onChange) {
+    var st = { mp: '', from: '', to: '' };
+    var mpSel = h('select', { class: 'ecm-input', 'aria-label': opts.mpLabel || 'Marketplace' },
+      [h('option', { value: '', text: opts.allLabel || 'All marketplaces' })].concat(opts.mps.slice().sort(function (a, b) {
+        return mpCode(a).localeCompare(mpCode(b));
+      }).map(function (m) { return h('option', { value: m, text: mpCode(m) }); })));
+    var from = h('input', { class: 'ecm-input', type: 'date', 'aria-label': 'From date' });
+    var to = h('input', { class: 'ecm-input', type: 'date', 'aria-label': 'To date' });
+    var presetBtns = [];
+    function setPreset(days) {
+      if (days) { var end = new Date(); st.to = ''; st.from = isoDay(new Date(end.getTime() - (days - 1) * 86400000)); }
+      else { st.from = ''; st.to = ''; }
+      from.value = st.from; to.value = st.to;
+      presetBtns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-days') === String(days || ''))); });
+      onChange();
+    }
+    (opts.presets || [[7, '7 days'], [30, '30 days'], [90, '90 days'], ['', 'All']]).forEach(function (p) {
+      var b = h('button', { type: 'button', class: 'ecm-chip-btn', 'data-days': String(p[0]), 'aria-pressed': String(p[0] === ''), text: p[1],
+        onclick: function () { setPreset(p[0]); } });
+      presetBtns.push(b);
+    });
+    mpSel.addEventListener('change', function () { st.mp = this.value; onChange(); });
+    function typed() {
+      st.from = from.value; st.to = to.value;
+      presetBtns.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+      onChange();
+    }
+    from.addEventListener('change', typed);
+    to.addEventListener('change', typed);
+    var el = h('div', { class: 'ecm-filters', role: 'group', 'aria-label': 'Filters' }, [
+      h('div', { class: 'ecm-filters__group' }, [mpSel].concat(opts.extra || [])),
+      h('div', { class: 'ecm-filters__group' }, [h('span', { class: 'ecm-filters__label', text: opts.dateLabel || 'Dates' }), from,
+        h('span', { class: 'ecm-filters__label', 'aria-hidden': 'true', text: '–' }), to].concat(presetBtns))
+    ]);
+    return {
+      el: el,
+      mpOk: function (m) { return !st.mp || m === st.mp; },
+      dateOk: function (d) { if (!d) return !st.from && !st.to; return (!st.from || d >= st.from) && (!st.to || d <= st.to); },
+      monthOk: function (m) { return (!st.from || m >= st.from.slice(0, 7)) && (!st.to || m <= st.to.slice(0, 7)); },
+      state: st
+    };
+  }
+
+  // ---- KPI tiles
+  function kpiRow(items) {
+    return h('div', { class: 'ecm-kpis' }, items.map(function (k) {
+      return h('div', { class: 'ecm-kpi' + (k.tone ? ' ecm-kpi--' + k.tone : '') }, [
+        h('span', { class: 'ecm-kpi__label', text: k.label }),
+        h('span', { class: 'ecm-kpi__value', text: k.value }),
+        k.hint ? h('span', { class: 'ecm-kpi__hint', text: k.hint }) : null
+      ]);
+    }));
+  }
+
+  // ---- charts: plain SVG (no library), bars and / or lines over one x axis; a "Show the numbers" table under each
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function sv(tag, attrs, text) {
+    var el = document.createElementNS(SVGNS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) el.setAttribute(k, attrs[k]); });
+    if (text != null) el.textContent = text;
+    return el;
+  }
+  function niceStep(range, n) {
+    var raw = range / Math.max(1, n), p = Math.pow(10, Math.floor(Math.log10(raw || 1))), f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+  function chart(cfg) {
+    var W = 760, H = cfg.height || 230, L = 56, R = 12, T = 10, B = 28;
+    var labels = cfg.labels, n = labels.length, xf = cfg.xFmt || String, tf = cfg.tipFmt || function (v) { return fmtNum(v, 0); };
+    var vals = [];
+    cfg.series.forEach(function (s) { s.values.forEach(function (v) { if (v != null && isFinite(v)) vals.push(v); }); });
+    // zoom: the axis spans the data only (stock levels), otherwise it includes 0 (bars, counts)
+    var lo = Math.min.apply(null, cfg.zoom && vals.length ? vals : vals.concat([0]));
+    var hi = Math.max.apply(null, cfg.zoom && vals.length ? vals : vals.concat([0]));
+    if (hi === lo) { hi = lo + 1; if (cfg.zoom) lo = lo - 1; }
+    var step = niceStep(hi - lo, 4);
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    var band = (W - L - R) / Math.max(1, n);
+    var X = function (i) { return L + band * (i + 0.5); };
+    var Y = function (v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'ecm-chart__svg', role: 'img', 'aria-label': cfg.title });
+    for (var v = lo; v <= hi + step / 2; v += step) {
+      svg.appendChild(sv('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: Math.abs(v) < step / 1e6 ? 'ecm-chart__zero' : 'ecm-chart__grid' }));
+      svg.appendChild(sv('text', { x: L - 8, y: Y(v) + 4, 'text-anchor': 'end', class: 'ecm-chart__tick' }, (cfg.yFmt || fmtShort)(v)));
+    }
+    var every = Math.max(1, Math.ceil(n / 8));
+    labels.forEach(function (lab, i) {
+      // every n-th label, and the last one only when it does not crowd the one before
+      var lastFits = i === n - 1 && (n - 1) % every >= Math.ceil(every / 2);
+      if (i % every && !lastFits) return;
+      svg.appendChild(sv('text', { x: X(i), y: H - 8, 'text-anchor': 'middle', class: 'ecm-chart__tick' }, xf(lab)));
+    });
+    var bars = cfg.series.filter(function (s) { return s.kind === 'bar'; });
+    var bw = Math.max(2, Math.min(28, band * 0.8 / Math.max(1, bars.length)));
+    bars.forEach(function (s, k) {
+      s.values.forEach(function (val, i) {
+        if (val == null || !isFinite(val) || !val) return;
+        var x0 = X(i) - (bw * bars.length) / 2 + k * bw, y0 = Y(Math.max(0, val)), y1 = Y(Math.min(0, val));
+        var r = sv('rect', { x: x0.toFixed(1), y: y0.toFixed(1), width: Math.max(1, bw - 1).toFixed(1), height: Math.max(1, y1 - y0).toFixed(1),
+          style: 'fill:' + s.color, class: 'ecm-chart__bar' });
+        r.appendChild(sv('title', null, s.name + ' · ' + xf(labels[i]) + ': ' + tf(val)));
+        svg.appendChild(r);
+      });
+    });
+    cfg.series.filter(function (s) { return s.kind !== 'bar'; }).forEach(function (s) {
+      var d = '', pen = false;
+      s.values.forEach(function (val, i) {
+        if (val == null || !isFinite(val)) { pen = false; return; }
+        d += (pen ? ' L ' : ' M ') + X(i).toFixed(1) + ' ' + Y(val).toFixed(1);
+        pen = true;
+      });
+      if (d) svg.appendChild(sv('path', { d: d.trim(), class: 'ecm-chart__line', style: 'fill:none;stroke:' + s.color + ';stroke-width:' + (s.width || 2.5) }));
+      if (n <= 60) s.values.forEach(function (val, i) {
+        if (val == null || !isFinite(val)) return;
+        var c = sv('circle', { cx: X(i).toFixed(1), cy: Y(val).toFixed(1), r: n > 31 ? 2 : 3, style: 'fill:' + s.color });
+        c.appendChild(sv('title', null, s.name + ' · ' + xf(labels[i]) + ': ' + tf(val)));
+        svg.appendChild(c);
+      });
+    });
+    var legend = h('ul', { class: 'ecm-legend' }, cfg.series.map(function (s) {
+      return h('li', null, [h('span', { class: 'ecm-legend__dot', style: 'background:' + s.color, 'aria-hidden': 'true' }), s.name]);
+    }));
+    var tbl = h('table', { class: 'ecm-table' }, [
+      h('thead', null, h('tr', null, [h('th', { scope: 'col', text: cfg.xName || 'Date' })].concat(cfg.series.map(function (s) {
+        return h('th', { scope: 'col', class: 'is-num', text: s.name }); })))),
+      h('tbody', null, labels.map(function (lab, i) {
+        return h('tr', null, [h('td', { text: xf(lab) })].concat(cfg.series.map(function (s) {
+          var val = s.values[i]; return h('td', { class: 'is-num', text: val == null ? '' : tf(val) }); })));
+      }))
+    ]);
+    return h('figure', { class: 'ecm-chart' }, [
+      h('figcaption', { class: 'ecm-chart__title', text: cfg.title }),
+      cfg.note ? h('p', { class: 'ecm-note', text: cfg.note }) : null,
+      legend, n ? svg : h('p', { class: 'ecm-note', text: 'No data in this range.' }),
+      n ? h('details', { class: 'ecm-chart__data' }, [h('summary', { text: 'Show the numbers' }), h('div', { class: 'ecm-tablewrap' }, tbl)]) : null
+    ]);
+  }
+  // Every month (or day) between the first and the last key, so gaps show as zero.
+  function fillMonths(keys) {
+    if (!keys.length) return [];
+    var out = [], p = keys[0].split('-'), y = +p[0], m = +p[1], last = keys[keys.length - 1];
+    for (var k = 0; k < 600; k++) {
+      var key = y + '-' + String(m).padStart(2, '0');
+      out.push(key);
+      if (key >= last) break;
+      m++; if (m > 12) { m = 1; y++; }
+    }
+    return out;
+  }
+
+  function loadingBox(main) { var box = h('div', null, h('p', { class: 'ecm-note', text: 'Loading…' })); main.appendChild(box); return box; }
+  function emptyData(box, conn) {
+    box.appendChild(h('div', { class: 'ecm-card ecm-empty' }, [
+      h('p', { text: 'No data yet for ' + conn.label + '.' }),
+      h('a', { class: 'ecm-btn ecm-btn--primary', href: '#/settings', text: 'Go to Settings → Sync now' })
+    ]));
+  }
+  function sampleNote(stats) {
+    return stats ? null : h('p', { class: 'ecm-note', text: 'The tiles and charts count the loaded test sample (≤ 100 rows per marketplace). Totals of Amazon\'s whole files appear after the next sync (needs supabase/0036).' });
+  }
+  function viewFailed(box, e) {
+    box.innerHTML = '';
+    box.appendChild(h('p', { class: 'ecm-error', role: 'alert', text: 'Could not load the data: ' + e.message }));
+  }
+
   function viewData(id, main) {
     var cfg = VIEWS[id];
     header(main, cfg.title, cfg.lede);
     var conn = current();
     if (!conn) return needAccount(main);
-    var box = h('div', null, h('p', { class: 'ecm-note', text: 'Loading…' }));
-    main.appendChild(box);
-    loadRows(id, conn).then(function (rows) {
+    var box = loadingBox(main);
+    Promise.all([loadRows(id, conn), loadStats(conn)]).then(function (res) {
       box.innerHTML = '';
-      if (!rows.length) {
-        box.appendChild(h('div', { class: 'ecm-card ecm-empty' }, [
-          h('p', { text: 'No data yet for ' + conn.label + '.' }),
-          h('a', { class: 'ecm-btn ecm-btn--primary', href: '#/settings', text: 'Go to Settings → Sync now' })
-        ]));
-        return;
-      }
-      box.appendChild(dataTable(id, cfg, rows, conn));
+      var rows = res[0], stats = res[1];
+      if (!rows.length && !(stats && stats.length)) return emptyData(box, conn);
+      ({ products: viewProducts, inventory: viewInventory, repeat: viewRepeat })[id](box, cfg, rows, stats, conn);
       box.appendChild(h('p', { class: 'ecm-note', text: TEST_NOTE + (conn.last_sync_at ? ' Last sync: ' + fmtTime(conn.last_sync_at) + '.' : '') }));
-    }).catch(function (e) {
-      box.innerHTML = '';
-      box.appendChild(h('p', { class: 'ecm-error', role: 'alert', text: 'Could not load the data: ' + e.message }));
+    }).catch(function (e) { viewFailed(box, e); });
+  }
+
+  // ---- Products: listing totals, new listings per month, the listings table
+  function viewProducts(box, cfg, rows, stats, conn) {
+    var ls = latestBy(stats, 'listings');
+    var mps = uniq(rows.map(function (r) { return r.marketplace_id; }).concat(ls.map(function (s) { return s.marketplace_id; })));
+    var kpiBox = h('div'), chartBox = h('div', { class: 'ecm-charts' });
+    var bar = filterBar({ mps: mps, dateLabel: 'Listed', presets: [[30, '30 days'], [365, '12 months'], ['', 'All']] }, render);
+    var tbl = dataTable('products', cfg, rows, conn, function (r) {
+      return bar.mpOk(r.marketplace_id) && bar.dateOk(dateOfListing(r.open_date));
     });
+    box.append(bar.el, kpiBox, chartBox, h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Listings (test sample: up to 100 per marketplace)' }), tbl.el);
+    var note = sampleNote(stats);
+    if (note) box.insertBefore(note, kpiBox);
+    function render() {
+      var sel = ls.filter(function (s) { return bar.mpOk(s.marketplace_id); });
+      var m = { skus: 0, active: 0, inactive: 0, incomplete: 0, fba: 0, fbm: 0 }, opened = {};
+      if (sel.length) {
+        sel.forEach(function (s) {
+          Object.keys(m).forEach(function (k) { m[k] += s.metrics[k] || 0; });
+          var o = s.metrics.opened || {};
+          Object.keys(o).forEach(function (k) { opened[k] = (opened[k] || 0) + o[k]; });
+        });
+      } else {
+        rows.forEach(function (r) {
+          if (!bar.mpOk(r.marketplace_id)) return;
+          m.skus++;
+          var w = /^(activ|aktiv|actif|attiv)/i.test(r.status || '') ? 'active' : /^(inactiv|inaktiv|inattiv)/i.test(r.status || '') ? 'inactive' : 'incomplete';
+          m[w]++;
+          if (/^AMAZON/i.test(r.fulfillment_channel || '')) m.fba++; else if (r.fulfillment_channel) m.fbm++;
+          var d = dateOfListing(r.open_date);
+          if (d) opened[d.slice(0, 7)] = (opened[d.slice(0, 7)] || 0) + 1;
+        });
+      }
+      var months = fillMonths(Object.keys(opened).sort()).filter(bar.monthOk);
+      var inRange = months.reduce(function (a, k) { return a + (opened[k] || 0); }, 0);
+      kpiBox.replaceChildren(kpiRow([
+        { label: 'SKUs listed', value: fmtInt(m.skus), hint: sel.length ? 'all of Amazon\'s report' : 'loaded sample' },
+        { label: 'Active', value: fmtInt(m.active), hint: pctOf(m.active, m.skus), tone: 'up' },
+        { label: 'Inactive', value: fmtInt(m.inactive), hint: pctOf(m.inactive, m.skus) },
+        { label: 'Incomplete', value: fmtInt(m.incomplete), hint: pctOf(m.incomplete, m.skus), tone: m.incomplete ? 'down' : null },
+        { label: 'FBA share', value: pctOf(m.fba, m.fba + m.fbm), hint: fmtInt(m.fba) + ' FBA · ' + fmtInt(m.fbm) + ' FBM' },
+        { label: 'Listed in the date range', value: fmtInt(inRange), hint: months.length ? fmtMonth(months[0]) + ' – ' + fmtMonth(months[months.length - 1]) : 'no dates' }
+      ]));
+      chartBox.replaceChildren(chart({ title: 'New listings per month', xName: 'Month', labels: months, xFmt: fmtMonth,
+        series: [{ name: 'Listings opened', values: months.map(function (k) { return opened[k] || 0; }), color: 'var(--partner)', kind: 'bar' }] }));
+      tbl.refresh();
+    }
+    render();
+  }
+
+  // ---- FBA inventory: stock now, stock development (Inventory Ledger), movement per SKU, the snapshot table
+  var SKU_MOVES = {
+    title: 'Stock movement per SKU',
+    cols: [
+      { k: 'marketplace_id', t: 'Pool', f: mpCode },
+      { k: 'sku', t: 'SKU', mono: true },
+      { k: 'asin', t: 'ASIN', mono: true },
+      { k: 'title', t: 'Title', wide: true },
+      { k: 'start', t: 'Start', num: true },
+      { k: 'end', t: 'End', num: true },
+      { k: '_chg', t: 'Change', num: true, calc: function (r) { return (r.end || 0) - (r.start || 0); } },
+      { k: 'receipts', t: 'Received', num: true },
+      { k: '_ship', t: 'Shipped', num: true, calc: function (r) { return -(r.shipments || 0); } },
+      { k: 'returns', t: 'Returns', num: true },
+      { k: 'lost_damaged', t: 'Lost / damaged', num: true }
+    ]
+  };
+  function viewInventory(box, cfg, rows, stats, conn) {
+    var fbaNow = latestBy(stats, 'fba_inventory');
+    var stock = (stats || []).filter(function (s) { return s.dataset === 'stock'; });
+    var skuAll = (stats || []).filter(function (s) { return s.dataset === 'stock_sku'; });
+    var lastWin = skuAll.reduce(function (a, s) { return s.period_end > a ? s.period_end : a; }, '');
+    var skuRows = skuAll.filter(function (s) { return s.period_end === lastWin; }).map(function (s) {
+      return Object.assign({ marketplace_id: s.marketplace_id, sku: s.dim, window: s.period_start + ' – ' + s.period_end }, s.metrics);
+    });
+    var pools = uniq(rows.map(function (r) { return r.marketplace_id; }).concat(fbaNow.map(function (s) { return s.marketplace_id; }),
+      stock.map(function (s) { return s.marketplace_id; })));
+    var locs = uniq(stock.map(function (s) { return s.dim.split('|')[0]; })).sort();
+    var locSel = h('select', { class: 'ecm-input', 'aria-label': 'Warehouse country' },
+      [h('option', { value: '', text: 'All warehouse countries' })].concat(locs.map(function (l) { return h('option', { value: l, text: 'Warehouses in ' + l }); })));
+    var bar = filterBar({ mps: pools, allLabel: 'All pools', mpLabel: 'Stock pool', extra: [locSel], dateLabel: 'Days' }, render);
+    locSel.addEventListener('change', render);
+    var nowBox = h('div'), devHead = h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Stock development' }), devKpis = h('div'), devCharts = h('div', { class: 'ecm-charts' });
+    var moveTbl = dataTable('skumoves', SKU_MOVES, skuRows, conn, function (r) { return bar.mpOk(r.marketplace_id); });
+    var snapTbl = dataTable('inventory', cfg, rows, conn, function (r) { return bar.mpOk(r.marketplace_id) && bar.dateOk(r.snapshot_date); });
+    box.append(bar.el);
+    var note = sampleNote(stats);
+    if (note) box.appendChild(note);
+    box.append(h('h2', { class: 'ecm-h2', text: 'Stock now' }), nowBox, devHead, devKpis, devCharts,
+      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Stock movement per SKU' + (lastWin ? ' (' + fmtDay(skuRows.length ? skuRows[0].window.slice(0, 10) : lastWin) + ' – ' + fmtDay(lastWin) + ', most shipped first)' : '') }),
+      skuRows.length ? moveTbl.el : h('p', { class: 'ecm-note', text: 'Comes with the next sync (Amazon\'s Inventory Ledger).' }),
+      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'FBA stock per SKU (latest snapshot, test sample)' }), snapTbl.el);
+    function render() {
+      // 1. stock now: the newest snapshot totals per pool (all SKUs), else the sample
+      var cur = fbaNow.filter(function (s) { return bar.mpOk(s.marketplace_id); });
+      var t = { skus: 0, fulfillable: 0, inbound: 0, reserved: 0, unfulfillable: 0, total: 0 };
+      if (cur.length) cur.forEach(function (s) { Object.keys(t).forEach(function (k) { t[k] += s.metrics[k] || 0; }); });
+      else rows.forEach(function (r) {
+        if (!bar.mpOk(r.marketplace_id)) return;
+        t.skus++; t.fulfillable += r.fulfillable || 0; t.inbound += inbound(r) || 0; t.reserved += r.reserved || 0;
+        t.unfulfillable += r.unfulfillable || 0; t.total += r.total || 0;
+      });
+      var snapDay = cur.reduce(function (a, s) { return s.period_end > a ? s.period_end : a; }, '');
+      nowBox.replaceChildren(kpiRow([
+        { label: 'SKUs in FBA', value: fmtInt(t.skus), hint: cur.length ? 'snapshot ' + fmtDay(snapDay) : 'loaded sample' },
+        { label: 'Available', value: fmtInt(t.fulfillable), hint: pctOf(t.fulfillable, t.total) + ' of total', tone: 'up' },
+        { label: 'Inbound', value: fmtInt(t.inbound), hint: 'on the way to Amazon' },
+        { label: 'Reserved', value: fmtInt(t.reserved), hint: 'orders, transfers, checks' },
+        { label: 'Unsellable', value: fmtInt(t.unfulfillable), tone: t.unfulfillable ? 'down' : null },
+        { label: 'Total units', value: fmtInt(t.total) }
+      ]));
+      // 2. stock development: per day, filtered by pool, warehouse country and dates
+      var loc = locSel.value;
+      var st = stock.filter(function (s) {
+        return bar.mpOk(s.marketplace_id) && (!loc || s.dim.indexOf(loc + '|') === 0) && bar.dateOk(s.period_start);
+      });
+      if (!stock.length) {
+        devKpis.replaceChildren(h('p', { class: 'ecm-note', text: 'The daily stock curve comes from Amazon\'s Inventory Ledger with the next sync (needs supabase/0036 and the updated server function).' }));
+        devCharts.replaceChildren();
+      } else {
+        var days = uniq(st.map(function (s) { return s.period_start; })).sort();
+        var by = {};
+        days.forEach(function (d) { by[d] = { sellStart: 0, sell: 0, unsell: 0, rec: 0, ship: 0, ret: 0, loss: 0 }; });
+        st.forEach(function (s) {
+          var d = by[s.period_start], m = s.metrics;
+          if (/\|SELLABLE$/.test(s.dim)) { d.sell += m.end || 0; d.sellStart += m.start || 0; } else d.unsell += m.end || 0;
+          d.rec += m.receipts || 0; d.ship += m.shipments || 0; d.ret += m.returns || 0;
+          d.loss += (m.lost || 0) + (m.damaged || 0) + (m.disposed || 0);
+        });
+        var first = days.length ? by[days[0]].sellStart : 0, last = days.length ? by[days[days.length - 1]].sell : 0;
+        var sum = function (k) { return days.reduce(function (a, d) { return a + by[d][k]; }, 0); };
+        var chg = last - first;
+        devKpis.replaceChildren(kpiRow([
+          { label: 'Sellable at the start', value: fmtInt(first), hint: days.length ? fmtDay(days[0]) : '' },
+          { label: 'Sellable at the end', value: fmtInt(last), hint: days.length ? fmtDay(days[days.length - 1]) : '' },
+          { label: 'Change', value: (chg > 0 ? '+' : '') + fmtInt(chg), hint: first ? (chg >= 0 ? '+' : '') + (chg * 100 / first).toFixed(1) + ' %' : '', tone: chg > 0 ? 'up' : chg < 0 ? 'down' : null },
+          { label: 'Received', value: fmtInt(sum('rec')), hint: days.length + ' days' },
+          { label: 'Shipped to customers', value: fmtInt(-sum('ship')) },
+          { label: 'Customer returns', value: fmtInt(sum('ret')) },
+          { label: 'Lost / damaged / disposed', value: fmtInt(Math.abs(sum('loss'))), tone: sum('loss') ? 'down' : null }
+        ]));
+        devCharts.replaceChildren(
+          chart({ title: 'Sellable units in stock at the end of each day', labels: days, xFmt: fmtDay, zoom: true,
+            note: 'The axis starts near the lowest level, so small changes show.',
+            series: [{ name: 'Sellable units', values: days.map(function (d) { return by[d].sell; }), color: 'var(--partner)' }] }),
+          chart({ title: 'Daily movements', labels: days, xFmt: fmtDay,
+            series: [{ name: 'Received', values: days.map(function (d) { return by[d].rec; }), color: 'var(--ok)', kind: 'bar' },
+                     { name: 'Shipped', values: days.map(function (d) { return by[d].ship; }), color: 'var(--accent)', kind: 'bar' },
+                     { name: 'Returns', values: days.map(function (d) { return by[d].ret; }), color: 'var(--watch)', kind: 'bar' }] })
+        );
+      }
+      moveTbl.refresh();
+      snapTbl.refresh();
+    }
+    render();
+  }
+
+  // ---- Repeat purchase: week totals (all ASINs), weekly trend, the ASIN table
+  function viewRepeat(box, cfg, rows, stats, conn) {
+    var wk = (stats || []).filter(function (s) { return s.dataset === 'repeat_purchase' && !s.dim; });
+    var mps = uniq(rows.map(function (r) { return r.marketplace_id; }).concat(wk.map(function (s) { return s.marketplace_id; })));
+    var kpiBox = h('div'), chartBox = h('div', { class: 'ecm-charts' });
+    var bar = filterBar({ mps: mps, dateLabel: 'Weeks from', presets: [[28, '4 weeks'], [91, '13 weeks'], ['', 'All']] }, render);
+    var tbl = dataTable('repeat', cfg, rows, conn, function (r) { return bar.mpOk(r.marketplace_id) && bar.dateOk(r.start_date); });
+    box.append(bar.el);
+    var note = sampleNote(stats && wk.length ? stats : null);
+    if (note) box.appendChild(note);
+    box.append(kpiBox, chartBox, h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Per ASIN (test sample: up to 100 per marketplace and week)' }), tbl.el);
+    function render() {
+      var weeks = {};
+      var add = function (w, mp, o, uc, rc, rev, cur) {
+        var x = weeks[w] || (weeks[w] = { orders: 0, uc: 0, rc: 0, rev: {} });
+        x.orders += o; x.uc += uc; x.rc += rc; x.rev[cur] = (x.rev[cur] || 0) + rev;
+      };
+      if (wk.length) {
+        wk.forEach(function (s) {
+          if (!bar.mpOk(s.marketplace_id) || !bar.dateOk(s.period_start)) return;
+          var m = s.metrics;
+          add(s.period_start, s.marketplace_id, m.orders || 0, m.unique_customers || 0, m.repeat_customers || 0, m.repeat_revenue || 0, m.currency);
+        });
+      } else {
+        rows.forEach(function (r) {
+          if (!bar.mpOk(r.marketplace_id) || !bar.dateOk(r.start_date)) return;
+          add(r.start_date, r.marketplace_id, r.orders || 0, r.unique_customers || 0, (r.unique_customers || 0) * (r.repeat_customers_pct || 0), r.repeat_revenue || 0, r.currency);
+        });
+      }
+      var keys = Object.keys(weeks).sort();
+      var tot = { orders: 0, uc: 0, rc: 0, rev: {} };
+      keys.forEach(function (k) {
+        var x = weeks[k]; tot.orders += x.orders; tot.uc += x.uc; tot.rc += x.rc;
+        Object.keys(x.rev).forEach(function (c) { tot.rev[c] = (tot.rev[c] || 0) + x.rev[c]; });
+      });
+      kpiBox.replaceChildren(kpiRow([
+        { label: 'Orders', value: fmtInt(tot.orders), hint: keys.length + (keys.length === 1 ? ' week' : ' weeks') },
+        { label: 'Customers', value: fmtInt(tot.uc), hint: 'unique per ASIN, added up' },
+        { label: 'Repeat customers', value: fmtInt(Math.round(tot.rc)), hint: pctOf(tot.rc, tot.uc) + ' of customers', tone: 'up' },
+        { label: 'Repeat revenue', value: moneyBy(tot.rev) },
+        { label: 'Orders per customer', value: tot.uc ? (tot.orders / tot.uc).toFixed(2) : '—' }
+      ]));
+      chartBox.replaceChildren(
+        chart({ title: 'Orders per week', xName: 'Week from', labels: keys, xFmt: fmtDay,
+          series: [{ name: 'Orders', values: keys.map(function (k) { return weeks[k].orders; }), color: 'var(--partner)', kind: 'bar' }] }),
+        chart({ title: 'Repeat customers, % of customers', xName: 'Week from', labels: keys, xFmt: fmtDay,
+          yFmt: function (v) { return Math.round(v * 10) / 10 + ' %'; }, tipFmt: function (v) { return v.toFixed(2) + ' %'; },
+          series: [{ name: 'Repeat customers %', values: keys.map(function (k) { return weeks[k].uc ? weeks[k].rc * 100 / weeks[k].uc : null; }), color: 'var(--ok)' }] })
+      );
+      tbl.refresh();
+    }
+    render();
   }
 
   function cellValue(c, r) {
     var v = c.calc ? c.calc(r) : r[c.k];
     return c.f ? c.f(v) : v;
   }
-  function dataTable(id, cfg, rows, conn) {
-    var st = { mp: '', q: '', sort: null, dir: 1 };
-    var mps = {};
-    rows.forEach(function (r) { if (r.marketplace_id) mps[r.marketplace_id] = 1; });
-    var mpSel = h('select', { class: 'ecm-input', id: 'ecm-f-mp-' + id, 'aria-label': 'Marketplace' }, [h('option', { value: '', text: 'All marketplaces' })]
-      .concat(Object.keys(mps).sort(function (a, b) { return mpCode(a).localeCompare(mpCode(b)); }).map(function (m) { return h('option', { value: m, text: mpCode(m) }); })));
+  // The table under a view: search, sort, CSV. `outer(row)` = the view's filter bar (marketplace + dates).
+  function dataTable(id, cfg, rows, conn, outer) {
+    var st = { q: '', sort: null, dir: 1 };
     var search = h('input', { class: 'ecm-input', type: 'search', placeholder: 'Search', 'aria-label': 'Search this table' });
     var count = h('span', { class: 'ecm-tools__count', 'aria-live': 'polite' });
     var csvBtn = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Download for Excel (CSV)' });
@@ -339,7 +762,7 @@
     function apply() {
       var q = st.q.toLowerCase();
       shown = rows.filter(function (r) {
-        if (st.mp && r.marketplace_id !== st.mp) return false;
+        if (outer && !outer(r)) return false;
         if (!q) return true;
         return cfg.cols.some(function (c) { var v = cellValue(c, r); return v != null && String(v).toLowerCase().indexOf(q) >= 0; });
       });
@@ -364,7 +787,6 @@
       });
       count.textContent = 'Showing ' + shown.length + ' of ' + rows.length + (shown.length > 2000 ? ' (first 2,000 on screen; the download has all)' : '');
     }
-    mpSel.addEventListener('change', function () { st.mp = this.value; apply(); });
     search.addEventListener('input', function () { st.q = this.value.trim(); apply(); });
     csvBtn.addEventListener('click', function () {
       csvDownload('ecommerce-' + id + '-' + new Date().toISOString().slice(0, 10) + '.csv',
@@ -372,7 +794,7 @@
         shown.map(function (r) { return cfg.cols.map(function (c) { return cellValue(c, r); }); }));
     });
     apply();
-    return h('div', null, [h('div', { class: 'ecm-tools' }, [mpSel, search, csvBtn, count]), h('div', { class: 'ecm-tablewrap' }, table)]);
+    return { el: h('div', null, [h('div', { class: 'ecm-tools' }, [search, csvBtn, count]), h('div', { class: 'ecm-tablewrap' }, table)]), refresh: apply };
   }
 
   function viewSoon(id, main) {
@@ -681,6 +1103,7 @@
         var open = (res.jobs || []).some(function (j) { return OPEN[j.status]; });
         if (open) { poll.timer = setTimeout(tick, 5000); return; }
         poll.on = false;
+        statsCache = {};
         toast('Sync finished for ' + conn.label + '.');
         loadConnections().then(function () {
           var acc = $('[aria-labelledby="ecm-acc-h"]'); if (acc) renderAccounts(acc);
