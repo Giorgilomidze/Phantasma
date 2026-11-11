@@ -5634,12 +5634,87 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .fb-admin__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); }
 .fb-admin__row .btn { padding: 8px 14px; }
 .fb-admin__row .btn[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
-.fb-admin__delete { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
-.fb-admin__delete:hover { border-color: var(--ink); }
-.fb-admin__delete:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 4px; }
+.fb-admin__reply-btn { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+.fb-admin__reply-btn:hover { border-color: var(--ink); }
+.fb-admin__reply-btn[aria-expanded="true"] { border-color: var(--ink); }
+.fb-admin__reply-btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 4px; }
+.fb-admin__reply { display: grid; gap: var(--space-1); }
+.fb-admin__reply[hidden] { display: none; }
 .fb-admin__note { min-height: 44px; padding: var(--space-2) var(--space-3); font-size: var(--type-body-sm); resize: vertical; }
+/* Done (✓, green) and Delete (bin) as icon buttons at the end of the row */
+.fb-admin__icons { display: flex; gap: var(--space-2); margin-left: auto; }
+.fb-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--space-6) + var(--space-1));
+  height: calc(var(--space-6) + var(--space-1));
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.fb-icon-btn[hidden] { display: none; }
+.fb-icon-btn:hover { border-color: var(--ink); }
+.fb-icon-btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 3px; }
+.fb-icon-btn[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
+.fb-icon-btn--done { color: var(--ok); border-color: var(--ok); }
+.fb-icon-btn--done:hover { background: var(--ok); color: var(--bg); }
+.fb-icon-btn--delete:hover { color: var(--act); border-color: var(--act); }
 @media (min-width: 768px) {
   .fb-admin__item { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); }
+}
+/* Feedback board (11 Nov 2026, owner; the same for every service): New /
+   Processing / Finished side by side from 1024px, stacked below. A card is
+   dragged into another column; inside the board a card is one column. */
+.fb-board__hint { margin: 0 0 var(--space-3); }
+.fb-board { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.fb-col {
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+.fb-col.is-over { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.fb-col__h {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--type-body-sm);
+  font-weight: 600;
+}
+.fb-col__count {
+  min-width: var(--space-5);
+  padding: 0 var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: var(--type-caption);
+  font-weight: 500;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.fb-col__list { min-height: var(--space-8); }
+.fb-col__empty {
+  padding: var(--space-4) var(--space-3);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-caption);
+  color: var(--ink-soft);
+  text-align: center;
+}
+.fb-board .fb-admin__item { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); cursor: grab; }
+.fb-board .fb-admin__item.is-dragging { opacity: 0.5; }
+@media (min-width: 1024px) {
+  .fb-board { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fb-col { transition: none; }
 }
 
 /* Room under the footer so the round button never covers its last line. */

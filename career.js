@@ -184,7 +184,7 @@
   // Stored with every message and feedback request (0035), so the admin panel
   // can tell them apart. One conversation per person across the services.
   const SERVICE = (document.body && document.body.getAttribute('data-chat')) || 'career';
-  const SERVICE_NAMES = { career: 'Job search', tenders: 'Tenders', ecommerce: 'E-commerce' };   // ecommerce/: <body data-chat="ecommerce"> (C7, 11 Nov 2026)
+  const SERVICE_NAMES = { career: 'Job search', tenders: 'Tenders', ads: 'Advertising', ecommerce: 'E-commerce' };   // ecommerce/: <body data-chat="ecommerce"> (C7, 11 Nov 2026); campaigns/: data-chat="ads" (C4, 11 Nov)
   const serviceName = (k) => SERVICE_NAMES[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : '');
   function serviceTag(k) {
     const t = el('span', 'chat-svc', serviceName(k));
@@ -2246,6 +2246,32 @@
     const fbSigOf = (list) => list.map((f) => f.id + ':' + f.status + ':' + (f.updated_at || '')).join(',');
     const paintFbBadge = () => paintBadge(fbBadge, fbRows ? fbRows.filter((f) => f.status === 'new').length : 0, 'new');
 
+    // Board (11 Nov 2026, owner; the same for every service): three columns.
+    // A card is dragged to another column to change its status; the status
+    // select + Save, the green Done button and the bin do the same by keyboard
+    // or touch. Dropping on Processing sets Reviewed, on Finished sets Done
+    // (Planned / Won't do stay in their column and are chosen in the select).
+    const FB_COLS = [
+      { key: 'new',        title: 'New',        statuses: ['new'],              drop: 'new' },
+      { key: 'processing', title: 'Processing', statuses: ['reviewed', 'planned'], drop: 'reviewed' },
+      { key: 'finished',   title: 'Finished',   statuses: ['done', 'wont_do'],  drop: 'done' },
+    ];
+    const colOf = (status) => (FB_COLS.find((c) => c.statuses.includes(status)) || FB_COLS[0]).key;
+    const fbOpen = new Set();                      // ids whose reply box is open (survives repaints)
+    // Constant icon markup (no user text in it).
+    const FB_ICON = {
+      bin: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      check: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    };
+    function fbIconBtn(cls, title, label, svg) {
+      const b = el('button', 'fb-icon-btn ' + cls);
+      b.type = 'button';
+      b.title = title;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = svg;
+      return b;
+    }
+
     async function loadFeedback() {
       if (!fbBox) return;
       const g = gen;
@@ -2275,6 +2301,8 @@
       const d = fbDraft.get(f.id);
       const li = el('li', 'fb-admin__item');
       li.dataset.status = f.status;
+      li.dataset.id = String(f.id);
+      li.draggable = true;                         // see the drag handlers below
       const info = el('div', 'fb-admin__info');
       const whoP = el('p', 'fb-admin__who');
       if (f.ticket_no) whoP.appendChild(el('span', 'fb-admin__ticket', '#' + f.ticket_no));   // YYMMDD-NNNN (0038)
@@ -2310,23 +2338,40 @@
       ta.maxLength = 1000;                          // feedback.admin_note limit
       ta.dataset.focusKey = 'note:' + f.id;
       ta.value = d ? d.note : (f.admin_note || '');
-      // Status, Save and Delete share one row; the note sits under it.
+      // Status, Save and Reply on one row with the Done (✓) and Delete (bin)
+      // icons at its end; the reply box opens under it (owner, 11 Nov 2026).
+      const who = c ? nameOf(c) : 'this account';
+      const tk = f.ticket_no ? '#' + f.ticket_no + ' ' : '';
       const row = el('div', 'fb-admin__row');
       const save = el('button', 'btn btn-primary btn-sm', 'Save');
       save.type = 'submit';
       save.dataset.focusKey = 'save:' + f.id;
-      save.setAttribute('aria-label', 'Save status and note for the request from ' + (c ? nameOf(c) : 'this account'));
-      const del = el('button', 'btn btn-secondary btn-sm fb-admin__delete', 'Delete');
-      del.type = 'button';
+      save.setAttribute('aria-label', 'Save status and reply for the request from ' + who);
+      const reply = el('button', 'btn btn-secondary btn-sm fb-admin__reply-btn', 'Reply');   // opens with the saved reply, if any
+      reply.type = 'button';
+      reply.dataset.fbReply = String(f.id);
+      reply.dataset.focusKey = 'reply:' + f.id;
+      const box = el('div', 'fb-admin__reply');
+      box.id = 'fb-reply-' + f.id;
+      const open = fbOpen.has(f.id) || !!(d && d.note !== (f.admin_note || ''));
+      box.hidden = !open;
+      reply.setAttribute('aria-expanded', String(open));
+      reply.setAttribute('aria-controls', box.id);
+      const icons = el('span', 'fb-admin__icons');
+      const done = fbIconBtn('fb-icon-btn--done', 'Done', 'Mark the request ' + tk + 'from ' + who + ' as done', FB_ICON.check);
+      done.dataset.fbDone = String(f.id);
+      done.dataset.focusKey = 'done:' + f.id;
+      if (f.status === 'done') done.hidden = true;  // already in Finished as Done
+      const del = fbIconBtn('fb-icon-btn--delete', 'Delete', 'Delete the request ' + tk + 'from ' + who, FB_ICON.bin);
       del.dataset.fbDelete = String(f.id);
       del.dataset.focusKey = 'del:' + f.id;
-      del.setAttribute('aria-label', 'Delete the request ' + (f.ticket_no ? '#' + f.ticket_no + ' ' : '')
-        + 'from ' + (c ? nameOf(c) : 'this account'));
-      row.append(sel, save, del);
+      icons.append(done, del);
+      row.append(sel, save, reply, icons);
+      box.append(nl, ta);
       const st = el('p', 'account-form__status');
       st.setAttribute('role', 'status');
       st.hidden = true;
-      form.append(sl, row, nl, ta, st);
+      form.append(sl, row, box, st);
       li.append(info, form);
       return li;
     }
@@ -2340,14 +2385,26 @@
       const shown = fbRows.filter((f) => (pick === 'all' || f.status === pick)
         && (svc === 'all' || (f.service || 'career') === svc));
       const keep = fbBox.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
-      if (shown.length) {
-        const list = el('ol', 'fb-admin');
-        list.setAttribute('aria-label', 'Feedback requests');
-        shown.forEach((f) => list.appendChild(fbItem(f)));
-        fbBox.replaceChildren(list);
-        fillThumbs(list);
+      if (fbRows.length) {
+        // Three columns, newest first in each; an empty column still takes drops.
+        const board = el('div', 'fb-board');
+        FB_COLS.forEach((col) => {
+          const cards = shown.filter((f) => colOf(f.status) === col.key);
+          const sec = el('section', 'fb-col');
+          sec.dataset.col = col.key;
+          const h = el('h3', 'fb-col__h', col.title + ' ');
+          h.appendChild(el('span', 'fb-col__count', String(cards.length)));
+          const list = el('ol', 'fb-admin fb-col__list');
+          list.setAttribute('aria-label', col.title + ' requests');
+          cards.forEach((f) => list.appendChild(fbItem(f)));
+          if (!cards.length) list.appendChild(el('li', 'fb-col__empty', 'No requests here.'));
+          sec.append(h, list);
+          board.appendChild(sec);
+        });
+        fbBox.replaceChildren(board);
+        fillThumbs(board);
       } else {
-        fbBox.replaceChildren(el('p', 'account__hint', fbRows.length ? 'No requests match this choice.' : 'No feedback yet.'));
+        fbBox.replaceChildren(el('p', 'account__hint', 'No feedback yet.'));
       }
       fbCount.textContent = pick === 'all' && svc === 'all'
         ? fbRows.length + (fbRows.length === 1 ? ' request' : ' requests')
@@ -2385,14 +2442,108 @@
           .select('id, status, admin_note, updated_at'));
         btn.removeAttribute('aria-disabled');
         if (error || !data || !data.length) { note(st, 'error', 'Could not save. Please try again.'); return; }
-        // The card stays as it is (with "Saved."); the next load repaints the
-        // list, so the status filter applies to it again then.
+        // Same column: the card stays as it is (with "Saved."). Another
+        // column: the board is repainted at once, so the card moves there.
         const row = fbRows && fbRows.find((x) => x.id === id);
+        const before = row ? colOf(row.status) : null;
         if (row) Object.assign(row, data[0]);
         fbDraft.delete(id);
         f.closest('.fb-admin__item').dataset.status = status;
         note(st, 'ok', 'Saved.');
+        if (before && before !== colOf(status)) { fbSig = fbSigOf(fbRows); paintFeedback(); }
         paintFbBadge();
+      });
+
+      // Shared by a drop and the Done button: saves the given fields of one
+      // request and repaints the board so the card lands in its column.
+      async function fbMove(id, fields, st) {
+        if (st) note(st, 'busy', 'Saving…');
+        const { data, error } = await call(db().from('feedback')
+          .update(fields).eq('id', id)
+          .select('id, status, admin_note, updated_at'));
+        if (error || !data || !data.length) {
+          if (st) note(st, 'error', 'Could not save. Please try again.');
+          else window.alert('Could not move the request. Please try again.');
+          return;
+        }
+        const row = fbRows && fbRows.find((x) => x.id === id);
+        if (row) Object.assign(row, data[0]);
+        const d = fbDraft.get(id);
+        if (d && 'admin_note' in fields) fbDraft.delete(id);
+        else if (d) d.status = data[0].status;
+        fbSig = fbSigOf(fbRows);
+        paintFeedback();
+        paintFbBadge();
+      }
+
+      // Reply: opens / closes the reply box under the card's buttons.
+      // Done (✓): status Done plus whatever is in the reply box, in one save.
+      fbBox.addEventListener('click', (e) => {
+        const rb = e.target.closest('button[data-fb-reply]');
+        if (rb) {
+          const id = Number(rb.dataset.fbReply);
+          const box = document.getElementById(rb.getAttribute('aria-controls'));
+          const open = box.hidden;
+          box.hidden = !open;
+          rb.setAttribute('aria-expanded', String(open));
+          if (open) { fbOpen.add(id); box.querySelector('textarea').focus(); } else fbOpen.delete(id);
+          return;
+        }
+        const db1 = e.target.closest('button[data-fb-done]');
+        if (db1 && db1.getAttribute('aria-disabled') !== 'true') {
+          const form = db1.closest('form');
+          db1.setAttribute('aria-disabled', 'true');
+          fbMove(Number(db1.dataset.fbDone),
+            { status: 'done', admin_note: form.querySelector('textarea').value.trim() || null },
+            form.querySelector('.account-form__status'))
+            .finally(() => db1.removeAttribute('aria-disabled'));
+        }
+      });
+
+      // Drag and drop between the columns. A drag never starts from a field or
+      // a button, so typing, selecting text and clicking keep working.
+      let dragId = null;
+      const clearOver = () => fbBox.querySelectorAll('.fb-col.is-over').forEach((c) => c.classList.remove('is-over'));
+      fbBox.addEventListener('pointerdown', (e) => {
+        const li = e.target.closest('.fb-admin__item');
+        if (li) li.draggable = !e.target.closest('textarea, select, input, button, a');
+      });
+      fbBox.addEventListener('dragstart', (e) => {
+        const li = e.target.closest && e.target.closest('.fb-admin__item');
+        if (!li) return;
+        dragId = Number(li.dataset.id);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(dragId));
+        li.classList.add('is-dragging');
+      });
+      fbBox.addEventListener('dragend', (e) => {
+        const li = e.target.closest && e.target.closest('.fb-admin__item');
+        if (li) li.classList.remove('is-dragging');
+        clearOver();
+        dragId = null;
+      });
+      fbBox.addEventListener('dragover', (e) => {
+        const col = e.target.closest('.fb-col');
+        if (!col || dragId === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!col.classList.contains('is-over')) { clearOver(); col.classList.add('is-over'); }
+      });
+      fbBox.addEventListener('dragleave', (e) => {
+        const col = e.target.closest('.fb-col');
+        if (col && !col.contains(e.relatedTarget)) col.classList.remove('is-over');
+      });
+      fbBox.addEventListener('drop', (e) => {
+        const col = e.target.closest('.fb-col');
+        if (!col || dragId === null) return;
+        e.preventDefault();
+        clearOver();
+        const id = dragId;
+        dragId = null;
+        const row = fbRows && fbRows.find((x) => x.id === id);
+        const def = FB_COLS.find((c) => c.key === col.dataset.col);
+        if (!row || !def || def.statuses.includes(row.status)) return;   // same column: nothing to save
+        fbMove(id, { status: def.drop }, null);
       });
       // Delete (0038, admins only by RLS): asks first; the client's uploaded files stay in the bucket.
       fbBox.addEventListener('click', async (e) => {
