@@ -628,7 +628,6 @@
   var SKU_MOVES = {
     title: 'Stock movement per SKU',
     cols: [
-      { k: 'marketplace_id', t: 'Pool', f: mpCode },
       { k: 'sku', t: 'SKU', mono: true },
       { k: 'asin', t: 'ASIN', mono: true },
       { k: 'title', t: 'Title', wide: true },
@@ -641,6 +640,10 @@
       { k: 'lost_damaged', t: 'Lost / damaged', num: true }
     ]
   };
+  // Amazon's Inventory Ledger covers every warehouse of the account (stored once as "ALL" since 11 Nov 2026); a
+  // warehouse country belongs to a stock pool: GB → UK, TR / SA / AE their own, the rest (DE, PL, CZ, SK …) → EU pool.
+  var LOC_POOL = { GB: 'A1F83G8C2ARO7P', TR: 'A33AVAJ2PDY3EV', SA: 'A17E79C6D8DWNP', AE: 'A2VIGQ35RCS4UG' };
+  function stockPool(s) { return s.marketplace_id === 'ALL' ? (LOC_POOL[s.dim.split('|')[0]] || 'EU') : s.marketplace_id; }
   function viewInventory(box, cfg, rows, stats, conn) {
     var fbaNow = latestBy(stats, 'fba_inventory');
     var stock = (stats || []).filter(function (s) { return s.dataset === 'stock'; });
@@ -650,20 +653,20 @@
       return Object.assign({ marketplace_id: s.marketplace_id, sku: s.dim, window: s.period_start + ' – ' + s.period_end }, s.metrics);
     });
     var pools = uniq(rows.map(function (r) { return r.marketplace_id; }).concat(fbaNow.map(function (s) { return s.marketplace_id; }),
-      stock.map(function (s) { return s.marketplace_id; })));
+      stock.map(stockPool)));
     var locs = uniq(stock.map(function (s) { return s.dim.split('|')[0]; })).sort();
     var locSel = h('select', { class: 'ecm-input', 'aria-label': 'Warehouse country' },
       [h('option', { value: '', text: 'All warehouse countries' })].concat(locs.map(function (l) { return h('option', { value: l, text: 'Warehouses in ' + l }); })));
     var bar = filterBar({ mps: pools, allLabel: 'All pools', mpLabel: 'Stock pool', extra: [locSel], dateLabel: 'Days' }, render);
     locSel.addEventListener('change', render);
     var nowBox = h('div'), devHead = h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Stock development' }), devKpis = h('div'), devCharts = h('div', { class: 'ecm-charts' });
-    var moveTbl = dataTable('skumoves', SKU_MOVES, skuRows, conn, function (r) { return bar.mpOk(r.marketplace_id); });
+    var moveTbl = dataTable('skumoves', SKU_MOVES, skuRows, conn, function (r) { return r.marketplace_id === 'ALL' || bar.mpOk(r.marketplace_id); });
     var snapTbl = dataTable('inventory', cfg, rows, conn, function (r) { return bar.mpOk(r.marketplace_id) && bar.dateOk(r.snapshot_date); });
     box.append(bar.el);
     var note = sampleNote(stats);
     if (note) box.appendChild(note);
     box.append(h('h2', { class: 'ecm-h2', text: 'Stock now' }), nowBox, devHead, devKpis, devCharts,
-      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Stock movement per SKU' + (lastWin ? ' (' + fmtDay(skuRows.length ? skuRows[0].window.slice(0, 10) : lastWin) + ' – ' + fmtDay(lastWin) + ', most shipped first)' : '') }),
+      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Stock movement per SKU' + (lastWin ? ' (all warehouses, ' + fmtDay(skuRows.length ? skuRows[0].window.slice(0, 10) : lastWin) + ' – ' + fmtDay(lastWin) + ', most shipped first)' : '') }),
       skuRows.length ? moveTbl.el : h('p', { class: 'ecm-note', text: 'Comes with the next sync (Amazon\'s Inventory Ledger).' }),
       h('h2', { class: 'ecm-h2 ecm-section-h', text: 'FBA stock per SKU (latest snapshot, test sample)' }), snapTbl.el);
     function render() {
@@ -677,8 +680,10 @@
         t.unfulfillable += r.unfulfillable || 0; t.total += r.total || 0;
       });
       var snapDay = cur.reduce(function (a, s) { return s.period_end > a ? s.period_end : a; }, '');
+      // Amazon lists every SKU the account ever had, in every pool (same list): the largest list, not the sum
+      var listed = cur.reduce(function (a, s) { return Math.max(a, s.metrics.skus_all || 0); }, 0);
       nowBox.replaceChildren(kpiRow([
-        { label: 'SKUs in FBA', value: fmtInt(t.skus), hint: cur.length ? 'snapshot ' + fmtDay(snapDay) : 'loaded sample' },
+        { label: 'SKUs with FBA stock', value: fmtInt(t.skus), hint: cur.length ? (listed ? 'of ' + fmtInt(listed) + ' Amazon lists · ' : '') + 'snapshot ' + fmtDay(snapDay) : 'loaded sample' },
         { label: 'Available', value: fmtInt(t.fulfillable), hint: pctOf(t.fulfillable, t.total) + ' of total', tone: 'up' },
         { label: 'Inbound', value: fmtInt(t.inbound), hint: 'on the way to Amazon' },
         { label: 'Reserved', value: fmtInt(t.reserved), hint: 'orders, transfers, checks' },
@@ -688,7 +693,7 @@
       // 2. stock development: per day, filtered by pool, warehouse country and dates
       var loc = locSel.value;
       var st = stock.filter(function (s) {
-        return bar.mpOk(s.marketplace_id) && (!loc || s.dim.indexOf(loc + '|') === 0) && bar.dateOk(s.period_start);
+        return bar.mpOk(stockPool(s)) && (!loc || s.dim.indexOf(loc + '|') === 0) && bar.dateOk(s.period_start);
       });
       if (!stock.length) {
         devKpis.replaceChildren(h('p', { class: 'ecm-note', text: 'The daily stock curve comes from Amazon\'s Inventory Ledger with the next sync (needs supabase/0036 and the updated server function).' }));
