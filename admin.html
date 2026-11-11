@@ -63,7 +63,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261109d" />
+  <link rel="stylesheet" href="./styles.css?v=20261111a" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -156,8 +156,18 @@
           <div class="account-table-wrap" id="clients-table"></div>
         </section>
 
-        <!-- Messages: conversation list + chat pane (stacked on phones) -->
+        <!-- Messages: conversation list + chat pane (stacked on phones). Since 11 Nov 2026
+             (supabase/0035) everyone who writes lands here, from the job-search pages and from
+             the Tender Portal; the filter and the tags say which (career.js). -->
         <section class="admin-tabpanel" id="admin-messages" role="tabpanel" aria-labelledby="admin-tab-messages" hidden>
+          <div class="admin-toolbar">
+            <label class="admin-filter__label" for="conv-filter">Show</label>
+            <select class="t-filter__select admin-filter" id="conv-filter">
+              <option value="all">All services</option>
+              <option value="career">Job search</option>
+              <option value="tenders">Tenders</option>
+            </select>
+          </div>
           <div class="admin-chat">
             <div class="admin-chat__list">
               <h2 class="visually-hidden" id="conv-h">Conversations</h2>
@@ -188,6 +198,12 @@
               <option value="planned">Planned</option>
               <option value="done">Done</option>
               <option value="wont_do">Won't do</option>
+            </select>
+            <label class="admin-filter__label" for="fb-service">From</label>
+            <select class="t-filter__select admin-filter" id="fb-service">
+              <option value="all">All services</option>
+              <option value="career">Job search</option>
+              <option value="tenders">Tenders</option>
             </select>
             <span class="admin-count" id="fb-count" aria-live="polite"></span>
           </div>
@@ -291,6 +307,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
   <script src="./script.js?v=20261110b"></script>
   <!-- Career service: admin panel + chat (after script.js) -->
-  <script src="./career.js?v=20261109a"></script>
+  <script src="./career.js?v=20261111a"></script>
 </body>
 </html>

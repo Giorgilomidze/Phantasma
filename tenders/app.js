@@ -1100,8 +1100,88 @@
       const summary = h('p', { class: 'summary', 'aria-live': 'polite' });
       const tableBox = h('div');
       let shown = [];
+
+      // Owner, 11 Nov 2026: "a separate view of watch list, new biddings, and the tenders the person is
+      // taking part in", as tabs or filters. Four buttons above the filters (view=… in the address bar);
+      // the filters below still apply. Watchlist = tenders ticked ☆; Bid opening = open for bids and
+      // like the bell's alert choice (left panel); Taking part = my company bid on it or won it.
+      const VIEWS = [['', 'All tenders'], ['watch', 'Watchlist'], ['open', 'Bid opening'], ['mine', 'Taking part']];
+      const viewBtns = VIEWS.map((v) => h('button', { type: 'button', class: 'views__btn', 'data-view': v[0],
+        on: { click: () => { if ((state.view || '') === v[0]) return; if (v[0]) state.view = v[0]; else delete state.view; limit = 100; render(); } } }));
+      const viewBar = h('div', { class: 'views', role: 'group', 'aria-label': 'Show' }, viewBtns);
+      const viewNote = h('div', { class: 'views__note', 'aria-live': 'polite' });
+      const companies = res[3].rows.slice().sort((a, b) => b.e - a.e);   // most active first: same names → the busier one
+      function viewSets() {
+        const W = watched();
+        const I = interests();
+        const M = myCompany();
+        return {
+          W: W, I: I, M: M,
+          watch: rows.filter((r) => W[r.no]).length,
+          open: I ? rows.filter((r) => isOpen(r.d) && rowInterest(I, r)) : [],
+          mine: M ? rows.filter((r) => takesPart(r, M.id)).length : 0,
+        };
+      }
+      function paintViews() {
+        const V = viewSets();
+        const cur = state.view || '';
+        const n = { watch: V.watch, open: V.open.length, mine: V.mine };
+        viewBtns.forEach((b, i) => {
+          const k = VIEWS[i][0];
+          clear(b);
+          add(b, [VIEWS[i][1], k && n[k] ? h('span', { class: 'views__n', text: int(n[k]) }) : null]);
+          b.setAttribute('aria-pressed', String(k === cur));
+        });
+        clear(viewNote);
+        viewNote.hidden = !cur;
+        if (cur === 'watch') {
+          add(viewNote, para(V.watch ? 'Tenders you watch (☆). The bell tells you when one of them changes: status, deadline, bids, winner or contract.'
+            : 'No tender watched yet. Press ☆ in the Watch column (tenders that are not finished yet); they then show here and the bell tells you when one changes.', 'small'));
+        } else if (cur === 'open') {
+          if (!V.I) {
+            add(viewNote, para('Choose tender types or codes in the left filter panel (on a wide screen: Dashboard, Tenders or Products) and press "Alert me about new tenders like this". The tenders that match and are open for bids then show here.', 'small'));
+          } else {
+            const fresh = V.open.filter((r) => V.I.seen.indexOf(r.no) < 0);
+            add(viewNote, h('p', { class: 'small' }, ['Open for bids and like your alert choice: ', h('strong', { text: interestText(V.I) }), '. ',
+              fresh.length ? [plural(fresh.length, 'new tender') + ' since you last looked. ',
+                h('button', { type: 'button', class: 'linkish small', text: 'Mark all as seen', on: { click: () => {
+                  const I2 = interests();
+                  if (I2) { I2.seen = Array.from(new Set(I2.seen.concat(V.open.map((r) => r.no)))); keep(ALERT_KEY, I2); }
+                  render();
+                } } })] : 'Nothing new since you last looked.']));
+          }
+        } else if (cur === 'mine') {
+          if (V.M) {
+            add(viewNote, h('p', { class: 'small' }, ['Tenders where ', h('a', { href: companyUrl(V.M.id) }, ka(V.M.name)), ' placed a bid or won. ',
+              'Bids show up once the buyer opens them; to follow a tender you are still preparing, watch it (☆). ',
+              h('button', { type: 'button', class: 'linkish small', text: 'Choose another company', on: { click: () => { keep(MINE_KEY, null); render(); } } })]));
+          } else {
+            const listId = nextId('mine');
+            const input = h('input', { type: 'search', list: listId, autocomplete: 'off', spellcheck: 'false', placeholder: 'Company name', 'aria-label': 'Your company' });
+            const msg = h('span', { class: 'small muted', role: 'status' });
+            const save = () => {
+              const name = input.value.trim().toLowerCase();
+              const c = name && companies.find((x) => x.name.toLowerCase() === name);
+              if (!c) { msg.textContent = 'Pick a name from the list.'; input.focus(); return; }
+              keep(MINE_KEY, { id: c.id, name: c.name, at: new Date().toISOString() });
+              render();
+            };
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+            add(viewNote, [
+              para('Which company is yours? Its tenders then show here: every tender it bid on or won. You can also press "This is my company" on its company page.', 'small'),
+              h('div', { class: 'mine-pick' }, [
+                input,
+                h('datalist', { id: listId }, companies.map((c) => h('option', { value: c.name }))),
+                h('button', { type: 'button', class: 'btn btn--primary btn--small', text: 'This is my company', on: { click: save } }),
+                msg,
+              ]),
+            ]);
+          }
+        }
+      }
+
       clear(APP);
-      add(APP, [details, chips, h('div', { class: 'listbar__end' }, [summary, csvButton('tenders', () => cols, () => shown)]), tableBox]);
+      add(APP, [viewBar, viewNote, details, chips, h('div', { class: 'listbar__end' }, [summary, csvButton('tenders', () => cols, () => shown)]), tableBox]);
 
       let state = {};
       let limit = 100;
@@ -1130,7 +1210,7 @@
         });
         if (el('open').checked) f.open = '1';
         if (el('req').checked) f.req = '1';
-        ['company', 'won', 'cpv'].forEach((k) => { if (state[k]) f[k] = state[k]; });
+        ['company', 'won', 'cpv', 'view'].forEach((k) => { if (state[k]) f[k] = state[k]; });
         const sv = sortSel.value.split(':');
         if (sv[0] && sortSel.value !== 'a:desc') { f.sort = sv[0]; f.dir = sv[1]; }
         state = f;
@@ -1139,7 +1219,13 @@
         const words = (f.q || '').toLowerCase().split(/\s+/).filter(Boolean);
         const vmin = f.vmin ? Number(f.vmin) : null;
         const vmax = f.vmax ? Number(f.vmax) : null;
+        const W = f.view === 'watch' ? watched() : null;
+        const I = f.view === 'open' ? interests() : null;
+        const M = f.view === 'mine' ? myCompany() : null;
         return rows.filter((r) => {
+          if (W && !W[r.no]) return false;                                              // the view buttons
+          if (f.view === 'open' && !(I && isOpen(r.d) && rowInterest(I, r))) return false;
+          if (f.view === 'mine' && !(M && takesPart(r, M.id))) return false;
           if (sideOn() && !sideMatch((r.k || '').split(' '), r.p)) return false;      // the left filter
           if (f.cat && r.c !== f.cat) return false;
           if (f.status && r.s !== f.status) return false;
@@ -1172,7 +1258,10 @@
       }
       const cols = [
         { key: 'watch', label: 'Watch', cls: 'watchcol', noCsv: true, cell: (r) => watchButton(r.no, r.s, true) || h('span', { class: 'muted', title: 'Finished tenders cannot be watched', text: DASH }) },
-        { key: 'no', label: 'Number', first: 'asc', cls: 'nowrap', sort: (r) => r.no, cell: (r) => h('a', { href: tenderUrl(r.no), text: r.no }) },
+        { key: 'no', label: 'Number', first: 'asc', cls: 'nowrap', sort: (r) => r.no, cell: (r) => {
+          const I = state.view === 'open' ? interests() : null;   // Bid opening: the ones not seen yet
+          return [h('a', { href: tenderUrl(r.no), text: r.no }), I && I.seen.indexOf(r.no) < 0 ? h('span', { class: 'tag tag--open', text: 'new' }) : null];
+        } },
         { key: 't', label: 'Title', first: 'asc', cls: 'wide', sort: (r) => r.t, cell: (r) => [ka(r.t), r.rq ? h('span', { class: 'tag tag--req', title: plural(r.rq[0], 'requirement item') + ', ' + int(r.rq[1]) + ' must be proven', text: 'requirements' }) : null] },
         { key: 'b', label: 'Buyer', first: 'asc', cls: 'wide', sort: (r) => r._bn, cell: (r) => (r.b ? h('a', { href: buyerUrl(r.b) }, ka(r._bn)) : DASH) },
         { key: 'c', label: 'Category', first: 'asc', sort: (r) => catLabel(r.c), cell: (r) => catLabel(r.c) },
@@ -1186,6 +1275,7 @@
       function render(opts) {
         const f = state;
         setHash(f);
+        paintViews();
         const list = filter(f);
         let sum = 0;
         let nb = 0;
@@ -1196,7 +1286,7 @@
         });
         clear(summary);
         add(summary, [plural(list.length, 'tender'), ' · ', short(sum) + ' estimated', cnt ? ' · average ' + one(nb / cnt) + ' bidders' : '']);
-        const active = Object.keys(f).filter((k2) => ['sort', 'dir', 'won'].indexOf(k2) < 0).length;
+        const active = Object.keys(f).filter((k2) => ['sort', 'dir', 'won', 'view'].indexOf(k2) < 0).length;
         count.textContent = active ? ' (' + active + ' active)' : '';
         clear(chips);
         if (f.company) {
@@ -1218,12 +1308,22 @@
           if (ch.limit) limit = ch.limit;
           render(ch);
         });
-        if (!list.length) tableBox.appendChild(para('No tender matches these filters.', 'note'));
+        if (!list.length) {
+          tableBox.appendChild(para(f.view && Object.keys(f).some((k2) => ['sort', 'dir', 'won', 'view'].indexOf(k2) < 0)
+            ? 'No tender here matches these filters. Clear the filters to see all of them.'
+            : f.view ? 'Nothing here yet.' : 'No tender matches these filters.', 'note'));
+        }
       }
+      // A star pressed in the table, the bell or another tab: new counts on the view buttons.
+      document.addEventListener('tp:bell', paintViews);
+      window.addEventListener('storage', (e) => { if ([WATCH_KEY, ALERT_KEY, MINE_KEY].indexOf(e.key) >= 0) paintViews(); });
       const onChange = () => { fromForm(); limit = 100; render(); };
       form.addEventListener('change', onChange);
       q.addEventListener('input', debounce(onChange, 160));
-      form.addEventListener('reset', () => setTimeout(() => { state = {}; fromHash.call(null); fromForm(); state = {}; sortSel.value = 'a:desc'; limit = 100; render(); }, 0));
+      form.addEventListener('reset', () => setTimeout(() => {
+        const view = state.view;                  // "Clear filters" keeps the view button
+        state = {}; fromHash.call(null); fromForm(); state = view ? { view: view } : {}; sortSel.value = 'a:desc'; limit = 100; render();
+      }, 0));
       window.addEventListener('hashchange', () => { fromHash(); limit = 100; render(); });
       mountSide(S, () => { limit = 100; render(); });
       fromHash();
@@ -1657,7 +1757,26 @@
         kpi('Buyers', int(c.buyers.length), 'bid to or signed with'),
         kpi('Active', c.first ? day(c.first) : DASH, c.last && c.last !== c.first ? 'to ' + day(c.last) + ' (announcement dates)' : 'announcement date'),
       ]));
-      APP.appendChild(h('div', { class: 'actions' }, [h('a', { class: 'btn btn--ghost btn--small', href: listUrl({ company: id }), text: 'Open these tenders in the list' })]));
+      // "This is my company" (11 Nov 2026): its tenders then show under "Taking part" on the Tenders page.
+      const mineBtn = h('button', { type: 'button', class: 'btn btn--ghost btn--small' });
+      const paintMine = () => {
+        const m = myCompany();
+        const on = !!(m && m.id === id);
+        mineBtn.setAttribute('aria-pressed', String(on));
+        mineBtn.textContent = on ? '✓ My company' : 'This is my company';
+        mineBtn.title = on ? 'Its tenders show under "Taking part" on the Tenders page. Press again to undo.'
+          : 'Show its tenders under "Taking part" on the Tenders page (kept in this browser)';
+      };
+      mineBtn.addEventListener('click', () => {
+        const m = myCompany();
+        keep(MINE_KEY, m && m.id === id ? null : { id: id, name: c.name, at: new Date().toISOString() });
+        paintMine();
+      });
+      paintMine();
+      APP.appendChild(h('div', { class: 'actions' }, [
+        h('a', { class: 'btn btn--ghost btn--small', href: listUrl({ company: id }), text: 'Open these tenders in the list' }),
+        mineBtn,
+      ]));
       if (c.cats.length) {
         APP.appendChild(section('Categories', h('p', null, c.cats.map((x) => chip(catLabel(x[0]) + ' · ' + int(x[1]), listUrl({ company: id, cat: x[0] }))))));
       }
@@ -2050,6 +2169,28 @@
     ]));
   }
 
+  /* "Send feedback" in the demo bar opens the chat window on its Feedback view (signed in; the window
+     comes from ../career.js). If the window is not there, the e-mail link works as before. */
+  function feedbackLink() {
+    const a = document.querySelector('[data-chat-open]');
+    if (!a) return;
+    a.addEventListener('click', (e) => {
+      if (!document.querySelector('.chat-dock:not([hidden])')) return;
+      e.preventDefault();
+      document.dispatchEvent(new CustomEvent('phantasma:chat-open', { detail: { view: a.getAttribute('data-chat-open') } }));
+    });
+  }
+
+  /* Career admins (consult@solvephantasma.com and those it adds) get a link to the admin panel, where
+     every message and feedback request arrives, from the job search and from the Tender Portal. */
+  function adminLink() {
+    sb.rpc('is_career_admin').then((res) => {
+      const links = document.querySelector('.demo-bar__links');
+      if (!res || res.error || res.data !== true || !links || links.querySelector('.demo-bar__admin')) return;
+      links.insertBefore(h('a', { href: '../admin.html#messages', class: 'demo-bar__admin', text: 'Admin: messages' }), links.firstChild);
+    }, () => {});
+  }
+
   /* The dates in the header and footer come from summary.json: the static pages carry no data */
   function dates(S) {
     const stamp = document.getElementById('stamp');
@@ -2145,6 +2286,13 @@
     return true;
   }
   const openMatches = (A, I) => A.rows.filter((r) => r[3] && isOpen(r[3]) && interestMatch(I, r));
+  // The same test for a row of tenders.json (p = procedure type, k = CPV codes)
+  const rowInterest = (I, r) => interestMatch(I, [r.no, r.t, r.s, r.d, null, null, null, null, r.v, r.a, r.c, r.k, r.p, null]);
+  // "My company" (11 Nov 2026): the company whose tenders show under "Taking part" on the Tenders page.
+  // Chosen on its company page or under that tab; kept in this browser, like the watchlist.
+  const MINE_KEY = 'tp_mine_v1';
+  const myCompany = () => { const m = stored(MINE_KEY, null); return m && m.id ? m : null; };
+  const takesPart = (r, id) => (r.bi || []).some((b) => b[0] === id) || (r.w || []).some((w) => w[0] === id);
   const interestText = (I) => [I.types.join(', '), I.codes.map((p) => p.padEnd(8, '0')).join(', ')].filter(Boolean).join(' · ');
   /** Alerts for new tenders like the left filter; what is open now is the baseline, later ones are new */
   function setInterests(codes, types) {
@@ -2216,6 +2364,7 @@
           keep(WATCH_KEY, W2);
         } } })));
       }
+      add(body, h('p', { class: 'small' }, h('a', { href: listUrl({ view: 'watch' }), text: 'Open the watchlist as a table' })));
     }
     function openTab(A, body) {
       const I = interests();
@@ -2245,6 +2394,7 @@
           if (I2) { I2.seen = Array.from(new Set(I2.seen.concat(rows.map((r) => r[0])))); keep(ALERT_KEY, I2); }
         } } })));
       }
+      add(body, h('p', { class: 'small' }, h('a', { href: listUrl({ view: 'open' }), text: 'Open them as a table' })));
     }
     function render() {
       clear(panel);
@@ -2753,6 +2903,14 @@
       return;
     }
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // The website's chat window (Messages + Feedback with files, ../career.js, 11 Nov 2026) reaches
+    // Supabase through this client, as the job-search pages do through script.js.
+    let current = null;
+    window.PhantasmaAuth = { db: () => sb, session: () => current };
+    sb.auth.onAuthStateChange((event, s) => {
+      current = s || null;
+      document.dispatchEvent(new CustomEvent('phantasma:auth', { detail: { event: event, session: current } }));
+    });
     sb.auth.getSession().then((res) => {
       const session = res && res.data && res.data.session;
       if (!session) {
@@ -2760,6 +2918,8 @@
         return null;
       }
       userBar(session.user);
+      feedbackLink();
+      adminLink();
       mountBell();
       load('summary.json').then(dates, () => {});   // a failed download is reported by the page itself
       return run();

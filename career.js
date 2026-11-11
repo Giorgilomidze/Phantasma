@@ -2,26 +2,32 @@
    PHANTASMA — career.js
    Career service (Personal Career Strategist): the admin panel and the chat
    between each client and the Phantasma team. Loaded after script.js on
-   account.html, preferences.html and admin.html only.
+   account.html, preferences.html and admin.html; since 11 Nov 2026 also on
+   the Tender Portal pages (tenders/*.html, <body data-chat="tenders">), which
+   hand over their own Supabase client as window.PhantasmaAuth.
 
      1. Helpers         — dates, sorting, badges, session watcher
+     1b. Files          — pictures and documents in chat + feedback (11 Nov 2026)
      2. Chat component  — one conversation: history, composer, edit/delete,
-                          emoji. Used by the client window AND the admin pane.
+                          emoji, files. Used by the client window AND the admin pane.
      2b. Feedback       — the Feedback view of the client window (7 Nov 2026)
      3. Client | Admin  — the switch on account.html (admins only)
      4. Client chat     — round button + floating window with the switch
-                          Messages | Feedback (account.html, preferences.html;
-                          signed in only)
+                          Messages | Feedback (account.html, preferences.html,
+                          the tender pages; signed in only)
      5. Admin panel     — admin.html: Clients / Messages / Feedback / Admins tabs
 
    Supabase is reached through the client script.js already holds
    (window.PhantasmaAuth, set at the end of script.js). Backend contract:
    supabase/0024-career-admin-chat.sql,
-   supabase/functions/career-admin-invite/index.ts and (feedback)
-   supabase/0030-start-matching-feedback.sql. The database checks every
-   call itself (RLS + is_career_admin()), so what this file shows or hides is
-   convenience, not security. Message text only ever goes in via textContent.
-   Until 0030 is run, the feedback parts only say they are not available yet.
+   supabase/functions/career-admin-invite/index.ts, (feedback)
+   supabase/0030-start-matching-feedback.sql and (files + the service a
+   message came from) supabase/0035-chat-files-service.sql. The database
+   checks every call itself (RLS + is_career_admin()), so what this file shows
+   or hides is convenience, not security. Message text only ever goes in via
+   textContent. Until 0030 is run, the feedback parts only say they are not
+   available yet; until 0035 is run, everything works as before and the
+   paper-clip button says sending files is not switched on yet.
    ========================================================================= */
 (function () {
   'use strict';
@@ -57,6 +63,7 @@
     expand: ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'],
     collapse: ['M4 14h6v6', 'M20 10h-6V4', 'M14 10l7-7', 'M3 21l7-7'],
     close: ['M18 6 6 18', 'M6 6l12 12'],
+    clip: ['M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'],
   };
   function icon(name) {
     const svg = document.createElementNS(SVG_NS, 'svg');
@@ -172,6 +179,335 @@
     if (window.ResizeObserver) new ResizeObserver(set).observe(banner);
   }
 
+  // Which service this page belongs to (11 Nov 2026): the job-search pages say
+  // nothing ('career'); the Tender Portal pages carry <body data-chat="tenders">.
+  // Stored with every message and feedback request (0035), so the admin panel
+  // can tell them apart. One conversation per person across the services.
+  const SERVICE = (document.body && document.body.getAttribute('data-chat')) || 'career';
+  const SERVICE_NAMES = { career: 'Job search', tenders: 'Tenders' };
+  const serviceName = (k) => SERVICE_NAMES[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : '');
+  function serviceTag(k) {
+    const t = el('span', 'chat-svc', serviceName(k));
+    t.dataset.service = k || '';
+    return t;
+  }
+
+  /* ---------------------------------------------------------------------
+     1b. Files (11 Nov 2026, supabase/0035): pictures and documents in the
+     chat and in feedback. Private bucket chat-files, path <client id>/<file>
+     (a reply from the team goes into the client's folder). At most 5 files of
+     10 MB at once: pictures, PDF, Word, Excel, PowerPoint, text and CSV.
+     Pictures show as thumbnails (signed links, an hour), other files as a
+     chip with name and size; a click asks for a fresh signed link: pictures
+     and PDFs open in a new tab, the rest downloads under its own name.
+     createPicker(say, text) = the paper-clip button, a hidden file input and
+     the tray of chosen files (with ✕); pasted and dropped files go in too.
+     --------------------------------------------------------------------- */
+  const FILES_BUCKET = 'chat-files';
+  const FILES_MAX = 5;
+  const FILE_MB = 10;
+  const FILE_TYPES = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+    pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ppt: 'application/vnd.ms-powerpoint',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    txt: 'text/plain', csv: 'text/csv',
+  };
+  const FILE_ACCEPT = Object.keys(FILE_TYPES).map((x) => '.' + x).join(',');
+  const FILES_OFF = 'Sending files is not switched on yet. Please try again later.';
+  const extOf = (name) => { const m = /\.([a-z0-9]{1,5})$/i.exec(name || ''); return m ? m[1].toLowerCase() : ''; };
+  const isPicture = (f) => /^image\//.test((f && f.type) || '');
+  // The files of a message / request row ([] before 0035, and once deleted).
+  const filesOf = (r) => (r && !r.deleted_at && Array.isArray(r.attachments) ? r.attachments : []);
+  function fmtSize(n) {
+    if (!(n >= 0)) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return Math.max(1, Math.round(n / 1024)) + ' KB';
+    return (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
+  }
+  // The type the bucket allows, from the file name (browsers report CSV and
+  // some Office files differently); '' = not allowed.
+  function typeOf(file) {
+    const byExt = FILE_TYPES[extOf(file.name)];
+    if (byExt) return byExt;
+    const k = Object.keys(FILE_TYPES).find((x) => FILE_TYPES[x] === file.type);
+    return k ? FILE_TYPES[k] : '';
+  }
+
+  // Is 0035 run (columns service + attachments, bucket chat-files)? Asked once
+  // per page; a network hiccup is asked again next time. filesOn: null = not
+  // known yet, then true / false.
+  let filesOn = null;
+  let filesAsk = null;
+  function hasFiles() {
+    if (!filesAsk) {
+      filesAsk = call(db().from('chat_messages').select('id, service, attachments').limit(1)).then(({ error }) => {
+        if (error && (error.code === '42703' || /does not exist/i.test(error.message || ''))) filesOn = false;
+        else if (error && (!error.code || error.code === '42501')) { filesAsk = null; return filesOn !== false; }
+        else filesOn = true;
+        return filesOn;
+      });
+    }
+    return filesAsk;
+  }
+
+  // Storage key: <folder>/<time>-<random>-<name in plain letters>. The real
+  // name (Georgian too) is kept in the message row.
+  function storageKey(folder, name) {
+    const ext = extOf(name);
+    const base = String(name || '').replace(/\.[^.]*$/, '').normalize('NFKD').replace(/[^A-Za-z0-9._-]+/g, '_')
+      .replace(/_+/g, '_').replace(/^[_.-]+|[_.-]+$/g, '').slice(0, 60) || 'file';
+    const t = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+    return folder + '/' + t + '-' + Math.random().toString(36).slice(2, 8) + '-' + base + (ext ? '.' + ext : '');
+  }
+  // Uploads the chosen files into `folder`; on a failure removes what went up and throws.
+  async function uploadFiles(folder, picked) {
+    const done = [];
+    for (let i = 0; i < picked.length; i += 1) {
+      const f = picked[i];
+      const path = storageKey(folder, f.name);
+      const { error } = await call(db().storage.from(FILES_BUCKET).upload(path, f.file, { contentType: f.type, upsert: false }));
+      if (error) { removeFiles(done.map((d) => d.path)); throw error; }
+      done.push({ path, name: f.name.slice(0, 200), type: f.type, size: f.file.size });
+    }
+    return done;
+  }
+  function removeFiles(paths) {
+    if (paths && paths.length) call(db().storage.from(FILES_BUCKET).remove(paths));
+  }
+  function uploadError(err) {
+    const m = String((err && (err.message || err.error)) || '');
+    if (/size|large|exceed/i.test(m)) return 'A file is larger than ' + FILE_MB + ' MB.';
+    if (/mime|type/i.test(m)) return 'This kind of file cannot be sent.';
+    return 'The file could not be uploaded. Please try again.';
+  }
+
+  // Thumbnails: signed links for an hour, kept per path.
+  const signedThumbs = new Map();                  // path -> { url, until }
+  async function thumbUrls(paths) {
+    const now = Date.now();
+    const need = paths.filter((p) => !(signedThumbs.has(p) && signedThumbs.get(p).until > now + 60000));
+    if (need.length) {
+      const { data } = await call(db().storage.from(FILES_BUCKET).createSignedUrls(need, 3600));
+      (data || []).forEach((d) => { if (d && d.path && d.signedUrl) signedThumbs.set(d.path, { url: d.signedUrl, until: now + 3500000 }); });
+    }
+    return paths.map((p) => (signedThumbs.get(p) || {}).url || null);
+  }
+  // Gives the pictures under `root` that wait for an address their signed link.
+  function fillThumbs(root) {
+    const imgs = Array.from(root.querySelectorAll('img.chat-file__img[data-pending]'));
+    if (!imgs.length) return;
+    imgs.forEach((img) => img.removeAttribute('data-pending'));
+    thumbUrls(imgs.map((img) => img.dataset.path)).then((urls) => {
+      imgs.forEach((img, i) => {
+        if (urls[i]) img.src = urls[i];
+        else img.closest('.chat-file').classList.add('is-broken');
+      });
+    });
+  }
+
+  // The files of one message or request: thumbnails for pictures, a chip for the rest.
+  function filesBlock(list) {
+    const box = el('ul', 'chat-files');
+    box.setAttribute('aria-label', list.length === 1 ? 'Attached file' : 'Attached files');
+    list.forEach((f) => {
+      const li = el('li');
+      const pic = isPicture(f);
+      const a = el('a', 'chat-file' + (pic ? ' chat-file--pic' : ''));
+      a.href = '#';
+      a.dataset.path = f.path;
+      a.dataset.name = f.name || '';
+      if (pic || f.type === 'application/pdf') a.dataset.inline = '1';
+      if (pic) {
+        const img = el('img', 'chat-file__img');
+        img.alt = f.name || 'Picture';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.dataset.path = f.path;
+        img.dataset.pending = '1';
+        a.appendChild(img);
+        a.title = 'Open ' + (f.name || 'the picture');
+      } else {
+        a.appendChild(el('span', 'chat-file__ext', (extOf(f.name) || 'file').toUpperCase()));
+        const txt = el('span', 'chat-file__txt');
+        txt.appendChild(el('span', 'chat-file__name', f.name || 'File'));
+        if (f.size) txt.appendChild(el('span', 'chat-file__size', fmtSize(f.size)));
+        a.appendChild(txt);
+        a.title = (a.dataset.inline ? 'Open ' : 'Download ') + (f.name || 'the file');
+      }
+      li.appendChild(a);
+      box.appendChild(li);
+    });
+    return box;
+  }
+
+  // A click on a file: a fresh signed link (10 minutes). The new tab opens
+  // inside the click (so no pop-up blocker) and goes to the file once the link is there.
+  async function openFile(a) {
+    const inline = a.dataset.inline === '1';
+    const w = inline ? window.open('', '_blank') : null;
+    if (w) { try { w.opener = null; } catch (_e) { /* not allowed: fine */ } }
+    const { data, error } = await call(db().storage.from(FILES_BUCKET)
+      .createSignedUrl(a.dataset.path, 600, inline ? undefined : { download: a.dataset.name || true }));
+    if (error || !data || !data.signedUrl) {
+      if (w) w.close();
+      a.classList.add('is-broken');
+      a.title = 'This file could not be opened. It may have been removed.';
+      return;
+    }
+    if (w) { w.location.href = data.signedUrl; return; }
+    const t = document.createElement('a');
+    t.href = data.signedUrl;
+    t.rel = 'noopener';
+    document.body.appendChild(t);
+    t.click();
+    t.remove();
+  }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest ? e.target.closest('a.chat-file[data-path]') : null;
+    if (!a) return;
+    e.preventDefault();
+    openFile(a);
+  });
+
+  // A pasted picture (a screenshot) becomes a file; text with a picture (from
+  // Word, a web page) pastes as text.
+  function pastedFiles(e) {
+    const dt = e.clipboardData;
+    if (!dt || !dt.files || !dt.files.length || dt.getData('text/plain')) return [];
+    return Array.from(dt.files);
+  }
+
+  let pickerCount = 0;
+  function createPicker(say, text) {
+    const n = ++pickerCount;
+    let picked = [];                               // [{ file, name, type, url }]
+    const btn = el('button', text ? 'fb__attach' : 'chat__icon-btn chat__attach');
+    btn.type = 'button';
+    btn.title = 'Attach pictures or files (up to ' + FILES_MAX + ', ' + FILE_MB + ' MB each)';
+    btn.appendChild(icon('clip'));
+    if (text) btn.appendChild(el('span', null, text));
+    else btn.setAttribute('aria-label', 'Attach pictures or files');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = FILE_ACCEPT;
+    input.hidden = true;
+    input.tabIndex = -1;
+    input.id = 'chat-file-' + n;
+    const tray = el('ul', 'chat-tray');
+    tray.setAttribute('aria-label', 'Files to send');
+    tray.hidden = true;
+
+    function paint() {
+      tray.replaceChildren();
+      picked.forEach((p, i) => {
+        const li = el('li', 'chat-tray__item');
+        if (p.url) {
+          const img = el('img', 'chat-tray__thumb');
+          img.src = p.url;
+          img.alt = '';
+          li.appendChild(img);
+        } else {
+          li.appendChild(el('span', 'chat-file__ext', (extOf(p.name) || 'file').toUpperCase()));
+        }
+        li.appendChild(el('span', 'chat-tray__name', p.name));
+        li.appendChild(el('span', 'chat-tray__size', fmtSize(p.file.size)));
+        const x = el('button', 'chat-tray__x');
+        x.type = 'button';
+        x.dataset.i = String(i);
+        x.title = 'Remove';
+        x.setAttribute('aria-label', 'Remove ' + p.name);
+        x.appendChild(icon('close'));
+        li.appendChild(x);
+        tray.appendChild(li);
+      });
+      tray.hidden = !picked.length;
+    }
+    function add(list, pasted) {
+      if (filesOn === false) { say(FILES_OFF); return; }
+      const refused = [];
+      Array.from(list || []).forEach((file) => {
+        const type = typeOf(file);
+        let name = file.name || 'file';
+        if (pasted && /^image\.[a-z]+$/i.test(name)) {
+          name = 'Picture ' + new Date().toTimeString().slice(0, 8).replace(/:/g, '.') + '.' + (extOf(name) || 'png');
+        }
+        if (!type) refused.push(name + ': this kind of file cannot be sent');
+        else if (!file.size) refused.push(name + ': the file is empty');
+        else if (file.size > FILE_MB * 1048576) refused.push(name + ': larger than ' + FILE_MB + ' MB');
+        else if (picked.length >= FILES_MAX) refused.push(name + ': at most ' + FILES_MAX + ' files at once');
+        else picked.push({ file, name, type, url: /^image\//.test(type) && window.URL ? URL.createObjectURL(file) : '' });
+      });
+      say(refused.join(' · '));
+      paint();
+    }
+    function clear() {
+      picked.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
+      picked = [];
+      input.value = '';
+      paint();
+    }
+    btn.addEventListener('click', () => {
+      if (filesOn === false) { say(FILES_OFF); return; }
+      input.click();
+    });
+    input.addEventListener('change', () => { add(input.files); input.value = ''; });
+    tray.addEventListener('click', (e) => {
+      const x = e.target.closest('.chat-tray__x');
+      if (!x || x.disabled) return;
+      const i = Number(x.dataset.i);
+      const p = picked[i];
+      if (p && p.url) URL.revokeObjectURL(p.url);
+      picked.splice(i, 1);
+      paint();
+      const next = tray.querySelector('.chat-tray__x[data-i="' + Math.min(i, picked.length - 1) + '"]');
+      (next || btn).focus();
+    });
+
+    // Files dropped anywhere on `zone`.
+    function dropZone(zone) {
+      let depth = 0;
+      const withFiles = (e) => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') !== -1;
+      zone.addEventListener('dragenter', (e) => {
+        if (!withFiles(e)) return;
+        e.preventDefault();
+        depth += 1;
+        zone.classList.add('is-dropping');
+      });
+      zone.addEventListener('dragover', (e) => { if (withFiles(e)) e.preventDefault(); });
+      zone.addEventListener('dragleave', () => {
+        depth = Math.max(0, depth - 1);
+        if (!depth) zone.classList.remove('is-dropping');
+      });
+      zone.addEventListener('drop', (e) => {
+        if (!withFiles(e)) return;
+        e.preventDefault();
+        depth = 0;
+        zone.classList.remove('is-dropping');
+        add(e.dataTransfer.files);
+      });
+    }
+
+    return {
+      btn,
+      input,
+      tray,
+      add,
+      clear,
+      dropZone,
+      files: () => picked.slice(),
+      setBusy(on) {
+        btn.disabled = on;
+        tray.querySelectorAll('button').forEach((b) => { b.disabled = on; });
+      },
+    };
+  }
+
   /* ---------------------------------------------------------------------
      2. Chat component
      One conversation = the chat_messages rows of one client_id. A client
@@ -188,8 +524,13 @@
        opts.pickText    shown while no conversation is open (admin pane)
      Returns { open(clientId|null), apply(row), sync(), markReadSoon(),
                reveal(), focus() }.
+     Files (section 1b): the paper-clip next to the emoji button, pasted
+     pictures and files dropped on the conversation go into a tray above the
+     message box; Send uploads them into the client's folder first. In the
+     admin pane every client message shows the service it came from.
      --------------------------------------------------------------------- */
   const MSG_COLS = 'id, client_id, sender_id, from_admin, body, created_at, edited_at, deleted_at, read_at';
+  const MSG_COLS_FILES = MSG_COLS + ', service, attachments';   // after 0035
   const HISTORY = 300;                             // newest N messages per conversation
   const MAX_LEN = 4000;                            // chat_messages.body limit
   const EMOJIS = [
@@ -273,10 +614,18 @@
     const status = el('p', 'chat__status');
     status.setAttribute('role', 'status');
     status.hidden = true;
-    form.append(emojiBtn, grid, label, input, sendBtn, status);
-    if (!touchOnly) form.appendChild(el('p', 'chat__hint', 'Enter sends · Shift+Enter adds a new line'));
+    const picker = createPicker(say);
+    form.append(emojiBtn, picker.btn, grid, picker.tray, label, input, sendBtn, picker.input, status);
+    if (!touchOnly) form.appendChild(el('p', 'chat__hint', 'Enter sends · Shift+Enter adds a new line · paste or drop pictures and files'));
     root.append(empty, log, live, form);
     host.appendChild(root);
+    picker.dropZone(root);
+    input.addEventListener('paste', (e) => {
+      const files = pastedFiles(e);
+      if (!files.length) return;
+      e.preventDefault();
+      picker.add(files, true);
+    });
 
     function say(text) {
       status.textContent = text || '';
@@ -318,7 +667,11 @@
       }
       const bubble = el('div', 'chat-msg__bubble');
       bubble.appendChild(el('span', 'visually-hidden', whoOf(r) + ': '));
-      bubble.appendChild(el('p', 'chat-msg__text', r.deleted_at ? 'Message deleted' : r.body));
+      const files = filesOf(r);
+      if (r.deleted_at || r.body || !files.length) {
+        bubble.appendChild(el('p', 'chat-msg__text', r.deleted_at ? 'Message deleted' : r.body));
+      }
+      if (files.length) bubble.appendChild(filesBlock(files));
       const meta = el('p', 'chat-msg__meta');
       const time = el('time', null, fmtTime(r.created_at));
       time.dateTime = r.created_at;
@@ -329,8 +682,11 @@
         ed.title = 'Edited ' + fmtDateTime(r.edited_at);
         meta.appendChild(ed);
       }
+      // Admin pane: where the client wrote from (job search, tenders …).
+      if (opts.isAdmin && !r.from_admin && r.service) meta.appendChild(serviceTag(r.service));
       bubble.appendChild(meta);
       li.appendChild(bubble);
+      if (files.length) fillThumbs(li);
       if (mine(r) && !r.deleted_at) {
         const at = fmtTime(r.created_at);
         const acts = el('div', 'chat-msg__actions');
@@ -387,7 +743,8 @@
       rows.set(r.id, row);
       if (!loaded) return;                         // drawn when the history arrives
       if (old) {
-        const changed = old.body !== row.body || old.edited_at !== row.edited_at || old.deleted_at !== row.deleted_at;
+        const changed = old.body !== row.body || old.edited_at !== row.edited_at || old.deleted_at !== row.deleted_at
+          || filesOf(old).length !== filesOf(row).length;
         if (!changed) return;                      // e.g. only read_at moved
         if (editing && editing.id === row.id) {
           if (!row.deleted_at) return;             // keep the open editor; Save writes over it
@@ -404,13 +761,15 @@
       showList();
       if (stick) toEnd();
       if (incoming(row) && !row.deleted_at) {
-        announce('New message from ' + whoOf(row) + ': ' + row.body);
+        const n = filesOf(row).length;
+        announce('New message from ' + whoOf(row) + ': ' + (row.body || (n === 1 ? 'a file' : n + ' files')));
         markReadSoon();
       }
     }
 
-    function fetchHistory(id) {
-      return call(db().from('chat_messages').select(MSG_COLS)
+    async function fetchHistory(id) {
+      const cols = (await hasFiles()) ? MSG_COLS_FILES : MSG_COLS;
+      return call(db().from('chat_messages').select(cols)
         .eq('client_id', id).order('created_at', { ascending: false }).limit(HISTORY));
     }
 
@@ -427,6 +786,7 @@
       say('');
       input.value = '';
       autosize(input);
+      picker.clear();
       form.hidden = !clientId;
       log.hidden = true;
       empty.hidden = false;
@@ -469,25 +829,53 @@
       if (opts.onRead) opts.onRead(id);
     }
 
-    // ---- send
+    // ---- send: files go up first (into the client's folder), then the message
+    // that lists them; if the message fails, the uploaded files are removed again.
     async function send() {
       const body = input.value.trim();
+      const picked = picker.files();
       if (sending || !clientId) return;
-      if (!body) { input.focus(); return; }
+      if (!body && !picked.length) { input.focus(); return; }
+      const id = clientId;
       sending = true;
       sendBtn.setAttribute('aria-disabled', 'true');
-      say('');
-      const { data, error } = await call(db().rpc('chat_send', { p_client: opts.isAdmin ? clientId : null, p_body: body }));
-      sending = false;
-      sendBtn.removeAttribute('aria-disabled');
+      picker.setBusy(true);
+      say(picked.length ? (picked.length === 1 ? 'Sending the file…' : 'Sending ' + picked.length + ' files…') : '');
+      const done = (text) => {
+        sending = false;
+        sendBtn.removeAttribute('aria-disabled');
+        picker.setBusy(false);
+        say(text);
+      };
+      let files = [];
+      if (picked.length) {
+        if (!(await hasFiles())) { done(FILES_OFF); return; }
+        try {
+          files = await uploadFiles(id, picked);
+        } catch (err) {
+          done(uploadError(err));
+          return;
+        }
+      }
+      const args = { p_client: opts.isAdmin ? id : null, p_body: body };
+      if (filesOn) {                               // 0035 run: the service and the files go along
+        args.p_service = opts.isAdmin ? null : SERVICE;
+        args.p_attachments = files;
+      }
+      const { data, error } = await call(db().rpc('chat_send', args));
       if (error) {
-        say(/too many/i.test(error.message || '')
-          ? 'That is a lot of messages in one minute. Please wait a moment.'
+        removeFiles(files.map((f) => f.path));
+        const m = String(error.message || '');
+        done(/too many messages/i.test(m) ? 'That is a lot of messages in one minute. Please wait a moment.'
+          : /bad_file|too_many_files/.test(m) ? 'The files could not be attached. Please try again.'
           : 'Could not send. Please try again.');
         return;
       }
+      done('');
+      if (id !== clientId) return;                 // another conversation was opened meanwhile
       input.value = '';
       autosize(input);
+      picker.clear();
       apply(Array.isArray(data) ? data[0] : data);
       input.focus();
     }
@@ -550,7 +938,7 @@
       const cur = editing;
       const body = cur.ta.value.trim();
       const r = rows.get(cur.id);
-      if (!body) { say('A message cannot be empty. Use Delete to remove it.'); cur.ta.focus(); return; }
+      if (!body && !filesOf(r).length) { say('A message cannot be empty. Use Delete to remove it.'); cur.ta.focus(); return; }
       if (r && body === r.body) { stopEdit(true); return; }
       cur.saving = true;
       const { error } = await call(db().rpc('chat_edit', { p_id: cur.id, p_body: body }));
@@ -567,7 +955,8 @@
       if (!window.confirm('Delete this message? This cannot be undone.')) return;
       const { error } = await call(db().rpc('chat_delete', { p_id: id }));
       if (error) { say('Could not delete the message. Please try again.'); return; }
-      const row = Object.assign({}, rows.get(id), { body: '', deleted_at: new Date().toISOString() });
+      removeFiles(filesOf(rows.get(id)).map((f) => f.path));   // own uploads: the bucket lets the sender remove them
+      const row = Object.assign({}, rows.get(id), { body: '', attachments: [], deleted_at: new Date().toISOString() });
       rows.set(id, row);
       refill(row);                                 // its buttons are gone → focus moves to the composer
     }
@@ -638,10 +1027,12 @@
      of the client window. What it is about (Feedback / Feature request /
      Problem with the platform; at least one), a message of at most 500
      characters with a counter, Send; at most 3 a day, counted by the
-     Georgian day. No attachments. send_feedback() (supabase/0030) checks
-     all of it again. Below, the person's own requests, newest first, as chat
-     bubbles: types, text, date, status, and the team's note when there is
-     one. Until 0030 is run the view only says it is not available yet.
+     Georgian day. Since 11 Nov 2026 (0035) up to 5 pictures or files go
+     along (section 1b), and the service the page belongs to. send_feedback()
+     checks all of it again. Below, the person's own requests, newest first,
+     as chat bubbles: types, text, files, date, status, and the team's note
+     when there is one. Until 0030 is run the view only says it is not
+     available yet.
      createFeedback(host) draws into `host` and returns
        { open(userId|null), show(), focus() }:
        open  — set / clear the person (nothing is loaded yet)
@@ -656,6 +1047,7 @@
   const FB_MAX = 500;                              // feedback.message limit
   const FB_PER_DAY = 3;                            // per Georgian day
   const FB_COLS = 'id, kinds, message, status, admin_note, created_at';
+  const FB_COLS_FILES = FB_COLS + ', service, attachments';   // after 0035
   const FB_OFF = 'Feedback is not available yet. Please try again later.';
   let fbCount = 0;
 
@@ -705,7 +1097,18 @@
     const status = el('p', 'fb__status');
     status.setAttribute('role', 'status');
     status.hidden = true;
-    form.append(kinds, label, ta, bar, status);
+    // Files: a text button under the message, the tray of chosen files under it.
+    const picker = createPicker((text) => say(text ? 'error' : '', text), 'Add pictures or files');
+    const fileRow = el('div', 'fb__files');
+    fileRow.append(picker.btn, el('span', 'fb__files-hint', 'Up to ' + FILES_MAX + ', ' + FILE_MB + ' MB each. You can also paste a screenshot.'));
+    form.append(kinds, label, ta, fileRow, picker.tray, picker.input, bar, status);
+    picker.dropZone(form);
+    ta.addEventListener('paste', (e) => {
+      const files = pastedFiles(e);
+      if (!files.length) return;
+      e.preventDefault();
+      picker.add(files, true);
+    });
     const listH = el('h3', 'fb__h', 'Your requests');
     listH.id = 'fb-h-' + n;
     const empty = el('p', 'fb__empty');
@@ -748,16 +1151,19 @@
 
     // One request: the person's own bubble on the right (as in the chat),
     // the team's note as a reply on the left.
-    function itemFor(r) {
+    function itemFor(r, manyServices) {
       const li = el('li', 'fb-item');
       const own = el('div', 'chat-msg chat-msg--right');
       const bubble = el('div', 'chat-msg__bubble');
       bubble.appendChild(el('p', 'fb-item__kinds', fbKinds(r.kinds)));
       bubble.appendChild(el('p', 'chat-msg__text', r.message));
+      const files = filesOf(r);
+      if (files.length) bubble.appendChild(filesBlock(files));
       const meta = el('p', 'chat-msg__meta');
       const time = el('time', null, fmtDateTime(r.created_at));
       time.dateTime = r.created_at;
       meta.appendChild(time);
+      if (manyServices && r.service) meta.appendChild(serviceTag(r.service));   // sent from job search and tenders
       const st = el('span', 'fb-status');
       st.dataset.status = r.status || '';
       st.appendChild(el('span', 'visually-hidden', 'Status: '));
@@ -778,7 +1184,9 @@
     }
     function renderList() {
       list.replaceChildren();
-      (rows || []).forEach((r) => list.appendChild(itemFor(r)));
+      const many = new Set((rows || []).map((r) => r.service || 'career')).size > 1;
+      (rows || []).forEach((r) => list.appendChild(itemFor(r, many)));
+      fillThumbs(list);
       list.hidden = !(rows && rows.length);
       empty.hidden = !list.hidden;
       if (rows && !rows.length) empty.textContent = 'Nothing sent yet. Your requests and our answers appear here.';
@@ -790,7 +1198,9 @@
       const who = uid;
       if (!rows) { empty.textContent = 'Loading…'; empty.hidden = false; list.hidden = true; }
       // Admins may read everyone's rows (RLS), so the filter is needed here.
-      const { data, error } = await call(db().from('feedback').select(FB_COLS)
+      const cols = (await hasFiles()) ? FB_COLS_FILES : FB_COLS;
+      if (token !== loadToken || who !== uid) return;
+      const { data, error } = await call(db().from('feedback').select(cols)
         .eq('user_id', who).order('created_at', { ascending: false }).limit(50));
       if (token !== loadToken || who !== uid) return;
       if (error) {
@@ -808,6 +1218,7 @@
       if (sending || !uid) return;
       const picked = boxes.filter((b) => b.checked).map((b) => b.value);
       const text = ta.value.trim();
+      const chosen = picker.files();
       if (leftToday() === 0) { say('error', 'You have sent ' + FB_PER_DAY + ' today. You can send more tomorrow.'); return; }
       if (!picked.length) { say('error', 'Tick at least one: Feedback, Feature request or Problem with the platform.'); boxes[0].focus(); return; }
       if (!text) { say('error', 'Please write your message first.'); ta.focus(); return; }
@@ -815,16 +1226,39 @@
       const who = uid;
       sending = true;
       sendBtn.setAttribute('aria-disabled', 'true');
-      say('busy', 'Sending…');
-      const { data, error } = await call(db().rpc('send_feedback', { p_kinds: picked, p_message: text }));
+      picker.setBusy(true);
+      say('busy', chosen.length ? 'Sending, with ' + (chosen.length === 1 ? 'the file' : chosen.length + ' files') + '…' : 'Sending…');
+      const stop = (text2) => {
+        sending = false;
+        picker.setBusy(false);
+        say('error', text2);
+        paintLeft();
+      };
+      // Files first, into the person's own folder (removed again if the request fails).
+      let files = [];
+      if (chosen.length) {
+        if (!(await hasFiles())) { if (who === uid) stop(FILES_OFF); return; }
+        try {
+          files = await uploadFiles(who, chosen);
+        } catch (err) {
+          if (who === uid) stop(uploadError(err));
+          return;
+        }
+      }
+      const args = { p_kinds: picked, p_message: text };
+      if (filesOn) { args.p_service = SERVICE; args.p_attachments = files; }
+      const { data, error } = await call(db().rpc('send_feedback', args));
+      if (error) removeFiles(files.map((f) => f.path));
       if (who !== uid) return;                     // signed out meanwhile
       sending = false;
+      picker.setBusy(false);
       if (error) {
         const m = String(error.message || '');
         say('error', /daily_limit/.test(m) ? 'You have sent ' + FB_PER_DAY + ' today. You can send more tomorrow.'
           : /too_long/.test(m) ? 'Please keep it to ' + FB_MAX + ' characters.'
           : /no_kind/.test(m) ? 'Tick at least one: Feedback, Feature request or Problem with the platform.'
           : /not_signed_in/.test(m) ? 'Please log in again.'
+          : /bad_file|too_many_files/.test(m) ? 'The files could not be attached. Please try again.'
           : isMissing(error) ? FB_OFF
           : 'Could not send. Please try again.');
         if (/daily_limit/.test(m)) load();         // e.g. sent from another device: recount
@@ -834,6 +1268,7 @@
       const row = Array.isArray(data) ? data[0] : data;
       ta.value = '';
       boxes.forEach((b) => { b.checked = false; });
+      picker.clear();
       paintCounter();
       if (rows && row && row.id != null) {
         if (!rows.some((r) => r.id === row.id)) rows.unshift(row);
@@ -859,6 +1294,8 @@
         sending = false;
         ta.value = '';
         boxes.forEach((b) => { b.checked = false; });
+        picker.clear();
+        picker.setBusy(false);
         paintCounter();
         say('', '');
         setOff(false);
@@ -898,10 +1335,14 @@
      a time: Messages (the chat) | Feedback (section 2b). Emails and Support
      come later as more entries in VIEWS. History loads on first open;
      realtime keeps the badge and the window live; messages are marked read
-     only while the Messages view is on screen.
+     only while the Messages view is on screen. Since 11 Nov 2026 also on the
+     tender pages (<body data-chat="tenders">); any page can open the window
+     on a view with  document.dispatchEvent(new CustomEvent('phantasma:chat-open',
+     { detail: { view: 'feedback' } }))  (the tender pages' "Send feedback").
      --------------------------------------------------------------------- */
   function bootClientChat() {
-    if (!document.getElementById('account') && !document.getElementById('preferences')) return;
+    if (!document.getElementById('account') && !document.getElementById('preferences')
+        && !document.body.hasAttribute('data-chat')) return;
     if (!db()) return;                             // supabase-js did not load
 
     let me = null;
@@ -979,7 +1420,9 @@
       me: () => me,
       isActive: () => !panel.hidden && view === 'messages',
       onRead: () => refreshUnreadSoon(),
-      emptyText: 'No messages yet. Ask the Phantasma team anything about your service — replies appear here.',
+      emptyText: SERVICE === 'tenders'
+        ? 'No messages yet. Tell the Phantasma team what works for you in the Tender Portal and what should be better, or ask anything — replies appear here.'
+        : 'No messages yet. Ask the Phantasma team anything about your service — replies appear here.',
     });
     const feedback = createFeedback(views.feedback);
     document.body.appendChild(dock);
@@ -1037,6 +1480,13 @@
     }
     fab.addEventListener('click', () => (panel.hidden ? openPanel() : closePanel(false)));
     closeBtn.addEventListener('click', () => closePanel(true));
+    // Opened from elsewhere on the page (signed in only), on the view asked for.
+    document.addEventListener('phantasma:chat-open', (e) => {
+      if (!me) return;
+      const want = e.detail && views[e.detail.view] ? e.detail.view : view;
+      if (panel.hidden) { view = want; openPanel(); } else showView(want, false);
+      (want === 'messages' ? chat : feedback).focus();
+    });
     // Esc closes (the emoji grid and the inline editor catch their own Esc first).
     // Stopped here so it does not also close a table panel on the page.
     dock.addEventListener('keydown', (e) => {
@@ -1109,6 +1559,10 @@
        Feedback — every feedback request (7 Nov 2026, 0030): filter by
                   status; per request a status, a note the client sees, Save.
        Admins   — the list with Remove, and Add admin (invitation email).
+     Since 11 Nov 2026 (0035) every person who writes from any page lands here
+     (job search and the Tender Portal): conversations and requests carry a
+     service tag (Job search / Tenders) and can be filtered by it; files show
+     in the pane and on the request cards, and a reply can carry files too.
      One realtime channel without a filter keeps the chat parts live; the
      feedback list reloads when its tab is opened and when the page is back
      on screen (it is not in the realtime publication).
@@ -1146,6 +1600,8 @@
     // ---- Messages: conversation list + one chat pane
     const convList  = $('#conv-list');
     const convEmpty = $('#conv-empty');
+    const convFilter = $('#conv-filter');          // All services / Job search / Tenders (0035)
+    let svcBy = {};                                // user id -> services they wrote from
     const pane      = $('#admin-chat-pane');
     const paneTitle = $('#admin-chat-title');
     const paneSub   = $('#admin-chat-sub');
@@ -1653,7 +2109,9 @@
 
     function paintConversations() {
       const last = (c) => (c.last_message_at ? stamp(c.last_message_at) : Number.MAX_SAFE_INTEGER);
-      const list = clients.filter((c) => c.last_message_at || c.user_id === openId)
+      const pick = convFilter ? convFilter.value : 'all';
+      const fits = (c) => pick === 'all' || c.user_id === openId || (svcBy[c.user_id] || []).indexOf(pick) !== -1;
+      const list = clients.filter((c) => (c.last_message_at || c.user_id === openId) && fits(c))
         .sort((a, b) => last(b) - last(a));
       const keep = convList.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
       convList.replaceChildren();
@@ -1669,6 +2127,12 @@
         top.appendChild(el('span', 'conv__time', c.last_message_at ? whenShort(c.last_message_at) : 'New'));
         b.appendChild(top);
         if (c.full_name && c.email) b.appendChild(el('span', 'conv__email', c.email));
+        const svcs = svcBy[c.user_id] || [];
+        if (svcs.length) {
+          const tags = el('span', 'conv__svc');
+          svcs.forEach((s) => tags.appendChild(serviceTag(s)));
+          b.appendChild(tags);
+        }
         const unread = Number(c.unread) || 0;
         if (unread) {
           const badge = el('span', 'chat-badge');
@@ -1679,11 +2143,15 @@
         convList.appendChild(li);
       });
       convEmpty.hidden = list.length > 0;
+      convEmpty.textContent = pick !== 'all' && clients.some((c) => c.last_message_at)
+        ? 'No conversation from ' + serviceName(pick) + ' yet.'
+        : 'No messages yet. To write first, open Chat for a client on the Clients tab.';
       if (keep) {
         const f = convList.querySelector('[data-focus-key="' + keep + '"]');
         if (f) f.focus();
       }
     }
+    if (convFilter) convFilter.addEventListener('change', paintConversations);
 
     function paintPane() {
       const c = clientOf(openId);
@@ -1715,15 +2183,20 @@
     // ---- data: clients + unread total (also after every realtime event)
     async function loadClients() {
       const g = gen;
-      const [list, total] = await Promise.all([
+      const [list, total, svcs] = await Promise.all([
         call(db().rpc('career_admin_clients')),
         call(db().rpc('career_admin_unread')),
+        hasFiles().then((yes) => (yes ? call(db().rpc('chat_admin_services')) : { data: null })),
       ]);
       if (g !== gen) return;                       // signed out / switched meanwhile
       if (list.error) {
         if (list.error.code === '42501') { showDenied(); return; }   // no longer an admin
         if (!clients.length) tableBox.replaceChildren(el('p', 'account__hint', 'Could not load the accounts. Please reload the page.'));
         return;
+      }
+      if (svcs && svcs.data) {
+        svcBy = {};
+        svcs.data.forEach((s) => { svcBy[s.client_id] = s.services || []; });
       }
       clients = list.data || [];
       renderRows();
@@ -1762,6 +2235,7 @@
     // not saved yet are kept in fbDraft, so a reload never eats a note.
     const fbBox    = $('#fb-list');
     const fbFilter = $('#fb-filter');
+    const fbSvc    = $('#fb-service');             // All services / Job search / Tenders (0035)
     const fbCount  = $('#fb-count');
     const fbBadge  = $('#admin-fb-new');
     let fbRows = null;                             // null = not loaded (or 0030 not run)
@@ -1773,8 +2247,11 @@
     async function loadFeedback() {
       if (!fbBox) return;
       const g = gen;
+      const cols = 'id, user_id, kinds, message, status, admin_note, created_at, updated_at'
+        + ((await hasFiles()) ? ', service, attachments' : '');
+      if (g !== gen) return;
       const { data, error } = await call(db().from('feedback')
-        .select('id, user_id, kinds, message, status, admin_note, created_at, updated_at')
+        .select(cols)
         .order('created_at', { ascending: false }).limit(500));
       if (g !== gen) return;
       if (error) {
@@ -1805,8 +2282,11 @@
       const time = el('time', null, fmtDateTime(f.created_at));
       time.dateTime = f.created_at;
       meta.append(time, document.createTextNode(' · ' + fbKinds(f.kinds)));
+      if (f.service) meta.append(document.createTextNode(' '), serviceTag(f.service));
       info.appendChild(meta);
       info.appendChild(el('p', 'fb-admin__text', f.message));
+      const files = filesOf(f);
+      if (files.length) info.appendChild(filesBlock(files));
 
       const form = el('form', 'fb-admin__edit');
       form.noValidate = true;
@@ -1846,17 +2326,20 @@
     function paintFeedback() {
       if (!fbBox || !fbRows) return;
       const pick = fbFilter.value;
-      const shown = fbRows.filter((f) => pick === 'all' || f.status === pick);
+      const svc = fbSvc ? fbSvc.value : 'all';
+      const shown = fbRows.filter((f) => (pick === 'all' || f.status === pick)
+        && (svc === 'all' || (f.service || 'career') === svc));
       const keep = fbBox.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
       if (shown.length) {
         const list = el('ol', 'fb-admin');
         list.setAttribute('aria-label', 'Feedback requests');
         shown.forEach((f) => list.appendChild(fbItem(f)));
         fbBox.replaceChildren(list);
+        fillThumbs(list);
       } else {
-        fbBox.replaceChildren(el('p', 'account__hint', fbRows.length ? 'No requests with this status.' : 'No feedback yet.'));
+        fbBox.replaceChildren(el('p', 'account__hint', fbRows.length ? 'No requests match this choice.' : 'No feedback yet.'));
       }
-      fbCount.textContent = pick === 'all'
+      fbCount.textContent = pick === 'all' && svc === 'all'
         ? fbRows.length + (fbRows.length === 1 ? ' request' : ' requests')
         : 'Showing ' + shown.length + ' of ' + fbRows.length;
       if (keep) {
@@ -1867,6 +2350,7 @@
 
     if (fbBox) {
       fbFilter.addEventListener('change', paintFeedback);
+      if (fbSvc) fbSvc.addEventListener('change', paintFeedback);
       const keepDraft = (e) => {
         const f = e.target.closest('form[data-fb]');
         if (f) fbDraft.set(Number(f.dataset.fb), { status: f.querySelector('select').value, note: f.querySelector('textarea').value });
@@ -2025,6 +2509,7 @@
       clients = [];
       clientsReady = false;
       openId = null;
+      svcBy = {};
       tbody = null;
       fbRows = null;
       fbSig = '';

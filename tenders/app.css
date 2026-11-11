@@ -382,3 +382,29 @@ a.tl-item:focus-visible .tl-bar { stroke: var(--ink); stroke-width: 2; }
 @media (max-width: 760px) {
   .bellpanel { position: fixed; left: 16px; right: 16px; top: 72px; width: auto; max-height: calc(100vh - 96px); }
 }
+
+/* ------------------------------------------------------------------ views on Tenders (11 Nov 2026) */
+/* All tenders | Watchlist | Bid opening | Taking part: a row of buttons above the filters (app.js pageTenders). */
+.views { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding: 4px; background: var(--surface); border: 1px solid var(--rule); border-radius: 999px; width: fit-content; max-width: 100%; }
+.views__btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: none; font: inherit; font-weight: 600; font-size: .9rem; color: var(--muted); cursor: pointer; }
+.views__btn:hover { color: var(--ink); background: #fff; }
+.views__btn[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.views__n { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--ink); font-size: .72rem; font-weight: 700; line-height: 20px; text-align: center; }
+.views__note { margin: 0 0 12px; padding: 10px 14px; background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: var(--r-sm); }
+.views__note[hidden] { display: none; }
+.views__note p { margin: 0; }
+.views__note p + p, .views__note p + .mine-pick { margin-top: 8px; }
+.mine-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mine-pick input { flex: 1 1 260px; min-width: 0; max-width: 460px; padding: 8px 10px; border: 1px solid #7a8291; border-radius: var(--r-sm); background: #fff; }
+@media (max-width: 600px) { .views { border-radius: var(--r); width: 100%; } .views__btn { flex: 1 1 calc(50% - 4px); justify-content: center; } }
+
+/* ------------------------------------------------------------------ chat window (11 Nov 2026) */
+/* The website's Messages + Feedback window (../career.js; its styles come in chat.css, made by
+   build_demo.py from the website's styles.css). Here: the two site buttons it uses, room under the
+   footer for the round button, and the admin link in the demo bar. */
+.chat-panel .btn { display: inline-flex; align-items: center; justify-content: center; font-weight: 600; border-radius: var(--r-sm); border: 1px solid transparent; cursor: pointer; }
+.chat-panel .btn-primary { background: var(--accent); color: var(--ink); border-color: var(--accent-deep); }
+.chat-panel .btn-primary:hover { background: var(--accent-deep); color: #fff; }
+.chat-panel .btn-sm { min-height: 36px; padding: 0 16px; font-size: .875rem; }
+body.has-chat .site-foot .wrap { padding-bottom: 104px; }
+.demo-bar__admin { font-weight: 600; }
