@@ -30,7 +30,7 @@
     ['fe', 'Far East (Japan, Australia, Singapore)']
   ];
   var REGION_NAME = { eu: 'Europe', na: 'North America', fe: 'Far East' };
-  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', inventory_ledger: 'Stock development (ledger)', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance' };
+  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', inventory_ledger: 'Stock development (ledger)', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance transactions' };
   var STATUS = { queued: 'Waiting', running: 'Loading', waiting: 'Amazon is preparing', done: 'Done', no_data: 'No data', error: 'Error', cancelled: 'Stopped', ok: 'Keys work', new: 'New', disabled: 'Off' };
   var OPEN = { queued: 1, running: 1, waiting: 1 };
 
@@ -38,14 +38,19 @@
     { id: 'products', label: 'Products' },
     { id: 'inventory', label: 'FBA inventory' },
     { id: 'repeat', label: 'Repeat purchase' },
-    { id: 'sales', label: 'Sales', soon: true },
-    { id: 'finance', label: 'Finance', soon: true },
+    { id: 'sales', label: 'Sales' },
+    { id: 'finance', label: 'Finance' },
     { id: 'settings', label: 'Settings' }
   ];
 
   // Column helpers for the data views
   // "EU" = the Pan-European FBA stock, stored once for DE FR IT ES NL SE PL BE (owner decision ED-14, 11 Nov 2026)
-  function mpCode(v) { return v === 'EU' ? 'EU pool' : (MP[v] || v || ''); }
+  // "ALL" = finance transactions without a marketplace (account fees, subscriptions)
+  function mpCode(v) { return v === 'EU' ? 'EU pool' : v === 'ALL' ? 'Account-wide' : (MP[v] || v || ''); }
+  // "2026-10-20T10:05:00+00:00" → "2026-10-20 10:05" (sorts as text)
+  function isoMinute(v) { return v ? String(v).slice(0, 16).replace('T', ' ') : ''; }
+  var FIN_STATUS = { RELEASED: 'Released', DEFERRED: 'Deferred', DEFERRED_RELEASED: 'Deferred, now released' };
+  function finStatus(v) { return v ? (FIN_STATUS[v] || v) : ''; }
   function fbaFbm(v) { if (!v) return ''; return /^AMAZON/i.test(v) ? 'FBA' : (v === 'DEFAULT' ? 'FBM' : v); }
   // Amazon gives repeat-purchase shares as fractions (0.0122 = 1.22 %), shown as percent
   function pct100(v) { return v == null ? null : Math.round(v * 10000) / 100; }
@@ -102,6 +107,47 @@
         { k: 'currency', t: 'Cur.' },
         { k: 'repeat_revenue_pct', t: 'Repeat revenue %', num: true, f: pct100 }
       ]
+    },
+    // Owner, 11 Nov 2026: "Sales - lets make it business report", "finance - will be finance transactions"
+    sales: {
+      title: 'Sales', table: 'ecom_amz_business_asin', order: ['-period_end', 'marketplace_id', 'child_asin', 'sku'],
+      sort: 'ordered_sales', sortDir: -1,
+      lede: 'Amazon\'s Business Report (sales and traffic): totals per day and marketplace, and per SKU for the whole period. Sales = ordered product sales as Amazon reports them, VAT included.',
+      cols: [
+        { k: 'marketplace_id', t: 'Market', f: mpCode },
+        { k: 'sku', t: 'SKU', mono: true },
+        { k: 'child_asin', t: 'ASIN', mono: true },
+        { k: 'parent_asin', t: 'Parent ASIN', mono: true },
+        { k: 'ordered_sales', t: 'Sales', num: true },
+        { k: 'currency', t: 'Cur.' },
+        { k: 'units_ordered', t: 'Units', num: true },
+        { k: 'total_order_items', t: 'Order items', num: true },
+        { k: 'sessions', t: 'Sessions', num: true },
+        { k: 'page_views', t: 'Page views', num: true },
+        { k: 'unit_session_pct', t: 'Conversion %', num: true },
+        { k: 'buy_box_pct', t: 'Buy Box %', num: true }
+      ],
+      extra: ['period_start', 'period_end'],
+      daily: { table: 'ecom_amz_business_daily', order: ['day', 'marketplace_id'],
+               cols: ['marketplace_id', 'day', 'currency', 'ordered_sales', 'units_ordered', 'total_order_items', 'units_refunded',
+                      'sessions', 'page_views', 'buy_box_pct'].map(function (k) { return { k: k }; }) }
+    },
+    finance: {
+      title: 'Finance', table: 'ecom_amz_finance_events', order: ['-posted_at', 'id'],
+      lede: 'Amazon\'s finance transactions: order payments, refunds, fees, reimbursements and more, as posted to the account. Amounts are in each marketplace\'s currency.',
+      cols: [
+        { k: 'posted_at', t: 'Posted (UTC)', f: isoMinute },
+        { k: 'marketplace', t: 'Market' },
+        { k: 'event_type', t: 'Type' },
+        { k: 'status', t: 'Status', sel: 'status:raw->>transactionStatus', f: finStatus },
+        { k: 'order_id', t: 'Order', mono: true },
+        { k: 'sku', t: 'SKU', mono: true },
+        { k: 'quantity', t: 'Qty', num: true },
+        { k: 'principal', t: 'Sales part', num: true },
+        { k: 'amount', t: 'Net', num: true },
+        { k: 'currency', t: 'Cur.' }
+      ],
+      extra: ['mp_id:raw->marketplaceDetails->>marketplaceId']
     }
   };
 
@@ -192,13 +238,18 @@
       fillAccountSelect();
     });
   }
+  // view = a VIEWS key or a config ({table, cols, order}); order = a column or a list, "-col" = newest / largest first
   function loadRows(view, conn) {
-    var cfg = VIEWS[view];
-    var cols = cfg.cols.filter(function (c) { return !c.calc; }).map(function (c) { return c.k; }).concat(cfg.extra || []);
+    var cfg = typeof view === 'string' ? VIEWS[view] : view;
+    var cols = cfg.cols.filter(function (c) { return !c.calc; }).map(function (c) { return c.sel || c.k; }).concat(cfg.extra || []);
     var all = [], page = 1000, cap = 5000;
     function next(from) {
-      return client.from(cfg.table).select(cols.join(',')).eq('connection_id', conn.id).order(cfg.order)
-        .range(from, from + page - 1).then(function (r) {
+      var q = client.from(cfg.table).select(cols.join(',')).eq('connection_id', conn.id);
+      (Array.isArray(cfg.order) ? cfg.order : [cfg.order]).forEach(function (o) {
+        var desc = o.charAt(0) === '-';
+        q = q.order(desc ? o.slice(1) : o, { ascending: !desc, nullsFirst: false });
+      });
+      return q.range(from, from + page - 1).then(function (r) {
           if (r.error) throw new Error(r.error.message);
           all = all.concat(r.data || []);
           if ((r.data || []).length === page && all.length < cap) return next(from + page);
@@ -219,7 +270,6 @@
     var main = $('#ecm-main');
     main.innerHTML = '';
     if (VIEWS[id]) viewData(id, main);
-    else if (id === 'sales' || id === 'finance') viewSoon(id, main);
     else viewSettings(main);
     if (started) main.focus({ preventScroll: false });
   }
@@ -351,7 +401,8 @@
     var to = h('input', { class: 'ecm-input', type: 'date', 'aria-label': 'To date' });
     var presetBtns = [];
     function setPreset(days) {
-      if (days) { var end = new Date(); st.to = ''; st.from = isoDay(new Date(end.getTime() - (days - 1) * 86400000)); }
+      // opts.endDay: count back from the newest day of the data (the business report ends 2 days ago), else from today
+      if (days) { var end = opts.endDay ? new Date(opts.endDay + 'T12:00:00Z') : new Date(); st.to = ''; st.from = isoDay(new Date(end.getTime() - (days - 1) * 86400000)); }
       else { st.from = ''; st.to = ''; }
       from.value = st.from; to.value = st.to;
       presetBtns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-days') === String(days || ''))); });
@@ -512,11 +563,14 @@
     var conn = current();
     if (!conn) return needAccount(main);
     var box = loadingBox(main);
-    Promise.all([loadRows(id, conn), loadStats(conn)]).then(function (res) {
+    Promise.all([loadRows(id, conn), loadStats(conn), cfg.daily ? loadRows(cfg.daily, conn) : []]).then(function (res) {
       box.innerHTML = '';
-      var rows = res[0], stats = res[1];
-      if (!rows.length && !(stats && stats.length)) return emptyData(box, conn);
-      ({ products: viewProducts, inventory: viewInventory, repeat: viewRepeat })[id](box, cfg, rows, stats, conn);
+      var rows = res[0], stats = res[1], daily = res[2];
+      var own = id === 'sales' ? daily.length > 0
+              : id === 'finance' ? (stats || []).some(function (s) { return s.dataset === 'finance'; })
+              : !!(stats && stats.length);
+      if (!rows.length && !own) return emptyData(box, conn);
+      ({ products: viewProducts, inventory: viewInventory, repeat: viewRepeat, sales: viewSales, finance: viewFinance })[id](box, cfg, rows, stats, conn, daily);
       box.appendChild(h('p', { class: 'ecm-note', text: TEST_NOTE + (conn.last_sync_at ? ' Last sync: ' + fmtTime(conn.last_sync_at) + '.' : '') }));
     }).catch(function (e) { viewFailed(box, e); });
   }
@@ -737,7 +791,7 @@
   }
   // The table under a view: search, sort, CSV. `outer(row)` = the view's filter bar (marketplace + dates).
   function dataTable(id, cfg, rows, conn, outer) {
-    var st = { q: '', sort: null, dir: 1 };
+    var st = { q: '', sort: cfg.sort || null, dir: cfg.sortDir || 1 };
     var search = h('input', { class: 'ecm-input', type: 'search', placeholder: 'Search', 'aria-label': 'Search this table' });
     var count = h('span', { class: 'ecm-tools__count', 'aria-live': 'polite' });
     var csvBtn = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Download for Excel (CSV)' });
@@ -797,15 +851,161 @@
     return { el: h('div', null, [h('div', { class: 'ecm-tools' }, [search, csvBtn, count]), h('div', { class: 'ecm-tablewrap' }, table)]), refresh: apply };
   }
 
-  function viewSoon(id, main) {
-    var isSales = id === 'sales';
-    header(main, isSales ? 'Sales' : 'Finance');
-    main.appendChild(h('div', { class: 'ecm-card ecm-card--soft' }, [
-      h('p', { text: 'Not in the test run (your decision ED-05, 10 Nov 2026).' }),
-      h('p', { class: 'ecm-note', text: isSales
-        ? 'Comes from Amazon\'s Business Report (sales and traffic per SKU and day; sales include VAT). The table is ready in the database; it fills in the next step.'
-        : 'Comes from Amazon\'s financial events (order payments, refunds, fees). The table is ready in the database; it fills in the next step.' })
-    ]));
+  // ---- money in several currencies: never added together. The main currency (largest amount, or the one the
+  //      charts use) is the tile's value; the others go into the hint.
+  function curOrder(map) {
+    return Object.keys(map).filter(function (c) { return map[c]; }).sort(function (a, b) { return Math.abs(map[b]) - Math.abs(map[a]); });
+  }
+  function moneyKpi(label, map, hint, main, tone) {
+    var keys = curOrder(map);
+    if (!main || !map[main]) main = keys[0];
+    var rest = keys.filter(function (c) { return c !== main; }).map(function (c) { return fmtInt(map[c]) + ' ' + c; });
+    return { label: label, value: main ? fmtInt(map[main]) + ' ' + main : '—', tone: tone,
+             hint: (rest.length ? 'also ' + rest.join(' · ') + (hint ? ' · ' : '') : '') + (hint || '') };
+  }
+  function otherCurNote(curs, main) {
+    var o = curs.filter(function (c) { return c !== main; });
+    return o.length ? 'Amounts in ' + o.join(', ') + ' are not in this chart (another currency); choose that marketplace in the filter to see them.' : null;
+  }
+  // Every day from the first to the last key, so days without data show as zero.
+  function fillDays(keys) {
+    if (!keys.length) return [];
+    var out = [], t = Date.parse(keys[0] + 'T12:00:00Z'), last = keys[keys.length - 1];
+    for (var k = 0; k < 800; k++) { var d = isoDay(new Date(t + k * 86400000)); out.push(d); if (d >= last) break; }
+    return out;
+  }
+  function add(map, key, v) { map[key] = (map[key] || 0) + (Number(v) || 0); }
+  var pctFmt = function (v) { return Math.round(v * 10) / 10 + ' %'; };
+  var pct2Fmt = function (v) { return v.toFixed(2) + ' %'; };
+
+  // ---- Sales = Amazon's Business Report: daily totals per marketplace (all days), the SKU table of the latest period
+  function viewSales(box, cfg, rows, stats, conn, daily) {
+    var latest = {};
+    rows.forEach(function (r) { if (!latest[r.marketplace_id] || r.period_end > latest[r.marketplace_id]) latest[r.marketplace_id] = r.period_end; });
+    var skuRows = rows.filter(function (r) { return r.period_end === latest[r.marketplace_id]; });
+    var pEnd = skuRows.reduce(function (a, r) { return r.period_end > a ? r.period_end : a; }, '');
+    var pStart = (skuRows.filter(function (r) { return r.period_end === pEnd; })[0] || {}).period_start;
+    var lastDay = daily.reduce(function (a, r) { return r.day > a ? r.day : a; }, '');
+    var mps = uniq(daily.map(function (r) { return r.marketplace_id; }).concat(skuRows.map(function (r) { return r.marketplace_id; })));
+    var kpiBox = h('div'), chartBox = h('div', { class: 'ecm-charts' });
+    var bar = filterBar({ mps: mps, dateLabel: 'Days', endDay: lastDay || null,
+                          presets: [[7, '7 days'], [14, '14 days'], [30, '30 days'], ['', 'All']] }, render);
+    var tbl = dataTable('sales', cfg, skuRows, conn, function (r) { return bar.mpOk(r.marketplace_id); });
+    box.append(bar.el, kpiBox, chartBox,
+      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Per SKU' + (pStart ? ' (' + fmtDay(pStart) + ' – ' + fmtDay(pEnd) + '; test mode: the 100 best-selling per marketplace)' : '') }),
+      skuRows.length ? tbl.el : h('p', { class: 'ecm-note', text: 'Comes with the next sync.' }));
+    function render() {
+      var d = daily.filter(function (r) { return bar.mpOk(r.marketplace_id) && bar.dateOk(r.day); });
+      var days = uniq(d.map(function (r) { return r.day; })).sort();
+      var by = {}, tot = { sales: {}, units: 0, items: 0, refunded: 0, sessions: 0, views: 0, bbw: 0, bbv: 0 };
+      days.forEach(function (k) { by[k] = { sales: {}, units: 0, refunded: 0, sessions: 0 }; });
+      d.forEach(function (r) {
+        var x = by[r.day], cur = r.currency || '';
+        add(x.sales, cur, r.ordered_sales); add(tot.sales, cur, r.ordered_sales);
+        x.units += r.units_ordered || 0; x.refunded += r.units_refunded || 0; x.sessions += r.sessions || 0;
+        tot.units += r.units_ordered || 0; tot.items += r.total_order_items || 0; tot.refunded += r.units_refunded || 0;
+        tot.sessions += r.sessions || 0; tot.views += r.page_views || 0;
+        if (r.buy_box_pct != null && r.page_views) { tot.bbw += r.buy_box_pct * r.page_views; tot.bbv += r.page_views; }
+      });
+      var curs = curOrder(tot.sales), main = curs[0] || '';
+      kpiBox.replaceChildren(kpiRow([
+        moneyKpi('Ordered sales', tot.sales, days.length ? fmtDay(days[0]) + ' – ' + fmtDay(days[days.length - 1]) + ', VAT incl.' : 'no days', main),
+        { label: 'Units ordered', value: fmtInt(tot.units), hint: fmtInt(tot.items) + ' order items' },
+        { label: 'Sessions', value: fmtInt(tot.sessions), hint: fmtInt(tot.views) + ' page views' },
+        { label: 'Conversion', value: pctOf(tot.units, tot.sessions), hint: 'units ordered per session', tone: 'up' },
+        { label: 'Buy Box', value: tot.bbv ? (tot.bbw / tot.bbv).toFixed(1) + ' %' : '—', hint: 'share of page views' },
+        { label: 'Units refunded', value: fmtInt(tot.refunded), hint: pctOf(tot.refunded, tot.units) + ' of units ordered', tone: tot.refunded ? 'down' : null }
+      ]));
+      chartBox.replaceChildren(
+        chart({ title: 'Ordered sales per day' + (main ? ' (' + main + ')' : ''), labels: days, xFmt: fmtDay, note: otherCurNote(curs, main),
+          tipFmt: function (v) { return fmtNum(v, 2) + ' ' + main; },
+          series: [{ name: 'Sales', values: days.map(function (k) { return by[k].sales[main] || 0; }), color: 'var(--partner)', kind: 'bar' }] }),
+        chart({ title: 'Units per day', labels: days, xFmt: fmtDay,
+          series: [{ name: 'Units ordered', values: days.map(function (k) { return by[k].units; }), color: 'var(--accent)', kind: 'bar' },
+                   { name: 'Units refunded', values: days.map(function (k) { return by[k].refunded; }), color: 'var(--act)', kind: 'bar' }] }),
+        chart({ title: 'Sessions per day', labels: days, xFmt: fmtDay,
+          series: [{ name: 'Sessions', values: days.map(function (k) { return by[k].sessions; }), color: 'var(--partner)' }] }),
+        chart({ title: 'Conversion per day (units ordered per session)', labels: days, xFmt: fmtDay, yFmt: pctFmt, tipFmt: pct2Fmt,
+          series: [{ name: 'Conversion %', values: days.map(function (k) { return by[k].sessions ? by[k].units * 100 / by[k].sessions : null; }), color: 'var(--ok)' }] })
+      );
+      tbl.refresh();
+    }
+    render();
+  }
+
+  // ---- Finance = Amazon's finance transactions: totals of ALL transactions per day, marketplace, type and currency
+  //      (ecom_amz_stats, dataset "finance"), and the sample of single transactions
+  var FIN_TYPES = {
+    title: 'Totals per transaction type',
+    cols: [
+      { k: 'type', t: 'Type' },
+      { k: 'currency', t: 'Cur.' },
+      { k: 'count', t: 'Transactions', num: true },
+      { k: 'sales', t: 'Sales', num: true },
+      { k: 'expenses', t: 'Fees and costs', num: true },
+      { k: 'refunded_sales', t: 'Refunded sales', num: true },
+      { k: 'refunded_expenses', t: 'Fees refunded', num: true },
+      { k: 'other', t: 'Other', num: true },
+      { k: 'total', t: 'Net', num: true }
+    ]
+  };
+  function viewFinance(box, cfg, rows, stats, conn) {
+    var fin = (stats || []).filter(function (s) { return s.dataset === 'finance'; });
+    var mps = uniq(fin.map(function (s) { return s.marketplace_id; }).concat(rows.map(function (r) { return r.mp_id || 'ALL'; })));
+    var kpiBox = h('div'), chartBox = h('div', { class: 'ecm-charts' }), typeBox = h('div');
+    var bar = filterBar({ mps: mps, dateLabel: 'Posted', presets: [[7, '7 days'], [30, '30 days'], ['', 'All']] }, render);
+    var tbl = dataTable('finance', cfg, rows, conn, function (r) { return bar.mpOk(r.mp_id || 'ALL') && bar.dateOk(String(r.posted_at || '').slice(0, 10)); });
+    box.append(bar.el);
+    if (!fin.length) box.appendChild(h('p', { class: 'ecm-note', text: 'The totals of all transactions appear after the next sync (needs supabase/0036).' }));
+    box.append(kpiBox, chartBox, h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Totals per transaction type' }), typeBox,
+      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Transactions (test sample: the first 100 Amazon sent for the period)' }), tbl.el);
+    function render() {
+      var tot = { total: {}, sales: {}, fees: {}, refunds: {}, deferred: {}, count: 0 }, days = {}, types = {};
+      fin.forEach(function (s) {
+        if (!bar.mpOk(s.marketplace_id) || !bar.dateOk(s.period_start)) return;
+        var m = s.metrics, cur = m.currency || '', type = s.dim.split('|')[0];
+        var refunds = (m.refunded_sales || 0) + (m.refunded_expenses || 0);
+        add(tot.total, cur, m.total); add(tot.sales, cur, m.sales); add(tot.fees, cur, m.expenses);
+        add(tot.refunds, cur, refunds); add(tot.deferred, cur, m.deferred);
+        tot.count += m.count || 0;
+        var dd = days[s.period_start] || (days[s.period_start] = {});
+        var dc = dd[cur] || (dd[cur] = { total: 0, sales: 0, fees: 0, refunds: 0 });
+        dc.total += m.total || 0; dc.sales += m.sales || 0; dc.fees += m.expenses || 0; dc.refunds += refunds;
+        var t = types[type + '|' + cur] || (types[type + '|' + cur] = { type: type, currency: cur, count: 0, sales: 0, expenses: 0, refunded_sales: 0, refunded_expenses: 0, other: 0, total: 0 });
+        ['count', 'sales', 'expenses', 'refunded_sales', 'refunded_expenses', 'other', 'total'].forEach(function (k) { t[k] += m[k] || 0; });
+      });
+      var curs = curOrder(tot.sales).concat(curOrder(tot.total)).filter(function (c, i, a) { return a.indexOf(c) === i; });
+      var main = curs[0] || '';
+      var dk = fillDays(Object.keys(days).sort());
+      var dv = function (k, f) { return (days[k] && days[k][main] && days[k][main][f]) || 0; };
+      kpiBox.replaceChildren(kpiRow([
+        moneyKpi('Net', tot.total, 'all transactions together', main),
+        moneyKpi('Sales', tot.sales, 'charged to customers', main, 'up'),
+        moneyKpi('Fees and costs', tot.fees, 'charged by Amazon', main, 'down'),
+        moneyKpi('Refunds', tot.refunds, 'refunded sales less fees returned', main),
+        { label: 'Transactions', value: fmtInt(tot.count), hint: dk.length ? fmtDay(dk[0]) + ' – ' + fmtDay(dk[dk.length - 1]) : 'none in this range' },
+        moneyKpi('Deferred', tot.deferred, 'held back by Amazon for now', main)
+      ]));
+      chartBox.replaceChildren(
+        chart({ title: 'Net per day' + (main ? ' (' + main + ')' : ''), labels: dk, xFmt: fmtDay, note: otherCurNote(curs, main),
+          tipFmt: function (v) { return fmtNum(v, 2) + ' ' + main; },
+          series: [{ name: 'Net', values: dk.map(function (k) { return dv(k, 'total'); }), color: 'var(--partner)', kind: 'bar' }] }),
+        chart({ title: 'Sales, fees and refunds per day' + (main ? ' (' + main + ')' : ''), labels: dk, xFmt: fmtDay,
+          tipFmt: function (v) { return fmtNum(v, 2) + ' ' + main; },
+          series: [{ name: 'Sales', values: dk.map(function (k) { return dv(k, 'sales'); }), color: 'var(--ok)', kind: 'bar' },
+                   { name: 'Fees and costs', values: dk.map(function (k) { return dv(k, 'fees'); }), color: 'var(--accent)', kind: 'bar' },
+                   { name: 'Refunds', values: dk.map(function (k) { return dv(k, 'refunds'); }), color: 'var(--act)', kind: 'bar' }] })
+      );
+      var typeRows = Object.keys(types).map(function (k) {
+        var t = types[k];
+        ['sales', 'expenses', 'refunded_sales', 'refunded_expenses', 'other', 'total'].forEach(function (f) { t[f] = Math.round(t[f] * 100) / 100; });
+        return t;
+      }).sort(function (a, b) { return Math.abs(b.total) - Math.abs(a.total); });
+      typeBox.replaceChildren(typeRows.length ? dataTable('finance-types', FIN_TYPES, typeRows, conn, null).el
+                                              : h('p', { class: 'ecm-note', text: 'No transactions in this range.' }));
+      tbl.refresh();
+    }
+    render();
   }
 
   /* 6. Settings ----------------------------------------------------------- */
@@ -1025,7 +1225,7 @@
     card.appendChild(h('h2', { class: 'ecm-h2', id: 'ecm-sync-h', text: 'Sync' }));
     var conn = current();
     if (!conn) { card.appendChild(h('p', { class: 'ecm-note', text: 'Add an Amazon account first.' })); return; }
-    card.appendChild(h('p', { class: 'ecm-note', text: 'Account: ' + conn.label + '. ' + TEST_NOTE + ' Data sets in the test run: listings, FBA inventory, repeat purchase (last full week). Amazon prepares reports in a few minutes; you can leave this page and come back.' }));
+    card.appendChild(h('p', { class: 'ecm-note', text: 'Account: ' + conn.label + '. ' + TEST_NOTE + ' Data sets in the test run: FBA stock and stock development (30 days), business report (30 days), finance transactions (30 days), listings, repeat purchase (last 4 full weeks). Amazon prepares reports in a few minutes; you can leave this page and come back.' }));
     var jobs = data ? data.jobs : null;
     var open = (jobs || []).filter(function (j) { return OPEN[j.status]; }).length;
     var row = h('div', { class: 'ecm-row', style: 'margin: var(--space-3) 0' });
@@ -1061,7 +1261,7 @@
     jobs.forEach(function (j) {
       tbody.appendChild(h('tr', null, [
         h('td', { text: DATASET[j.dataset] || j.dataset }),
-        h('td', { text: mpCode(j.marketplace_id) }),
+        h('td', { text: j.marketplace_id ? mpCode(j.marketplace_id) : 'All' }),
         h('td', null, status(j.status)),
         h('td', { class: 'is-num', text: j.rows_written ? fmtNum(j.rows_written, 0) : '' }),
         h('td', { class: 'is-wide', text: j.message || '' }),
