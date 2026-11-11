@@ -5608,8 +5608,8 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .fb-admin__item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3) var(--space-5);
-  padding: var(--space-4);
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-3) var(--space-4);
   background: var(--bg);
   border: 1px solid var(--rule);
   border-radius: var(--radius-sm);
@@ -5629,12 +5629,17 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .fb-admin__edit { display: grid; gap: var(--space-1); align-content: start; min-width: 0; }
 .fb-admin__label { font-size: var(--type-caption); font-weight: 500; }
 .fb-admin__label small { font-size: inherit; font-weight: 400; color: var(--ink-soft); }
-.fb-admin__select { justify-self: start; margin-bottom: var(--space-2); }
-.fb-admin__note { min-height: 64px; padding: var(--space-2) var(--space-3); font-size: var(--type-body-sm); resize: vertical; }
-.fb-admin__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-1); }
-.fb-admin__actions .btn[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
+.fb-admin__ticket { font-size: var(--type-caption); font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* Status select, Save and Delete on one row (11 Nov 2026, owner: less empty space) */
+.fb-admin__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); }
+.fb-admin__row .btn { padding: 8px 14px; }
+.fb-admin__row .btn[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
+.fb-admin__delete { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+.fb-admin__delete:hover { border-color: var(--ink); }
+.fb-admin__delete:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 4px; }
+.fb-admin__note { min-height: 44px; padding: var(--space-2) var(--space-3); font-size: var(--type-body-sm); resize: vertical; }
 @media (min-width: 768px) {
-  .fb-admin__item { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); }
+  .fb-admin__item { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); }
 }
 
 /* Room under the footer so the round button never covers its last line. */

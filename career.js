@@ -2249,7 +2249,7 @@
     async function loadFeedback() {
       if (!fbBox) return;
       const g = gen;
-      const cols = 'id, user_id, kinds, message, status, admin_note, created_at, updated_at'
+      const cols = 'id, ticket_no, user_id, kinds, message, status, admin_note, created_at, updated_at'
         + ((await hasFiles()) ? ', service, attachments' : '');
       if (g !== gen) return;
       const { data, error } = await call(db().from('feedback')
@@ -2277,6 +2277,7 @@
       li.dataset.status = f.status;
       const info = el('div', 'fb-admin__info');
       const whoP = el('p', 'fb-admin__who');
+      if (f.ticket_no) whoP.appendChild(el('span', 'fb-admin__ticket', '#' + f.ticket_no));   // YYMMDD-NNNN (0038)
       whoP.appendChild(el('span', 'admin-client', c ? nameOf(c) : clientsReady ? 'Unknown account' : '…'));
       if (c && c.full_name && c.email) whoP.appendChild(el('span', 'fb-admin__email', c.email));
       info.appendChild(whoP);
@@ -2309,16 +2310,23 @@
       ta.maxLength = 1000;                          // feedback.admin_note limit
       ta.dataset.focusKey = 'note:' + f.id;
       ta.value = d ? d.note : (f.admin_note || '');
-      const actions = el('div', 'fb-admin__actions');
+      // Status, Save and Delete share one row; the note sits under it.
+      const row = el('div', 'fb-admin__row');
       const save = el('button', 'btn btn-primary btn-sm', 'Save');
       save.type = 'submit';
       save.dataset.focusKey = 'save:' + f.id;
       save.setAttribute('aria-label', 'Save status and note for the request from ' + (c ? nameOf(c) : 'this account'));
+      const del = el('button', 'btn btn-secondary btn-sm fb-admin__delete', 'Delete');
+      del.type = 'button';
+      del.dataset.fbDelete = String(f.id);
+      del.dataset.focusKey = 'del:' + f.id;
+      del.setAttribute('aria-label', 'Delete the request ' + (f.ticket_no ? '#' + f.ticket_no + ' ' : '')
+        + 'from ' + (c ? nameOf(c) : 'this account'));
+      row.append(sel, save, del);
       const st = el('p', 'account-form__status');
       st.setAttribute('role', 'status');
       st.hidden = true;
-      actions.append(save, st);
-      form.append(sl, sel, nl, ta, actions);
+      form.append(sl, row, nl, ta, st);
       li.append(info, form);
       return li;
     }
@@ -2384,6 +2392,26 @@
         fbDraft.delete(id);
         f.closest('.fb-admin__item').dataset.status = status;
         note(st, 'ok', 'Saved.');
+        paintFbBadge();
+      });
+      // Delete (0038, admins only by RLS): asks first; the client's uploaded files stay in the bucket.
+      fbBox.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-fb-delete]');
+        if (!btn || btn.getAttribute('aria-disabled') === 'true') return;
+        const id = Number(btn.dataset.fbDelete);
+        const row = fbRows && fbRows.find((x) => x.id === id);
+        if (!window.confirm('Delete request ' + (row && row.ticket_no ? '#' + row.ticket_no + ' ' : '')
+          + 'for everyone, including the client? This cannot be undone.')) return;
+        const st = btn.closest('form').querySelector('.account-form__status');
+        btn.setAttribute('aria-disabled', 'true');
+        note(st, 'busy', 'Deleting…');
+        const { data, error } = await call(db().from('feedback').delete().eq('id', id).select('id'));
+        btn.removeAttribute('aria-disabled');
+        if (error || !data || !data.length) { note(st, 'error', 'Could not delete. Please try again.'); return; }
+        fbRows = fbRows.filter((x) => x.id !== id);
+        fbDraft.delete(id);
+        fbSig = fbSigOf(fbRows);
+        paintFeedback();
         paintFbBadge();
       });
     }
