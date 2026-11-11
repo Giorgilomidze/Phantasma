@@ -196,8 +196,14 @@
   .ads-table--stack td.ads-actions { justify-content: flex-start; }
   .ads-table--stack td.ads-actions::before { display: none; }
 }
-.ads-chart { overflow-x: auto; }
-.ads-chart svg { min-width: 520px; width: 100%; max-width: 760px; height: auto; display: block; }
+/* The daily chart fills its card (feedback 261111-0004): app.js draws the SVG at the frame's pixel size;
+   the frame takes the card's width and, beside a taller card (one row from 1400px), its free height. */
+.ads-card--fill { display: flex; flex-direction: column; }
+.ads-chartbox { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.ads-chart { position: relative; flex: 1 1 auto; min-height: clamp(220px, 22vw, 320px); overflow-x: auto; overflow-y: hidden; }
+.ads-chart svg { position: absolute; top: 0; left: 0; display: block; }
+.ads-chart--static { min-height: 0; }
+.ads-chart--static svg { position: static; min-width: 520px; width: 100%; height: auto; }
 .ads-chart__tick { font-size: 13px; fill: var(--ink-soft); font-family: var(--font-body); }
 .ads-chart__legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--type-caption); margin: 0 0 var(--space-2); }
 /* Dashboard: the daily chart and "Spend by campaign" side by side from 1400px (the line chart needs ~520px) */

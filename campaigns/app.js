@@ -426,31 +426,57 @@
     var p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
     return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
   }
+  // The daily chart is drawn at the real size of its frame (owner feedback 261111-0004, 11 Nov 2026: it
+  // filled only part of the card): the width follows the card, the height fills the card when it stands
+  // beside a taller one (wide screens) and otherwise follows the CSS minimum. One drawing unit = one
+  // pixel, so the labels keep their size; redrawn whenever the frame changes size.
   function lineChart(series) {
-    var W = 640, H = 240, L = 52, R = 48, T = 14, B = 30, iw = W - L - R, ih = H - T - B;
+    var L = 52, R = 48, T = 14, B = 30, MIN_W = 300, MIN_H = 200;
     var maxS = niceMax(Math.max.apply(null, series.map(function (s) { return s.spend; })));
     var maxM = niceMax(Math.max.apply(null, series.map(function (s) { return s.messages; })));
-    function x(i) { return L + (series.length > 1 ? i * iw / (series.length - 1) : iw / 2); }
-    function y(v, m) { return T + ih - v / m * ih; }
-    var g = '';
-    for (var i = 0; i <= 4; i++) {
-      var gy = T + ih - i * ih / 4;
-      g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#ddd8cf"/>' +
-        '<text x="' + (L - 6) + '" y="' + (gy + 4) + '" text-anchor="end" class="ads-chart__tick">' + Math.round(maxS * i / 4 * 10) / 10 + '</text>' +
-        '<text x="' + (W - R + 6) + '" y="' + (gy + 4) + '" class="ads-chart__tick">' + Math.round(maxM * i / 4 * 10) / 10 + '</text>';
-    }
-    var pS = series.map(function (s, k) { return x(k).toFixed(1) + ',' + y(s.spend, maxS).toFixed(1); }).join(' ');
-    var pM = series.map(function (s, k) { return x(k).toFixed(1) + ',' + y(s.messages, maxM).toFixed(1); }).join(' ');
-    var xl = [0, Math.floor((series.length - 1) / 2), series.length - 1].map(function (k, n) {
-      return '<text x="' + x(k) + '" y="' + (H - 8) + '" text-anchor="' + (n === 0 ? 'start' : n === 2 ? 'end' : 'middle') + '" class="ads-chart__tick">' + esc(fmtDate(series[k].date)) + '</text>';
-    }).join('');
-    var dots = series.length <= 31 ? series.map(function (s, k) {
-      return '<circle cx="' + x(k).toFixed(1) + '" cy="' + y(s.spend, maxS).toFixed(1) + '" r="2.5" fill="#b8420a"><title>' + esc(fmtDate(s.date) + ': ' + money(s.spend) + ', ' + s.messages) + '</title></circle>';
-    }).join('') : '';
     var wrap = h('div', { class: 'ads-chart', tabindex: '0', role: 'region', 'aria-label': t('dash.chartAria') });
-    wrap.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(t('dash.chartAria')) + '">' + g + xl +
-      '<polyline points="' + pM + '" fill="none" stroke="#0e4f6b" stroke-width="2.5" stroke-dasharray="6 4"/>' +
-      '<polyline points="' + pS + '" fill="none" stroke="#b8420a" stroke-width="2.5"/>' + dots + '</svg>';
+    var drawn = '', shown = false;
+    function draw(W, H) {
+      var iw = W - L - R, ih = H - T - B;
+      function x(i) { return L + (series.length > 1 ? i * iw / (series.length - 1) : iw / 2); }
+      function y(v, m) { return T + ih - v / m * ih; }
+      var g = '';
+      for (var i = 0; i <= 4; i++) {
+        var gy = T + ih - i * ih / 4;
+        g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#ddd8cf"/>' +
+          '<text x="' + (L - 6) + '" y="' + (gy + 4) + '" text-anchor="end" class="ads-chart__tick">' + Math.round(maxS * i / 4 * 10) / 10 + '</text>' +
+          '<text x="' + (W - R + 6) + '" y="' + (gy + 4) + '" class="ads-chart__tick">' + Math.round(maxM * i / 4 * 10) / 10 + '</text>';
+      }
+      var pS = series.map(function (s, k) { return x(k).toFixed(1) + ',' + y(s.spend, maxS).toFixed(1); }).join(' ');
+      var pM = series.map(function (s, k) { return x(k).toFixed(1) + ',' + y(s.messages, maxM).toFixed(1); }).join(' ');
+      var xl = [0, Math.floor((series.length - 1) / 2), series.length - 1].map(function (k, n) {
+        return '<text x="' + x(k) + '" y="' + (H - 8) + '" text-anchor="' + (n === 0 ? 'start' : n === 2 ? 'end' : 'middle') + '" class="ads-chart__tick">' + esc(fmtDate(series[k].date)) + '</text>';
+      }).join('');
+      var dots = series.length <= 31 ? series.map(function (s, k) {
+        return '<circle cx="' + x(k).toFixed(1) + '" cy="' + y(s.spend, maxS).toFixed(1) + '" r="2.5" fill="#b8420a"><title>' + esc(fmtDate(s.date) + ': ' + money(s.spend) + ', ' + s.messages) + '</title></circle>';
+      }).join('') : '';
+      wrap.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(t('dash.chartAria')) + '">' + g + xl +
+        '<polyline points="' + pM + '" fill="none" stroke="#0e4f6b" stroke-width="2.5" stroke-dasharray="6 4"/>' +
+        '<polyline points="' + pS + '" fill="none" stroke="#b8420a" stroke-width="2.5"/>' + dots + '</svg>';
+    }
+    // Fit to the frame; a phone narrower than MIN_W scrolls sideways (the frame is focusable for keyboards).
+    // The observer also reports while the new view is still being built off-page: wait for it; stop only
+    // once the chart has been on the page and left it (the view was replaced).
+    function fit() {
+      if (!document.contains(wrap)) { if (shown && ro) ro.disconnect(); return; }
+      shown = true;
+      var W = Math.max(MIN_W, Math.floor(wrap.clientWidth)), H = Math.max(MIN_H, Math.floor(wrap.clientHeight));
+      if (W + 'x' + H === drawn) return;
+      drawn = W + 'x' + H;
+      draw(W, H);
+    }
+    var ro = window.ResizeObserver ? new ResizeObserver(fit) : null;
+    if (ro) {
+      ro.observe(wrap);
+      // First drawing right after the dashboard is on the page (the observer waits for the next painted
+      // frame, which a background tab may not get); a view replaced meanwhile stops observing.
+      setTimeout(function () { if (document.contains(wrap)) fit(); else ro.disconnect(); }, 0);
+    } else { wrap.classList.add('ads-chart--static'); draw(640, 240); } // old browsers: the former fixed drawing, scaled
     var legend = h('p', { class: 'ads-chart__legend' }, [
       h('span', { class: 'ads-key ads-key--spend' }, t('dash.spendAxis')), h('span', { class: 'ads-key ads-key--msg' }, t('dash.msgAxis'))
     ]);
@@ -458,7 +484,7 @@
       h('thead', {}, h('tr', {}, [h('th', { scope: 'col' }, t('common.date')), h('th', { scope: 'col' }, t('col.spend')), h('th', { scope: 'col' }, t('col.messages'))])),
       h('tbody', {}, series.map(function (s) { return h('tr', {}, [h('td', {}, fmtDate(s.date)), h('td', {}, money(s.spend)), h('td', {}, num(s.messages))]); }))
     ]);
-    return h('div', {}, [legend, wrap, h('details', { class: 'ads-details' }, [h('summary', {}, t('dash.viewTable')), h('div', { class: 'ads-tablewrap', tabindex: '0', role: 'region', 'aria-label': t('dash.viewTable') }, table)])]);
+    return h('div', { class: 'ads-chartbox' }, [legend, wrap, h('details', { class: 'ads-details' }, [h('summary', {}, t('dash.viewTable')), h('div', { class: 'ads-tablewrap', tabindex: '0', role: 'region', 'aria-label': t('dash.viewTable') }, table)])]);
   }
   // Spend per campaign in the chosen period: thin horizontal bars, biggest first, the values as text
   // beside them (the bars only show the size). More than BARS_MAX campaigns: the rest is one "Other" row.
@@ -557,7 +583,7 @@
       body.appendChild(h('p', { class: 'ads-note' }, t('dash.updated', { time: new Date(d.updatedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }), n: dashRange })));
       // The daily chart and, beside it, where the money went (one row on wide screens, stacked below 1400px).
       body.appendChild(h('div', { class: 'ads-dashrow' }, [
-        h('section', { class: 'ads-card', 'aria-labelledby': 'ads-d-chart' }, [h('h2', { class: 'ads-h2', id: 'ads-d-chart' }, t('dash.chartTitle')), lineChart(d.series)]),
+        h('section', { class: 'ads-card ads-card--fill', 'aria-labelledby': 'ads-d-chart' }, [h('h2', { class: 'ads-h2', id: 'ads-d-chart' }, t('dash.chartTitle')), lineChart(d.series)]),
         h('section', { class: 'ads-card', 'aria-labelledby': 'ads-d-bars' }, [h('h2', { class: 'ads-h2', id: 'ads-d-bars' }, t('dash.byCampaign')),
           h('p', { class: 'ads-chart__legend' }, t('dash.byCampaignNote', { n: dashRange })), spendBars(d.campaigns)])
       ]));
