@@ -44,7 +44,8 @@
   ];
 
   // Column helpers for the data views
-  function mpCode(v) { return MP[v] || v || ''; }
+  // "EU" = the Pan-European FBA stock, stored once for DE FR IT ES NL SE PL BE (owner decision ED-14, 11 Nov 2026)
+  function mpCode(v) { return v === 'EU' ? 'EU pool' : (MP[v] || v || ''); }
   function fbaFbm(v) { if (!v) return ''; return /^AMAZON/i.test(v) ? 'FBA' : (v === 'DEFAULT' ? 'FBM' : v); }
   function inbound(r) { var n = (r.inbound_working || 0) + (r.inbound_shipped || 0) + (r.inbound_receiving || 0); return n || (r.inbound_working == null && r.inbound_shipped == null && r.inbound_receiving == null ? null : 0); }
 
@@ -67,7 +68,7 @@
     },
     inventory: {
       title: 'FBA inventory', table: 'ecom_amz_fba_inventory', order: 'seller_sku',
-      lede: 'Amazon\'s FBA stock per SKU (Inventory API), one snapshot per day.',
+      lede: 'Amazon\'s FBA stock per SKU (Inventory API), one snapshot per day. The shared European stock (DE, FR, IT, ES, NL, SE, PL, BE) shows once as "EU pool"; UK and other countries have their own.',
       cols: [
         { k: 'marketplace_id', t: 'Market', f: mpCode },
         { k: 'snapshot_date', t: 'Date' },
