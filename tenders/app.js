@@ -2193,13 +2193,13 @@
       }));
       const years = Array.from(new Set(rows.map((r) => r.y).filter(Boolean))).sort().reverse();
       simpleList({
-        rows: rows, csv: 'purchase-plans', caption: 'Purchase plan lines', searchLabel: 'Search', placeholder: 'Buyer, plan number or CPV code',
+        rows: rows, csv: 'eplans', caption: 'ePlans: plan lines', searchLabel: 'Search', placeholder: 'Buyer, plan number or CPV code',
         selects: [
           { name: 'cat', label: 'Category', options: mcatOptions(), test: (r, v) => r.cpv === v },
           { name: 'year', label: 'Plan year', options: [['', 'Any year']].concat(years.map((y) => [String(y), String(y)])), test: (r, v) => String(r.y) === v },
           { name: 'reg', label: 'Plan', options: [['', 'Registered and drafts'], ['1', 'Registered only'], ['0', 'Drafts only']], test: (r, v) => (v === '1') === !!r.no },
         ],
-        defSort: 'amt', defDir: 'desc', empty: 'No purchase plans collected yet.',
+        defSort: 'amt', defDir: 'desc', empty: 'No ePlans collected yet.',
         intro: para('Collected ' + day(M.made) + '. One row per plan line in the 4 categories; a plan can have several. Drafts can still change; registered plans carry a number.', 'small muted'),
         cols: [
           { key: 'b', label: 'Buyer', cls: 'wide', first: 'asc', sort: (r) => r.b, cell: (r) => ka(r.b || DASH) },
