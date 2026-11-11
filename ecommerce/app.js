@@ -946,9 +946,13 @@
       { k: 'refunded_sales', t: 'Refunded sales', num: true },
       { k: 'refunded_expenses', t: 'Fees refunded', num: true },
       { k: 'other', t: 'Other', num: true },
-      { k: 'total', t: 'Net', num: true }
+      { k: 'total', t: 'Net', num: true },
+      { k: 'deferred', t: 'Held back', num: true }
     ]
   };
+  // Transfer = payout to the bank, DebtRecovery = charge to the seller's card: money moving, no income. They stay
+  // out of net, sales and the charts (the server books their amounts as "other"); payouts get their own tile.
+  var FIN_MOVES = { Transfer: 1, DebtRecovery: 1 };
   function viewFinance(box, cfg, rows, stats, conn) {
     var fin = (stats || []).filter(function (s) { return s.dataset === 'finance'; });
     var mps = uniq(fin.map(function (s) { return s.marketplace_id; }).concat(rows.map(function (r) { return r.mp_id || 'ALL'; })));
@@ -958,12 +962,16 @@
     box.append(bar.el);
     if (!fin.length) box.appendChild(h('p', { class: 'ecm-note', text: 'The totals of all transactions appear after the next sync (needs supabase/0036).' }));
     box.append(kpiBox, chartBox, h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Totals per transaction type' }), typeBox,
-      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Transactions (test sample: the first 100 Amazon sent for the period)' }), tbl.el);
+      h('h2', { class: 'ecm-h2 ecm-section-h', text: 'Transactions (test sample: the newest 100 Amazon sent)' }), tbl.el);
+    var TYPE_KEYS = ['count', 'sales', 'expenses', 'refunded_sales', 'refunded_expenses', 'other', 'total', 'deferred'];
     function render() {
-      var tot = { total: {}, sales: {}, fees: {}, refunds: {}, deferred: {}, count: 0 }, days = {}, types = {};
+      var tot = { total: {}, sales: {}, fees: {}, refunds: {}, deferred: {}, payout: {}, count: 0 }, days = {}, types = {};
       fin.forEach(function (s) {
         if (!bar.mpOk(s.marketplace_id) || !bar.dateOk(s.period_start)) return;
         var m = s.metrics, cur = m.currency || '', type = s.dim.split('|')[0];
+        var t = types[type + '|' + cur] || (types[type + '|' + cur] = { type: type, currency: cur });
+        TYPE_KEYS.forEach(function (k) { t[k] = (t[k] || 0) + (m[k] || 0); });
+        if (FIN_MOVES[type]) { if (type === 'Transfer') add(tot.payout, cur, m.total); return; }
         var refunds = (m.refunded_sales || 0) + (m.refunded_expenses || 0);
         add(tot.total, cur, m.total); add(tot.sales, cur, m.sales); add(tot.fees, cur, m.expenses);
         add(tot.refunds, cur, refunds); add(tot.deferred, cur, m.deferred);
@@ -971,20 +979,19 @@
         var dd = days[s.period_start] || (days[s.period_start] = {});
         var dc = dd[cur] || (dd[cur] = { total: 0, sales: 0, fees: 0, refunds: 0 });
         dc.total += m.total || 0; dc.sales += m.sales || 0; dc.fees += m.expenses || 0; dc.refunds += refunds;
-        var t = types[type + '|' + cur] || (types[type + '|' + cur] = { type: type, currency: cur, count: 0, sales: 0, expenses: 0, refunded_sales: 0, refunded_expenses: 0, other: 0, total: 0 });
-        ['count', 'sales', 'expenses', 'refunded_sales', 'refunded_expenses', 'other', 'total'].forEach(function (k) { t[k] += m[k] || 0; });
       });
       var curs = curOrder(tot.sales).concat(curOrder(tot.total)).filter(function (c, i, a) { return a.indexOf(c) === i; });
       var main = curs[0] || '';
       var dk = fillDays(Object.keys(days).sort());
       var dv = function (k, f) { return (days[k] && days[k][main] && days[k][main][f]) || 0; };
       kpiBox.replaceChildren(kpiRow([
-        moneyKpi('Net', tot.total, 'all transactions together', main),
-        moneyKpi('Sales', tot.sales, 'charged to customers', main, 'up'),
+        moneyKpi('Net', tot.total, 'earned in this range, before payouts', main),
+        moneyKpi('Sales', tot.sales, 'charged to customers, plus reimbursements', main, 'up'),
         moneyKpi('Fees and costs', tot.fees, 'charged by Amazon', main, 'down'),
         moneyKpi('Refunds', tot.refunds, 'refunded sales less fees returned', main),
         { label: 'Transactions', value: fmtInt(tot.count), hint: dk.length ? fmtDay(dk[0]) + ' – ' + fmtDay(dk[dk.length - 1]) : 'none in this range' },
-        moneyKpi('Deferred', tot.deferred, 'held back by Amazon for now', main)
+        moneyKpi('Held back', tot.deferred, 'deferred: Amazon pays it out later (as of the last sync)', main),
+        moneyKpi('Paid out to your bank', tot.payout, 'payouts in this range; not income', main)
       ]));
       chartBox.replaceChildren(
         chart({ title: 'Net per day' + (main ? ' (' + main + ')' : ''), labels: dk, xFmt: fmtDay, note: otherCurNote(curs, main),
@@ -996,11 +1003,14 @@
                    { name: 'Fees and costs', values: dk.map(function (k) { return dv(k, 'fees'); }), color: 'var(--accent)', kind: 'bar' },
                    { name: 'Refunds', values: dk.map(function (k) { return dv(k, 'refunds'); }), color: 'var(--act)', kind: 'bar' }] })
       );
+      // money movements (payouts) last; types with only release records of earlier money (count 0) left out
       var typeRows = Object.keys(types).map(function (k) {
         var t = types[k];
-        ['sales', 'expenses', 'refunded_sales', 'refunded_expenses', 'other', 'total'].forEach(function (f) { t[f] = Math.round(t[f] * 100) / 100; });
+        TYPE_KEYS.forEach(function (f) { if (f !== 'count') t[f] = Math.round(t[f] * 100) / 100; });
         return t;
-      }).sort(function (a, b) { return Math.abs(b.total) - Math.abs(a.total); });
+      }).filter(function (t) { return t.count; }).sort(function (a, b) {
+        return (FIN_MOVES[a.type] ? 1 : 0) - (FIN_MOVES[b.type] ? 1 : 0) || Math.abs(b.total) - Math.abs(a.total);
+      });
       typeBox.replaceChildren(typeRows.length ? dataTable('finance-types', FIN_TYPES, typeRows, conn, null).el
                                               : h('p', { class: 'ecm-note', text: 'No transactions in this range.' }));
       tbl.refresh();
