@@ -3573,6 +3573,15 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
   padding-top: var(--space-4);
   border-top: 1px solid var(--rule);
 }
+/* Dream jobs dialog (11 Nov 2026): three fieldsets in the Profile-details layout */
+.dream-slots { display: grid; gap: var(--space-5); }
+.dream-slot { border: 0; margin: 0; padding: 0; gap: var(--space-2); }
+.dream-slot + .dream-slot { padding-top: var(--space-5); border-top: 1px solid var(--rule); }
+.dream-slot legend { padding: 0; margin-bottom: var(--space-2); float: left; width: 100%; }
+.dream-slot legend + * { clear: both; }
+.dream-slot__desc { min-height: 120px; resize: vertical; font-size: var(--type-body-sm); }
+.dream-slot__why { min-height: 52px; resize: vertical; font-size: var(--type-body-sm); }
+.account-status__btn[hidden] { display: none; }
 .profile-src { display: grid; gap: var(--space-3); min-width: 0; }
 .profile-src + .profile-src { padding-top: var(--space-5); border-top: 1px solid var(--rule); }
 .profile-src__h,

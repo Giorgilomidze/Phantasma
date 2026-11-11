@@ -1725,6 +1725,28 @@
       return getClient().from('preferences').select('salary_min, salary_max, currency, answers').eq('user_id', session.user.id).maybeSingle();
     }
 
+    // Dream jobs (11 Nov 2026, supabase/0040): up to 3 rows per client, keyed by slot.
+    function loadDreamJobs() {
+      return getClient().from('dream_jobs').select('slot, description, why, source_url, updated_at')
+        .eq('user_id', session.user.id).order('slot');
+    }
+    // rows: [{ slot, description, why, source_url }] to keep; every other slot is removed.
+    async function saveDreamJobs(rows) {
+      const uid = session.user.id;
+      const keep = rows.map((r) => r.slot);
+      if (rows.length) {
+        const { error } = await getClient().from('dream_jobs')
+          .upsert(rows.map((r) => Object.assign({ user_id: uid }, r)), { onConflict: 'user_id,slot' });
+        if (error) return { error };
+      }
+      const gone = [1, 2, 3].filter((s) => keep.indexOf(s) === -1);
+      if (gone.length) {
+        const { error } = await getClient().from('dream_jobs').delete().eq('user_id', uid).in('slot', gone);
+        if (error) return { error };
+      }
+      return { error: null };
+    }
+
     // Start matching (CAR-05, supabase/0030): the client's own requests,
     // newest first (admins may read everyone's, hence the user filter), and
     // the RPC that checks the rule again and queues one.
@@ -1900,6 +1922,8 @@
       cvUrl,
       workbookUrl,
       loadPreferences,
+      loadDreamJobs,
+      saveDreamJobs,
       savePreferences,
       loadMatching,
       requestMatching,
@@ -3372,6 +3396,7 @@
         prefsRow = pr || null; fillPrefs();
         paintPrefs(prefsPct(pr)); matchSet({ need: missingPrefs(pr) });
       }, () => { paintPrefs(0); matchSet({ need: missingPrefs(null) }); });
+      loadDream();                                      // Dream jobs count next to Preferences (0040)
       Auth.loadCandidate().then(({ data: c, error }) => {
         if (error) console.warn('account: candidate read failed', error.message);
         cand = (!error && c) || null; fillCv();
@@ -3988,6 +4013,93 @@
       // Closes as before, unless My simple CV / the CV was opened on top meanwhile.
       setTimeout(() => { if (pfModal.isOpen && openModals[openModals.length - 1] === pfEl) pfModal.close(); }, 700);
     });
+
+    // ---- Dream jobs (11 Nov 2026, owner; supabase/0040): the rocket-in-a-cloud
+    // button next to Preferences shows how many are saved ("2/3") and opens a
+    // dialog with three slots: the pasted job ad, an optional link, and why it
+    // is a dream job. One Save writes all three; an emptied slot is removed.
+    const stDream   = root.querySelector('#status-dream');
+    const stDreamN  = root.querySelector('#status-dream-n');
+    const drEl      = document.getElementById('dream-modal');
+    const drModal   = drEl ? modalCtl(drEl) : null;
+    const drForm    = document.getElementById('dream-form');
+    const drSlots   = document.getElementById('dream-slots');
+    const drNote    = document.getElementById('dream-status');
+    let dreamRows   = [];                              // what is saved, as loaded
+    let dreamOff    = false;                           // 0040 not run: the button stays hidden
+    const drSay = (kind, text) => { drNote.textContent = text; drNote.dataset.kind = kind; drNote.hidden = !text; };
+    function paintDream() {
+      if (!stDream) return;
+      stDream.hidden = dreamOff;
+      const n = dreamRows.length;
+      stDreamN.textContent = n + '/3';
+      stDream.dataset.state = n ? 'on' : 'off';
+      const label = fillIn(stDream.dataset.label, { n });
+      stDream.setAttribute('aria-label', label);
+      stDream.title = label;
+    }
+    function buildDreamSlots() {
+      const tpl = document.getElementById('dream-slot-tpl');
+      drSlots.replaceChildren();
+      [1, 2, 3].forEach((slot) => {
+        const fs = tpl.content.firstElementChild.cloneNode(true);
+        fs.dataset.slot = String(slot);
+        fs.querySelector('[data-n]').textContent = String(slot);
+        fs.querySelectorAll('[data-field]').forEach((f) => {
+          f.id = 'dream-' + slot + '-' + f.dataset.field;
+          f.name = f.dataset.field + '_' + slot;
+        });
+        fs.querySelectorAll('label[data-for]').forEach((l) => {
+          l.htmlFor = 'dream-' + slot + '-' + { desc: 'description', url: 'source_url', why: 'why' }[l.dataset.for];
+        });
+        const r = dreamRows.find((x) => x.slot === slot) || {};
+        fs.querySelector('[data-field="description"]').value = r.description || '';
+        fs.querySelector('[data-field="source_url"]').value = r.source_url || '';
+        fs.querySelector('[data-field="why"]').value = r.why || '';
+        drSlots.appendChild(fs);
+      });
+    }
+    function loadDream() {
+      if (!stDream) return;
+      const uid = current && current.user.id;
+      Auth.loadDreamJobs().then(({ data, error }) => {
+        if (!current || current.user.id !== uid) return;
+        if (error) { dreamOff = /dream_jobs/.test(error.message || '') && /exist|schema/i.test(error.message || ''); dreamRows = []; }
+        else dreamRows = data || [];
+        paintDream();
+      }, () => {});
+    }
+    if (stDream && drModal) {
+      stDream.addEventListener('click', () => {
+        drSay('', '');
+        buildDreamSlots();
+        drModal.open('#dream-1-description');
+      });
+      drForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const rows = [];
+        for (const fs of drSlots.querySelectorAll('.dream-slot')) {
+          const slot = Number(fs.dataset.slot);
+          const desc = fs.querySelector('[data-field="description"]');
+          const url  = fs.querySelector('[data-field="source_url"]');
+          const why  = fs.querySelector('[data-field="why"]');
+          const d = desc.value.trim(), u = url.value.trim(), w = why.value.trim();
+          if (!d) {
+            if (w) { drSay('error', drForm.dataset.msgWhy); desc.focus(); return; }
+            continue;                                  // empty slot: removed on save
+          }
+          if (u && !/^https?:\/\/\S+$/i.test(u)) { drSay('error', drForm.dataset.msgBadUrl); url.focus(); return; }
+          rows.push({ slot, description: d, source_url: u || null, why: w || null });
+        }
+        drSay('busy', drForm.dataset.msgSaving);
+        const { error } = await Auth.saveDreamJobs(rows);
+        if (error) { drSay('error', drForm.dataset.msgError); return; }
+        dreamRows = rows;
+        paintDream();
+        drSay('ok', drForm.dataset.msgSaved);
+        setTimeout(() => { if (drModal.isOpen && openModals[openModals.length - 1] === drEl) drModal.close(); }, 700);
+      });
+    }
 
     // ---- LinkedIn profile modal — candidates.linkedin_audit, written by
     // sync_local.py from "NNN II LinkedIn Audit.json": the profile text as

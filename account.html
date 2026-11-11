@@ -66,7 +66,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261111d" />
+  <link rel="stylesheet" href="./styles.css?v=20261111e" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -157,6 +157,16 @@
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
               <span class="account-status__pct" id="status-prefs-pct">0%</span>
             </a>
+            <!-- Dream jobs (11 Nov 2026, owner; table dream_jobs, supabase/0040): a rocket in a
+                 thought cloud; opens #dream-modal, where the client pastes up to 3 job ads they
+                 would love and says why. The count shows how many are saved. -->
+            <button class="account-status__btn account-status__btn--pct" type="button" id="status-dream"
+                    aria-haspopup="dialog" aria-controls="dream-modal"
+                    data-label="Dream jobs: {n} of 3 added. Add or edit your dream jobs"
+                    aria-label="Dream jobs: 0 of 3 added. Add or edit your dream jobs" title="Dream jobs: 0 of 3 added. Add or edit your dream jobs">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 17.5h9.2a3.6 3.6 0 0 0 .7-7.1 5.2 5.2 0 0 0-9.9-1.6A4.4 4.4 0 0 0 8 17.5z"/><path d="M13 9.3c1.3 1 1.9 2.6 1.6 4.4h-3.2c-.3-1.8.3-3.4 1.6-4.4z"/><path d="M11.4 13.7l-.9 1.1M14.6 13.7l.9 1.1M13 14.6v1"/><circle cx="4.6" cy="19.4" r="1.3"/><circle cx="2.4" cy="22" r=".7"/></svg>
+              <span class="account-status__pct" id="status-dream-n">0/3</span>
+            </button>
           </div>
           <!-- Start matching (7 Nov 2026, CAR-05, owner answer V-08; in this row
                since 8 Nov 2026). Its place is kept (invisible) while the data
@@ -538,6 +548,46 @@
     </div>
   </div>
 
+  <!-- Dream jobs (11 Nov 2026, owner): up to 3 job ads pasted from any website, an
+       optional link, and why each is a dream job (table dream_jobs, supabase/0040).
+       One Save writes all three; a slot with an empty description is removed. We
+       later compare them with the client's CV, LinkedIn and preferences. -->
+  <div class="auth-modal" id="dream-modal" role="dialog" aria-modal="true" aria-labelledby="dream-title" aria-describedby="dream-sub" hidden>
+    <div class="auth-modal__backdrop" data-close></div>
+    <div class="auth-modal__panel profile-panel">
+      <button class="auth-modal__close" type="button" data-close aria-label="Close">✕</button>
+      <h2 class="auth-modal__title" id="dream-title">Your dream jobs</h2>
+      <p class="auth-modal__sub" id="dream-sub">Found a job you would love? Paste up to three job ads from any website and tell us in a few words why. We compare them with your CV, LinkedIn and preferences to understand what you are really looking for.</p>
+      <form class="profile-form" id="dream-form" novalidate
+            data-msg-saving="Saving…" data-msg-saved="Saved." data-msg-error="Could not save — please try again."
+            data-msg-bad-url="The link should start with http:// or https://"
+            data-msg-why="Please add the job ad too, or clear the reason.">
+        <div class="profile-form__body">
+          <template id="dream-slot-tpl">
+            <fieldset class="profile-src dream-slot">
+              <legend class="profile-src__h"><span class="profile-src__badge">Dream job <span data-n></span></span></legend>
+              <label class="auth-modal__label" data-for="desc">The job ad <small>(paste the whole text: title, company, duties, requirements)</small></label>
+              <textarea class="auth-modal__input dream-slot__desc" data-field="description" rows="6" maxlength="12000"
+                        placeholder="Paste the job description here"></textarea>
+              <label class="auth-modal__label" data-for="url">Link to the ad <small>(optional)</small></label>
+              <input class="auth-modal__input" data-field="source_url" type="url" inputmode="url" maxlength="500"
+                     placeholder="https://…" />
+              <label class="auth-modal__label" data-for="why">Why is this your dream job?</label>
+              <textarea class="auth-modal__input dream-slot__why" data-field="why" rows="2" maxlength="600"
+                        placeholder="For example: the product, the team, remote work, the salary, growth…"></textarea>
+            </fieldset>
+          </template>
+          <div class="dream-slots" id="dream-slots"></div>
+        </div>
+        <div class="profile-form__actions">
+          <button class="btn btn-primary" type="submit">Save</button>
+          <p class="account__hint">To remove a dream job, clear its text and save.</p>
+          <p class="account-form__status" id="dream-status" role="status" aria-live="polite" hidden></p>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- CV modal — preview, download, replace, remove. PDF only, ≤ 5 MB. -->
   <div class="auth-modal" id="cv-modal" role="dialog" aria-modal="true" aria-labelledby="cv-title" hidden
        data-msg-uploading="Uploading…" data-msg-uploaded="CV uploaded." data-msg-type="PDF only, please."
@@ -670,7 +720,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261110b"></script>
+  <script src="./script.js?v=20261111e"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
   <script src="./career.js?v=20261111d"></script>
 </body>
