@@ -20,9 +20,10 @@
 
   <!-- Site tokens (colours, spacing, type) + this app's own styles (classes prefixed ecm-) -->
   <link rel="stylesheet" href="../styles.css?v=20261111a" />
-  <link rel="stylesheet" href="./app.css?v=20261110b" />
+  <link rel="stylesheet" href="./app.css?v=20261111a" />
 </head>
-<body class="ecm-body">
+<!-- data-chat = this page's service for the shared Messages + Feedback window (../career.js, 11 Nov 2026) -->
+<body class="ecm-body" data-chat="ecommerce">
   <a class="skip-link" href="#ecm-main">Skip to content</a>
 
   <!-- Login gate: shown until the session and the access check are confirmed. Fails closed. -->
@@ -40,6 +41,8 @@
         <select id="ecm-account" class="ecm-input ecm-input--bar"></select>
       </div>
       <div class="ecm-topbar__end">
+        <!-- Opens the chat window on its Feedback view (signed in); without the window the e-mail link works. -->
+        <a class="ecm-btn ecm-btn--ghost ecm-btn--small" href="mailto:consult@solvephantasma.com?subject=E-commerce%20automation%20feedback" data-chat-open="feedback">Send feedback</a>
         <span class="ecm-topbar__user" id="ecm-user"></span>
         <button type="button" id="ecm-signout" class="ecm-btn ecm-btn--ghost ecm-btn--small">Sign out</button>
       </div>
@@ -62,6 +65,8 @@
 
   <!-- supabase-js (UMD), same version as the main site; reads the shared session -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./app.js?v=20261110b"></script>
+  <script src="./app.js?v=20261111a"></script>
+  <!-- The website's Messages + Feedback window (files too); reaches Supabase through the client app.js hands over -->
+  <script src="../career.js?v=20261111b"></script>
 </body>
 </html>

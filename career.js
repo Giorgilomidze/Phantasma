@@ -184,7 +184,7 @@
   // Stored with every message and feedback request (0035), so the admin panel
   // can tell them apart. One conversation per person across the services.
   const SERVICE = (document.body && document.body.getAttribute('data-chat')) || 'career';
-  const SERVICE_NAMES = { career: 'Job search', tenders: 'Tenders' };
+  const SERVICE_NAMES = { career: 'Job search', tenders: 'Tenders', ecommerce: 'E-commerce' };   // ecommerce/: <body data-chat="ecommerce"> (C7, 11 Nov 2026)
   const serviceName = (k) => SERVICE_NAMES[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : '');
   function serviceTag(k) {
     const t = el('span', 'chat-svc', serviceName(k));
@@ -1422,7 +1422,9 @@
       onRead: () => refreshUnreadSoon(),
       emptyText: SERVICE === 'tenders'
         ? 'No messages yet. Tell the Phantasma team what works for you in the Tender Portal and what should be better, or ask anything — replies appear here.'
-        : 'No messages yet. Ask the Phantasma team anything about your service — replies appear here.',
+        : SERVICE === 'ecommerce'
+          ? 'No messages yet. Tell the Phantasma team what works for you in E-commerce automation and what should be better, or ask anything — replies appear here.'
+          : 'No messages yet. Ask the Phantasma team anything about your service — replies appear here.',
     });
     const feedback = createFeedback(views.feedback);
     document.body.appendChild(dock);

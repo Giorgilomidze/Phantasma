@@ -129,6 +129,8 @@
 .ecm-st--waiting, .ecm-st--running, .ecm-st--queued, .ecm-st--new { background: color-mix(in oklch, var(--watch) 14%, var(--bg)); color: var(--watch); }
 .ecm-st--no_data, .ecm-st--cancelled, .ecm-st--disabled { background: var(--surface-soft); color: var(--ink-soft); }
 .ecm-toasts { position: fixed; right: var(--space-5); bottom: var(--space-5); display: grid; gap: var(--space-2); z-index: 60; max-width: min(420px, calc(100vw - 32px)); }
+/* With the chat window's round button (../career.js; 56px = --chat-fab in styles.css §28) the toasts sit above it */
+.has-chat .ecm-toasts { bottom: calc(56px + var(--space-5) + var(--space-4)); }
 .ecm-toast { background: var(--ink); color: var(--bg); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); box-shadow: var(--shadow-lightbox); }
 .ecm-toast--act { background: var(--act); }
 .ecm-gate { min-height: 100vh; display: grid; place-items: center; padding: var(--space-5); }

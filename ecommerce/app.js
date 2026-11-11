@@ -252,6 +252,21 @@
     window.addEventListener('hashchange', route);
     window.addEventListener('resize', setTopOffset);
     setTopOffset();
+    wireFeedback();
+  }
+  // "Send feedback" opens the chat window on its Feedback view; without the window (career.js not loaded)
+  // the e-mail link works as before. Career admins also get "Admin: messages" (all services arrive there).
+  function wireFeedback() {
+    var a = document.querySelector('[data-chat-open]');
+    if (a) a.addEventListener('click', function (e) {
+      if (!document.querySelector('.chat-dock:not([hidden])')) return;
+      e.preventDefault();
+      document.dispatchEvent(new CustomEvent('phantasma:chat-open', { detail: { view: a.getAttribute('data-chat-open') } }));
+    });
+    client.rpc('is_career_admin').then(function (r) {
+      if (!r || r.error || r.data !== true || !a || document.querySelector('.ecm-admin-link')) return;
+      a.parentNode.insertBefore(h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small ecm-admin-link', href: '../admin.html#messages', text: 'Admin: messages' }), a);
+    }, function () { /* not an admin, or offline: no link */ });
   }
   function header(main, title, lede) {
     main.appendChild(h('h1', { class: 'ecm-h1', text: title }));
@@ -708,6 +723,15 @@
   function boot() {
     if (!window.supabase || !window.supabase.createClient) return showGate('error', 'library missing');   // fail closed
     try { client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch (e) { return showGate('error'); }
+    // The website's Messages + Feedback window (../career.js, loaded after this file; 11 Nov 2026) reaches
+    // Supabase through this client, as the job-search pages do through script.js and the tender pages through
+    // their app.js. Set before career.js starts (its DOMContentLoaded listener runs after this one).
+    var current = null;
+    window.PhantasmaAuth = { db: function () { return client; }, session: function () { return current; } };
+    client.auth.onAuthStateChange(function (ev, s) {
+      current = s || null;
+      document.dispatchEvent(new CustomEvent('phantasma:auth', { detail: { event: ev, session: current } }));
+    });
     client.auth.getSession().then(function (res) {
       var s = res && res.data && res.data.session;
       if (res.error) return showGate('error');
@@ -719,6 +743,7 @@
       });
     }).catch(function (e) { showGate('error', e && e.message); });
     client.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT' && started) location.href = '../services.html'; });
+    // A signed-in person without access (gate "No access") can still write to the team through the chat window.
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
