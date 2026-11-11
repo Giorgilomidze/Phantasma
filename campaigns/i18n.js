@@ -80,6 +80,7 @@
     'tool.state.approved': 'Done.', 'tool.state.rejected': 'Rejected. Nothing was done.', 'tool.state.edited': 'Opened for editing.', 'tool.done': 'Done.',
     /* Live backend (Supabase Edge Functions) */
     'top.badge.mock': 'Mock data', 'top.badge.live': 'Live backend (dry-run)',
+    'top.feedback': 'Send feedback', 'top.adminMsgs': 'Admin: messages',
     'menu.modeLive': 'Use live backend (dry-run)', 'menu.modeMock': 'Use mock data',
     'mode.toLive.title': 'Switch to the live backend?', 'mode.toLive.text': 'Businesses and spending limits will come from the database, and "Create as paused" will call the server. While the server is in dry-run mode, nothing is sent to Meta. Campaign lists, posts and numbers stay sample data. The page will reload.',
     'mode.toLive.confirm': 'Switch to live backend', 'mode.toMock.title': 'Switch back to mock data?', 'mode.toMock.text': 'Everything will be sample data again. The page will reload.', 'mode.toMock.confirm': 'Use mock data',
@@ -427,6 +428,7 @@
     'tool.state.approved': 'შესრულდა.', 'tool.state.rejected': 'უარყოფილია. არაფერი გაკეთებულა.', 'tool.state.edited': 'გაიხსნა რედაქტირებისთვის.', 'tool.done': 'შესრულდა.',
     /* Live backend. MACHINE-TRANSLATED, not proofread. Server messages stay in English. */
     'top.badge.mock': 'სატესტო მონაცემები', 'top.badge.live': 'რეალური ბექენდი (ტესტური გაშვება)',
+    'top.feedback': 'გამოხმაურება', 'top.adminMsgs': 'ადმინი: შეტყობინებები',
     'menu.modeLive': 'რეალური ბექენდის გამოყენება (ტესტური გაშვება)', 'menu.modeMock': 'სატესტო მონაცემების გამოყენება',
     'mode.toLive.title': 'გადავიდეთ რეალურ ბექენდზე?', 'mode.toLive.text': 'ბიზნესები და ხარჯვის ლიმიტები ბაზიდან წამოვა, ხოლო „შექმნა შეჩერებულად“ სერვერს გამოიძახებს. სანამ სერვერი ტესტური გაშვების რეჟიმშია, Meta-ში არაფერი იგზავნება. კამპანიების სია, პოსტები და ციფრები სატესტო რჩება. გვერდი თავიდან ჩაიტვირთება.',
     'mode.toLive.confirm': 'რეალურ ბექენდზე გადასვლა', 'mode.toMock.title': 'დავბრუნდეთ სატესტო მონაცემებზე?', 'mode.toMock.text': 'ყველაფერი ისევ სატესტო იქნება. გვერდი თავიდან ჩაიტვირთება.', 'mode.toMock.confirm': 'სატესტო მონაცემების გამოყენება',

@@ -27,6 +27,7 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
 
   var client = null, user = null, started = false;
+  var chatSession = null; // the session handed to ../career.js (the Messages + Feedback window)
   var settings = null;
   var ctx = { business: 'edelweiss', account: 'all' };
   var viewTok = 0, viewTimer = null, firstRender = true;
@@ -3508,6 +3509,22 @@
     }
     buildTopbar.fillAccounts = fillAccounts;
   }
+  // "Send feedback" (top bar) opens the website's chat window on its Feedback view; without the window
+  // (../career.js missing or signed out) the e-mail link works. Career admins also get "Admin: messages":
+  // messages and feedback of every service arrive there, this tool's tagged "Ads".
+  function wireFeedback() {
+    var a = $('#ads-feedback');
+    if (!a) return;
+    a.addEventListener('click', function (e) {
+      if (!document.querySelector('.chat-dock:not([hidden])')) return;
+      e.preventDefault();
+      document.dispatchEvent(new CustomEvent('phantasma:chat-open', { detail: { view: 'feedback' } }));
+    });
+    client.rpc('is_career_admin').then(function (r) {
+      if (!r || r.error || r.data !== true || $('#ads-admin-msgs')) return;
+      a.parentNode.insertBefore(h('a', { id: 'ads-admin-msgs', class: 'ads-btn ads-btn--ghost ads-btn--small', href: '../admin.html#messages', 'data-i18n': 'top.adminMsgs' }, t('top.adminMsgs')), a);
+    }, function () { /* not an admin, or offline: no link */ });
+  }
   function saveCtx() { try { localStorage.setItem('ads_ctx', JSON.stringify(ctx)); } catch (e) { /* ignore */ } }
   function loadCtx() {
     try { var c = JSON.parse(localStorage.getItem('ads_ctx')); if (c && c.business) { ctx.business = c.business; ctx.account = c.account || 'all'; } } catch (e) { /* ignore */ }
@@ -3605,7 +3622,7 @@
       settings = r[0];
       cacheImages(r[1]);
       main = $('#ads-main'); shell = $('#ads-shell'); scrim = $('#ads-scrim'); toastBox = $('#ads-toasts'); sidebar = $('#ads-sidebar'); assistant = $('#ads-assistant');
-      loadCtx(); buildNav(); buildTopbar(); buildAssistant(); wireShell();
+      loadCtx(); buildNav(); buildTopbar(); buildAssistant(); wireShell(); wireFeedback();
       $('#ads-gate').hidden = true; $('#ads-app').hidden = false;
       route();
       if (liveFailed) toast(t('mode.liveFailed'), 'act');
@@ -3617,6 +3634,10 @@
     if (!window.supabase || !window.supabase.createClient) return showGate('error'); // fail closed
     try { client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch (e) { return showGate('error'); }
     api.setClient(client); // same session as the gate; api.js sends its access token to the Edge Functions
+    // The website's Messages + Feedback window (../career.js, loaded after this file; 11 Nov 2026) reaches
+    // Supabase through this client, as on the job-search, tender and e-commerce pages. Set before career.js
+    // starts (its DOMContentLoaded listener runs after this one). <body data-chat="ads"> names the service.
+    window.PhantasmaAuth = { db: function () { return client; }, session: function () { return chatSession; } };
     client.auth.getSession().then(function (res) {
       var s = res && res.data && res.data.session;
       if (res.error) return showGate('error');
@@ -3628,7 +3649,11 @@
         start(s);
       });
     }).catch(function () { showGate('error'); });
-    client.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT' && started) location.reload(); });
+    client.auth.onAuthStateChange(function (ev, s) {
+      chatSession = s || null;
+      document.dispatchEvent(new CustomEvent('phantasma:auth', { detail: { event: ev, session: chatSession } }));
+      if (ev === 'SIGNED_OUT' && started) location.reload();
+    });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

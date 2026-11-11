@@ -25,7 +25,8 @@
   <!-- Restore the desktop sidebar state before first paint (no flash) -->
   <script>try { if (localStorage.getItem('ads_side') === 'collapsed') document.documentElement.classList.add('ads-side-collapsed'); } catch (e) { /* ignore */ }</script>
 </head>
-<body class="ads-body">
+<!-- data-chat = this page's service for the shared Messages + Feedback window (../career.js, 11 Nov 2026) -->
+<body class="ads-body" data-chat="ads">
   <a class="skip-link" href="#ads-main" data-i18n="common.skip">Skip to content</a>
 
   <!-- Login gate: shown until a Supabase session is confirmed. Fails closed. -->
@@ -48,6 +49,8 @@
           <select id="ads-account" class="ads-input ads-input--bar"></select>
         </div>
         <div class="ads-topbar__end">
+          <!-- Opens the chat window on its Feedback view (signed in); without the window the e-mail link works. -->
+          <a id="ads-feedback" class="ads-btn ads-btn--ghost ads-btn--small" href="mailto:consult@solvephantasma.com?subject=Ads%20Management%20feedback" data-chat-open="feedback" data-i18n="top.feedback">Send feedback</a>
           <button type="button" id="ads-lang" class="ads-btn ads-btn--ghost ads-btn--small" data-i18n-aria="top.lang" aria-label="Language">ქართული</button>
           <button type="button" id="ads-ai-btn" class="ads-btn ads-btn--ghost ads-btn--small" aria-expanded="false" aria-controls="ads-assistant" data-i18n="ai.title">AI Assistant</button>
           <div class="ads-user">
@@ -83,10 +86,12 @@
 
   <!-- supabase-js (UMD), same version as the main site; only used to read the session -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./i18n.js?v=20261109f"></script>
+  <script src="./i18n.js?v=20261111a"></script>
   <!-- Reads stock files (Excel / CSV); loads SheetJS from its CDN only when a file is used -->
   <script src="./stock-import.js?v=20261106d"></script>
   <script src="./api.js?v=20261109c"></script>
-  <script src="./app.js?v=20261109f"></script>
+  <script src="./app.js?v=20261111a"></script>
+  <!-- The website's Messages + Feedback window (files too); reaches Supabase through the client app.js hands over -->
+  <script src="../career.js?v=20261111c"></script>
 </body>
 </html>
