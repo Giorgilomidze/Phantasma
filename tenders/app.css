@@ -408,3 +408,23 @@ a.tl-item:focus-visible .tl-bar { stroke: var(--ink); stroke-width: 2; }
 .chat-panel .btn-sm { min-height: 36px; padding: 0 16px; font-size: .875rem; }
 body.has-chat .site-foot .wrap { padding-bottom: 104px; }
 .demo-bar__admin { font-weight: 600; }
+
+/* ------------------------------------------------------------------ price requests, plans, connections (11 Nov 2026) */
+.listbar--wide { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .listbar--wide { grid-template-columns: minmax(0, 2fr) repeat(auto-fit, minmax(160px, 1fr)); align-items: end; } }
+.listbar--wide .field--check { align-self: end; min-height: 40px; }
+.mrs__cpv { display: block; margin-top: 4px; }
+.mrs__files { list-style: none; margin: 0; padding: 0; font-size: .82rem; }
+.mrs__files li + li { margin-top: 2px; }
+.conn { max-width: 760px; }
+.conn h2 { margin-top: 0; }
+.conn__steps { margin: 12px 0 16px; padding-left: 20px; }
+.conn__steps li + li { margin-top: 4px; }
+.conn__form { display: grid; gap: 12px; max-width: 460px; }
+.conn__form input[type="text"], .conn__form input[type="password"] { width: 100%; padding: 8px 10px; border: 1px solid #7a8291; border-radius: var(--r-sm); background: #fff; }
+.conn__consent { align-items: flex-start; }
+.conn__consent label { font-weight: 400; font-size: .875rem; line-height: 1.45; }
+.conn__consent input { margin-top: 3px; }
+.conn__status:empty { display: none; }
+.conn__facts { margin: 12px 0; }
+.conn__off { color: var(--act); border-color: var(--act); }

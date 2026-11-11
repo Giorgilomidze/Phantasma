@@ -2087,6 +2087,254 @@
     return isNaN(t) ? String(ts || '').slice(0, 10) : new Date(t + 4 * 3600e3).toISOString().slice(0, 10);
   }
 
+  /* ------------------------------------------------------------------ price requests + plans (11 Nov 2026) */
+  // Owner, 11 Nov 2026: "retrieve only last 30 days worth of information from MRS and ePlan. then lets see".
+  // requests.json (build_demo.py requests_plans_json, collected by app\run_market.py): mrs = buyers asking suppliers for
+  // price offers before they buy (market research); plans = the lines in our four categories of the yearly
+  // procurement plans (ePLAN) filed or changed in the window. Facts as published; files are the state's copy.
+  const MCAT = { 39100000: 'Furniture', 15800000: 'Food', 33700000: 'Hygiene', 44100000: 'Construction materials' };
+  const mcatOptions = () => [['', 'All four categories']].concat(Object.keys(MCAT).map((k) => [k, MCAT[k]]));
+
+  /** A list with a search box, a few selects / checkboxes, sortable columns and a download; state in the URL hash */
+  function simpleList(o) {
+    const controls = [field(o.searchLabel, h('input', { type: 'search', name: 'q', autocomplete: 'off', spellcheck: 'false', placeholder: o.placeholder || '' }), 'field--grow')]
+      .concat(o.selects.map((s) => field(s.label, select(s.name, s.options))))
+      .concat((o.checks || []).map((c) => check(c.label, c.name)));
+    const form = h('form', { class: 'listbar listbar--wide', role: 'search', on: { submit: (e) => e.preventDefault() } }, controls);
+    const summary = h('p', { class: 'summary', 'aria-live': 'polite' });
+    const box = h('div');
+    let shown = o.rows;
+    let state = {};
+    let limit = 100;
+    clear(APP);
+    add(APP, [form, o.intro || null, h('div', { class: 'listbar__end' }, [summary, csvButton(o.csv, () => o.cols, () => shown)]), box]);
+    function fromHash() {
+      state = readHash();
+      form.elements.q.value = state.q || '';
+      o.selects.forEach((s) => setControl(form.elements[s.name], state[s.name]));
+      (o.checks || []).forEach((c) => { form.elements[c.name].checked = state[c.name] === '1'; });
+    }
+    function fromForm() {
+      const f = {};
+      const q = form.elements.q.value.trim();
+      if (q) f.q = q;
+      o.selects.forEach((s) => { if (form.elements[s.name].value) f[s.name] = form.elements[s.name].value; });
+      (o.checks || []).forEach((c) => { if (form.elements[c.name].checked) f[c.name] = '1'; });
+      if (state.sort) { f.sort = state.sort; f.dir = state.dir; }
+      state = f;
+    }
+    function render(ch) {
+      setHash(state);
+      const words = (state.q || '').toLowerCase().split(/\s+/).filter(Boolean);
+      const list = o.rows.filter((r) => words.every((w) => r._hay.indexOf(w) >= 0)
+        && o.selects.every((s) => !state[s.name] || s.test(r, state[s.name]))
+        && (o.checks || []).every((c) => state[c.name] !== '1' || c.test(r)));
+      clear(summary);
+      add(summary, o.summarize(list));
+      const x = ch || {};
+      shown = dataTable(box, o.cols, list, { sort: state.sort || o.defSort, dir: state.dir || o.defDir, limit: limit, caption: o.caption, focusSort: x.focusSort, focusRow: x.focusRow }, (c) => {
+        if (c.sort) { state.sort = c.sort; state.dir = c.dir; }
+        if (c.limit) limit = c.limit;
+        render(c);
+      });
+      if (!list.length) box.appendChild(para(o.rows.length ? 'Nothing matches this choice.' : o.empty, 'note'));
+    }
+    const onChange = () => { fromForm(); limit = 100; render(); };
+    form.addEventListener('change', onChange);
+    form.elements.q.addEventListener('input', debounce(onChange, 160));
+    window.addEventListener('hashchange', () => { fromHash(); limit = 100; render(); });
+    fromHash();
+    render();
+  }
+
+  function pageRequests() {
+    return load('requests.json').then((M) => {
+      // [mrs_no, status, procedure, buyer, registered, offers_from, offers_till, description, delivery term,
+      //  financial year, categories [codes], cpv ["code - name"], files [[name, url]]]
+      const rows = (M.mrs || []).map((x) => {
+        const r = { no: x[0], st: x[1], p: x[2], b: x[3] || '', reg: x[4], from: x[5], till: x[6], d: x[7] || '', del: x[8] || '',
+          fy: x[9], cats: x[10] || [], cpv: x[11] || [], files: x[12] || [] };
+        r._cat = r.cats.map((c) => MCAT[c]).filter(Boolean);
+        r._hay = [r.no, r.b, r.d, r.cpv.join(' '), r._cat.join(' ')].join(' ').toLowerCase();
+        return r;
+      });
+      simpleList({
+        rows: rows, csv: 'price-requests', caption: 'Price requests', searchLabel: 'Search', placeholder: 'Number, buyer, what is bought or a CPV code',
+        selects: [{ name: 'cat', label: 'Category', options: mcatOptions(), test: (r, v) => r.cats.indexOf(v) >= 0 }],
+        checks: [{ name: 'open', label: 'Open for offers now', test: (r) => isOpen(r.till) }],
+        defSort: 'till', defDir: 'desc', empty: 'No price requests collected yet.',
+        intro: para('Collected ' + day(M.made) + '. The number, the files and the deadline are as the buyer published them; send offers on the state site.', 'small muted'),
+        cols: [
+          { key: 'no', label: 'Number', cls: 'nowrap', first: 'desc', sort: (r) => r.no, csv: (r) => r.no, cell: (r) => [r.no, isOpen(r.till) ? h('span', { class: 'tag tag--open', text: 'open' }) : null] },
+          { key: 'd', label: 'What is bought', cls: 'wide', first: 'asc', sort: (r) => r.d, csv: (r) => r.d, cell: (r) => [ka(r.d.length > 240 ? r.d.slice(0, 240) + '…' : r.d || DASH),
+            r.cpv.length ? h('span', { class: 'muted small mrs__cpv' }, ka(r.cpv.slice(0, 4).join(' · '))) : null,
+            r.del ? h('span', { class: 'muted small mrs__cpv' }, ['Delivery: ', ka(r.del)]) : null] },
+          { key: 'b', label: 'Buyer', cls: 'wide', first: 'asc', sort: (r) => r.b, cell: (r) => ka(r.b || DASH) },
+          { key: 'c', label: 'Category', first: 'asc', sort: (r) => r._cat.join(', '), csv: (r) => r._cat.join(', '), cell: (r) => r._cat.join(', ') || DASH },
+          { key: 'till', label: 'Offers until', first: 'desc', sort: (r) => r.till, csv: (r) => r.till, cell: (r) => [dayTime(r.till), h('span', { class: 'muted small', text: ' · ' + closesIn(r.till) })] },
+          { key: 'reg', label: 'Published', first: 'desc', sort: (r) => r.reg, csv: (r) => r.reg, cell: (r) => day(r.reg) },
+          { key: 'p', label: 'Procedure', first: 'asc', sort: (r) => r.p, csv: (r) => r.p, cell: (r) => ka(r.p || DASH) },
+          { key: 'f', label: 'Files', noCsv: true, cell: (r) => (r.files.length ? h('ul', { class: 'mrs__files' }, r.files.slice(0, 5).map((f) => h('li', null, h('a', { href: f[1], rel: 'noopener', target: '_blank' }, ka(f[0]))))) : DASH) },
+        ],
+        summarize: (list) => [plural(list.length, 'price request'), ' · ', int(list.filter((r) => isOpen(r.till)).length) + ' open now'],
+      });
+    });
+  }
+
+  function pagePlans() {
+    return load('requests.json').then((M) => {
+      // plans: [plan_no, year, buyer, total, status, last_change, [[cpv_main, cpv_name, amount, means, quarters, funding, [codes]]]]
+      const rows = [];
+      (M.plans || []).forEach((p) => (p[6] || []).forEach((l) => {
+        const r = { no: p[0], y: p[1], b: p[2] || '', st: p[4], ch: p[5], cpv: l[0], cn: l[1] || '', amt: l[2], means: l[3] || '', q: l[4] || '', fund: l[5] || '', det: l[6] || [] };
+        r._cat = MCAT[r.cpv] || r.cpv;
+        r._hay = [r.b, r.no || '', r.cpv, r.cn, r.det.join(' '), r._cat].join(' ').toLowerCase();
+        rows.push(r);
+      }));
+      const years = Array.from(new Set(rows.map((r) => r.y).filter(Boolean))).sort().reverse();
+      simpleList({
+        rows: rows, csv: 'purchase-plans', caption: 'Purchase plan lines', searchLabel: 'Search', placeholder: 'Buyer, plan number or CPV code',
+        selects: [
+          { name: 'cat', label: 'Category', options: mcatOptions(), test: (r, v) => r.cpv === v },
+          { name: 'year', label: 'Plan year', options: [['', 'Any year']].concat(years.map((y) => [String(y), String(y)])), test: (r, v) => String(r.y) === v },
+          { name: 'reg', label: 'Plan', options: [['', 'Registered and drafts'], ['1', 'Registered only'], ['0', 'Drafts only']], test: (r, v) => (v === '1') === !!r.no },
+        ],
+        defSort: 'amt', defDir: 'desc', empty: 'No purchase plans collected yet.',
+        intro: para('Collected ' + day(M.made) + '. One row per plan line in the 4 categories; a plan can have several. Drafts can still change; registered plans carry a number.', 'small muted'),
+        cols: [
+          { key: 'b', label: 'Buyer', cls: 'wide', first: 'asc', sort: (r) => r.b, cell: (r) => ka(r.b || DASH) },
+          { key: 'y', label: 'Year', num: true, first: 'desc', sort: (r) => r.y, cell: (r) => String(r.y || DASH) },
+          { key: 'cpv', label: 'Category', first: 'asc', sort: (r) => r._cat, csv: (r) => r.cpv + ' ' + r._cat, cell: (r) => [r._cat, r.det.length && !(r.det.length === 1 && r.det[0] === r.cpv) ? h('span', { class: 'muted small', text: ' · ' + r.det.slice(0, 3).join(', ') + (r.det.length > 3 ? ' …' : '') }) : null] },
+          { key: 'amt', label: 'Planned value', num: true, first: 'desc', sort: (r) => r.amt, csv: (r) => r.amt, cell: (r) => lari(r.amt) },
+          { key: 'q', label: 'Quarters', first: 'asc', sort: (r) => r.q, cell: (r) => r.q || DASH },
+          { key: 'means', label: 'How it is bought', first: 'asc', sort: (r) => r.means, cell: (r) => ka(r.means || DASH) },
+          { key: 'fund', label: 'Funding', first: 'asc', sort: (r) => r.fund, cell: (r) => ka(r.fund || DASH) },
+          { key: 'no', label: 'Plan', first: 'asc', sort: (r) => r.no || '', csv: (r) => r.no || 'draft', cell: (r) => r.no || h('span', { class: 'muted', text: 'draft' }) },
+          { key: 'ch', label: 'Last change', first: 'desc', sort: (r) => r.ch, csv: (r) => r.ch, cell: (r) => day(r.ch) },
+        ],
+        summarize: (list) => [plural(list.length, 'plan line'), ' · ', short(list.reduce((a, r) => a + (isNum(r.amt) ? r.amt : 0), 0)) + ' planned', ' · ',
+          plural(new Set(list.map((r) => r.b)).size, 'buyer')],
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------ my connections: RS.ge (11 Nov 2026) */
+  // Owner, 11 Nov 2026: RS.ge for the account owner's own data, on their request ("important to have the
+  // connection first, then we will understand how to use it"). The person creates a *service user* in their own
+  // eservices.rs.ge cabinet and enters it here; the Edge Function tender-rsge checks it with RS.ge and keeps it
+  // encrypted (supabase/0037). This page only ever sees the company's tax id and name and the last 4 characters of
+  // the service user's name. RS_CONSENT must stay word for word the same as CONSENT_TEXT in the Edge Function.
+  const RS_CONSENT = "I connect my company's RS.ge service user to the Phantasma Tender Portal. Phantasma may use it " +
+    "only to read my company's own data from RS.ge and show it to me in my account. It will never change anything " +
+    "in RS.ge and never show my data to anyone else. I can disconnect at any time; the user name and password are then deleted.";
+  const RS_OFF = 'The RS.ge connection is not switched on yet. Please try again later.';
+  const geIso = (ts) => { const t = Date.parse(ts || ''); return isNaN(t) ? '' : new Date(t + 4 * 3600e3).toISOString().slice(0, 16); };   // Georgian time
+  const isMissingFn = (e) => !!e && (['PGRST202', '42883', 'PGRST205'].indexOf(e.code) >= 0 || /could not find|does not exist/i.test(e.message || ''));
+  function fnError(error) {
+    // supabase-js: a non-2xx answer carries the Response in error.context; its JSON says {error: "…"}
+    const res = error && error.context;
+    if (res && typeof res.json === 'function') {
+      return res.json().then((j) => (j && j.error) || 'Something went wrong. Please try again.', () => (res.status === 404 ? RS_OFF : 'Something went wrong. Please try again.'));
+    }
+    return Promise.resolve(RS_OFF);
+  }
+  function pageConnections() {
+    const card = h('section', { class: 'card conn', 'aria-labelledby': 'conn-rs' });
+    clear(APP);
+    add(APP, card);
+    function header() {
+      return [h('h2', { id: 'conn-rs', text: 'RS.ge — Revenue Service of Georgia' }),
+        para('Connect your own company\'s RS.ge account. Later the portal can show you your own waybills and invoices, for example next to the contracts you won — only to you, and only when you ask for it. For now it keeps the connection and checks it.', 'small')];
+    }
+    function paintLoading(text) {
+      clear(card);
+      add(card, header().concat([para(text || 'Loading…', 'small muted')]));
+    }
+    function paintConnected(c) {
+      clear(card);
+      const status = h('p', { class: 'small conn__status', role: 'status' });
+      const ok = c.status === 'ok';
+      const test = h('button', { type: 'button', class: 'btn btn--ghost btn--small', text: 'Check the connection' });
+      const off = h('button', { type: 'button', class: 'btn btn--ghost btn--small conn__off', text: 'Disconnect' });
+      add(card, header().concat([
+        h('dl', { class: 'facts conn__facts' }, [
+          h('dt', { text: 'Company' }), h('dd', null, ka(c.org_name || DASH)),
+          h('dt', { text: 'Tax id' }), h('dd', { text: c.tin || DASH }),
+          h('dt', { text: 'Service user' }), h('dd', { text: c.user_hint || DASH }),
+          h('dt', { text: 'Connected' }), h('dd', { text: dayTime(geIso(c.connected_at)) }),
+          h('dt', { text: 'Last check' }), h('dd', null, [dayTime(geIso(c.last_checked_at)), ' · ',
+            h('span', { class: ok ? 'tag tag--open' : 'tag tag--won', text: ok ? 'works' : 'not working' })]),
+        ]),
+        ok ? null : para(c.status_message || 'RS.ge did not accept the service user at the last check.', 'note'),
+        h('p', { class: 'actions' }, [test, off]),
+        status,
+        para('Nothing is read from RS.ge yet besides your company\'s tax id and name.', 'small muted'),
+      ]));
+      test.addEventListener('click', () => {
+        test.disabled = true;
+        status.textContent = 'Checking with RS.ge…';
+        sb.functions.invoke('tender-rsge', { body: { action: 'test' } }).then((res) => {
+          if (res.error) return fnError(res.error).then((m) => { status.textContent = m; test.disabled = false; });
+          return load0();
+        }, () => { status.textContent = RS_OFF; test.disabled = false; });
+      });
+      off.addEventListener('click', () => {
+        if (!window.confirm('Disconnect RS.ge? The service user\'s name and password are deleted here; the service user itself stays in your RS.ge cabinet until you delete it there.')) return;
+        off.disabled = true;
+        sb.rpc('tender_rs_disconnect').then((res) => {
+          if (res.error) { status.textContent = 'Could not disconnect. Please try again.'; off.disabled = false; return; }
+          paintForm('Disconnected. The name and password are deleted here.');
+        });
+      });
+    }
+    function paintForm(note) {
+      clear(card);
+      const su = h('input', { type: 'text', name: 'su', autocomplete: 'off', spellcheck: 'false', maxlength: '100', required: '' });
+      const sp = h('input', { type: 'password', name: 'sp', autocomplete: 'new-password', maxlength: '100', required: '' });
+      const consentId = nextId('rs');
+      const consent = h('input', { type: 'checkbox', id: consentId, name: 'consent' });
+      const go = h('button', { type: 'submit', class: 'btn btn--primary', text: 'Connect' });
+      const status = h('p', { class: 'small conn__status', role: 'status' });
+      const form = h('form', { class: 'conn__form', 'aria-label': 'Connect RS.ge' }, [
+        field('Service user name', su),
+        field('Service user password', sp),
+        h('div', { class: 'field field--check conn__consent' }, [consent, h('label', { for: consentId, text: RS_CONSENT })]),
+        h('p', { class: 'actions' }, [go]),
+        status,
+      ]);
+      add(card, header().concat([
+        note ? para(note, 'note') : null,
+        h('ol', { class: 'conn__steps small' }, [
+          h('li', null, ['Sign in to ', h('a', { href: 'https://eservices.rs.ge', rel: 'noopener', target: '_blank', text: 'eservices.rs.ge' }), ' with your company and open the service users (სერვისის მომხმარებლები).']),
+          h('li', { text: 'Create a new service user for Phantasma: a name, a password, only the rights to read, and leave the IP address field empty.' }),
+          h('li', { text: 'Enter that name and password here. Never your main RS.ge password.' }),
+        ]),
+        form,
+      ]));
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!su.value.trim() || !sp.value) { status.textContent = 'Enter the service user\'s name and password.'; return; }
+        if (!consent.checked) { status.textContent = 'Please tick the box to agree first.'; consent.focus(); return; }
+        go.disabled = true;
+        status.textContent = 'Checking with RS.ge…';
+        sb.functions.invoke('tender-rsge', { body: { action: 'connect', su: su.value.trim(), sp: sp.value, consent: true } }).then((res) => {
+          sp.value = '';
+          if (res.error) return fnError(res.error).then((m) => { status.textContent = m; go.disabled = false; });
+          return load0();
+        }, () => { sp.value = ''; status.textContent = RS_OFF; go.disabled = false; });
+      });
+    }
+    function load0() {
+      return sb.rpc('tender_rs_my_connection').then((res) => {
+        if (res.error) { paintLoading(isMissingFn(res.error) ? RS_OFF : 'Could not load your connection. Please reload the page.'); return; }
+        if (res.data) paintConnected(res.data); else paintForm();
+      });
+    }
+    if (LOCAL) { paintLoading('Connections work on the website only (sign-in needed).'); return Promise.resolve(); }
+    paintLoading();
+    return load0();
+  }
+
   /* ------------------------------------------------------------------ sign-in */
 
   /* Google's own button (Google Identity Services), the same flow as the website's script.js: the
@@ -2165,6 +2413,7 @@
       sb.auth.signOut().catch(() => null).then(() => location.reload());
     });
     add(links, h('span', { class: 'demo-bar__user' }, [
+      h('a', { href: 'connections.html', text: 'My connections' }),
       h('span', { class: 'demo-bar__email', text: (user && user.email) || 'Signed in' }), out,
     ]));
   }
@@ -2888,6 +3137,7 @@
   const PAGES = {
     dashboard: pageDashboard, tenders: pageTenders, tender: pageTender, companies: pageCompanies,
     company: pageCompany, buyers: pageBuyers, buyer: pageBuyer, mycompany: pageMyCompany, products: pageProducts,
+    requests: pageRequests, plans: pagePlans, connections: pageConnections,
   };
   function boot() {
     const run = PAGES[PAGE];
