@@ -1746,6 +1746,15 @@
       }
       return { error: null };
     }
+    // Dream jobs comparison (0041): Claude's reading of the dream jobs against the CV
+    // reading + preferences, by the Edge Function career-dream-compare; the saved one.
+    function compareDreamJobs() {
+      return getClient().functions.invoke('career-dream-compare', { body: {} });
+    }
+    function loadDreamInsight() {
+      return getClient().from('dream_job_insights').select('model, data, basis, made_at')
+        .eq('user_id', session.user.id).maybeSingle();
+    }
 
     // Start matching (CAR-05, supabase/0030): the client's own requests,
     // newest first (admins may read everyone's, hence the user filter), and
@@ -1924,6 +1933,8 @@
       loadPreferences,
       loadDreamJobs,
       saveDreamJobs,
+      compareDreamJobs,
+      loadDreamInsight,
       savePreferences,
       loadMatching,
       requestMatching,
@@ -4067,12 +4078,139 @@
         if (error) { dreamOff = /dream_jobs/.test(error.message || '') && /exist|schema/i.test(error.message || ''); dreamRows = []; }
         else dreamRows = data || [];
         paintDream();
+        if (dreamRows.length) loadInsight();
       }, () => {});
     }
+    // What your dream jobs tell us (0041): shown under the slots once a comparison
+    // exists; runs by itself after every Save with at least one job, and on
+    // "Compare again". Built with textContent only (Claude's text is never HTML).
+    const diBox   = document.getElementById('dream-insight');
+    const diMeta  = document.getElementById('dream-insight-meta');
+    const diBody  = document.getElementById('dream-insight-body');
+    const diBtn   = document.getElementById('dream-compare');
+    const diNote  = document.getElementById('dream-insight-status');
+    let dreamInsight = null;                           // the saved comparison row, or null
+    let diRun = false;
+    const diSay = (kind, text) => { diNote.textContent = text; diNote.dataset.kind = kind; diNote.hidden = !text; };
+    const mk = (tag, cls, text) => {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text != null) n.textContent = text;
+      return n;
+    };
+    const DI_STATUS = { aligned: ['✓', 'Fits'], mismatch: ['✗', 'Does not fit'], missing: ['?', 'Not filled in'] };
+    function paintInsight() {
+      if (!diBox) return;
+      const d = dreamInsight && dreamInsight.data;
+      diBox.hidden = !dreamRows.length || (!d && diNote.hidden);
+      diBtn.hidden = !dreamRows.length;
+      diBody.replaceChildren();
+      if (!d) { diMeta.textContent = ''; return; }
+      const b = dreamInsight.basis || {};
+      const used = ['your dream jobs', b.cv ? 'your CV' : null, b.preferences ? 'your preferences' : null].filter(Boolean);
+      diMeta.textContent = 'Compared ' + fmtDate(dreamInsight.made_at) + ', based on ' + used.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'
+        + (b.cv ? '' : ' Upload your CV for a closer comparison.');
+      if (d.summary) diBody.appendChild(mk('p', 'dream-insight__summary', d.summary));
+      if ((d.common_threads || []).length) {
+        diBody.appendChild(mk('h4', 'dream-insight__h', 'What they have in common'));
+        const ul = mk('ul', 'dream-insight__chips');
+        d.common_threads.forEach((t) => ul.appendChild(mk('li', null, t)));
+        diBody.appendChild(ul);
+      }
+      (d.jobs || []).forEach((j) => {
+        const card = mk('div', 'dream-insight__job');
+        const head = mk('p', 'dream-insight__job-h');
+        head.appendChild(mk('strong', null, 'Dream job ' + j.slot + (j.title ? ': ' + j.title : '')));
+        if (j.company) head.appendChild(document.createTextNode(' · ' + j.company));
+        card.appendChild(head);
+        const fit = mk('p', 'dream-insight__fit');
+        fit.appendChild(mk('span', null, 'Your fit today: ' + j.fit + '%'));
+        const bar = mk('span', 'dream-insight__bar');
+        const fill = mk('span');
+        fill.style.width = Math.max(0, Math.min(100, j.fit)) + '%';
+        bar.appendChild(fill);
+        fit.appendChild(bar);
+        card.appendChild(fit);
+        [['Where you match', j.strengths, 'dream-insight__list--ok'], ['What is missing', j.gaps, 'dream-insight__list--gap']].forEach(([t, items, c]) => {
+          if (!(items || []).length) return;
+          card.appendChild(mk('p', 'dream-insight__sub', t));
+          const ul = mk('ul', 'dream-insight__list ' + c);
+          items.forEach((x) => ul.appendChild(mk('li', null, x)));
+          card.appendChild(ul);
+        });
+        diBody.appendChild(card);
+      });
+      if ((d.vs_profile || []).length) {
+        diBody.appendChild(mk('h4', 'dream-insight__h', 'Against what you told us you are looking for'));
+        const ul = mk('ul', 'dream-insight__checks');
+        d.vs_profile.forEach((v) => {
+          const li = mk('li');
+          li.dataset.status = v.status;
+          const [icon, word] = DI_STATUS[v.status] || DI_STATUS.missing;
+          const tag = mk('span', 'dream-insight__tag', icon);
+          tag.setAttribute('aria-label', word);
+          tag.title = word;
+          li.append(tag, mk('strong', null, v.topic + ': '), document.createTextNode(v.note));
+          ul.appendChild(li);
+        });
+        diBody.appendChild(ul);
+      }
+      if ((d.suggestions || []).length) {
+        diBody.appendChild(mk('h4', 'dream-insight__h', 'Next steps'));
+        const ol = mk('ol', 'dream-insight__list');
+        d.suggestions.forEach((x) => ol.appendChild(mk('li', null, x)));
+        diBody.appendChild(ol);
+      }
+    }
+    function loadInsight() {
+      if (!diBox) return;
+      const uid = current && current.user.id;
+      Auth.loadDreamInsight().then(({ data, error }) => {
+        if (!current || current.user.id !== uid) return;
+        dreamInsight = error ? null : (data || null);
+        paintInsight();
+      }, () => {});
+    }
+    async function runCompare() {
+      if (!diBox || diRun || !dreamRows.length) return;
+      diRun = true;
+      diBtn.setAttribute('aria-disabled', 'true');
+      diSay('busy', diBox.dataset.msgBusy);
+      paintInsight();
+      let res;
+      try { res = await Auth.compareDreamJobs(); } catch (err) { res = { data: null, error: err }; }
+      diRun = false;
+      diBtn.removeAttribute('aria-disabled');
+      const data = res && res.data;
+      if (data && data.ok && data.insight) {
+        dreamInsight = data.insight;
+        diSay('', '');
+        paintInsight();
+        return;
+      }
+      // Same reading of the error as the CV reading: the JSON body says the code.
+      let code = '', message = '', status = 0;
+      const ctx = res && res.error && res.error.context;
+      if (ctx && typeof ctx.status === 'number') {
+        status = ctx.status;
+        try {
+          const body = typeof ctx.json === 'function' ? await ctx.json() : null;
+          if (body && body.error) { code = clean(body.error.code); message = clean(body.error.message); }
+        } catch (_e) { /* not JSON */ }
+      }
+      if (status === 404 || code === 'not_ready') diSay('ok', diBox.dataset.msgOff);
+      else if (['user_limit', 'total_limit', 'no_jobs'].indexOf(code) !== -1 && message) diSay('error', message);
+      else diSay('error', diBox.dataset.msgError);
+      paintInsight();
+    }
+    if (diBtn) diBtn.addEventListener('click', () => { if (diBtn.getAttribute('aria-disabled') !== 'true') runCompare(); });
+
     if (stDream && drModal) {
       stDream.addEventListener('click', () => {
         drSay('', '');
+        if (!diRun) diSay('', '');
         buildDreamSlots();
+        paintInsight();
         drModal.open('#dream-1-description');
       });
       drForm.addEventListener('submit', async (e) => {
@@ -4097,7 +4235,12 @@
         dreamRows = rows;
         paintDream();
         drSay('ok', drForm.dataset.msgSaved);
-        setTimeout(() => { if (drModal.isOpen && openModals[openModals.length - 1] === drEl) drModal.close(); }, 700);
+        // With jobs saved, the comparison runs right away and shows below; the dialog stays open.
+        if (rows.length && diBox) runCompare();
+        else {
+          paintInsight();
+          setTimeout(() => { if (drModal.isOpen && openModals[openModals.length - 1] === drEl) drModal.close(); }, 700);
+        }
       });
     }
 

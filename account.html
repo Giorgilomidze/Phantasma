@@ -66,7 +66,7 @@
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./styles.css?v=20261111e" />
+  <link rel="stylesheet" href="./styles.css?v=20261112a" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -578,6 +578,19 @@
             </fieldset>
           </template>
           <div class="dream-slots" id="dream-slots"></div>
+          <!-- What your dream jobs tell us (0041): Claude's comparison of the dream jobs with the
+               CV reading and the preferences (Edge Function career-dream-compare). Runs after every
+               Save with at least one job; painted by bootAccountPage (paintInsight). -->
+          <section class="profile-src dream-insight" id="dream-insight" aria-labelledby="dream-insight-h" hidden
+                   data-msg-busy="Comparing your dream jobs with your CV and preferences… this takes up to a minute."
+                   data-msg-off="Your dream jobs are saved. The comparison with your profile will be switched on soon."
+                   data-msg-error="Could not compare right now. Please try again later.">
+            <h3 class="profile-src__h" id="dream-insight-h"><span class="profile-src__badge">What your dream jobs tell us</span></h3>
+            <p class="account__hint" id="dream-insight-meta"></p>
+            <p class="account-form__status" id="dream-insight-status" role="status" aria-live="polite" hidden></p>
+            <div class="dream-insight__body" id="dream-insight-body"></div>
+            <p class="dream-insight__again"><button class="btn btn-sm account__quiet" type="button" id="dream-compare">Compare again</button></p>
+          </section>
         </div>
         <div class="profile-form__actions">
           <button class="btn btn-primary" type="submit">Save</button>
@@ -720,7 +733,7 @@
 
   <!-- supabase-js (UMD) — must load before script.js; see Auth in script.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./script.js?v=20261111e"></script>
+  <script src="./script.js?v=20261112a"></script>
   <!-- Career service: Client | Admin switch + the Messages chat window (after script.js) -->
   <script src="./career.js?v=20261111d"></script>
 </body>

@@ -3582,6 +3582,30 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 .dream-slot__desc { min-height: 120px; resize: vertical; font-size: var(--type-body-sm); }
 .dream-slot__why { min-height: 52px; resize: vertical; font-size: var(--type-body-sm); }
 .account-status__btn[hidden] { display: none; }
+/* What your dream jobs tell us (0041) */
+.dream-insight { padding-top: var(--space-5); border-top: 1px solid var(--rule); }
+.dream-insight__body { display: grid; gap: var(--space-3); }
+.dream-insight__summary { margin: 0; font-size: var(--type-body); line-height: 1.55; }
+.dream-insight__h { margin: var(--space-2) 0 0; font-family: var(--font-body); font-size: var(--type-body-sm); font-weight: 600; }
+.dream-insight__chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.dream-insight__chips li { padding: 4px 10px; border: 1px solid var(--rule); border-radius: 999px; font-size: var(--type-caption); background: var(--surface); }
+.dream-insight__job { padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-sm); display: grid; gap: var(--space-1); }
+.dream-insight__job-h { margin: 0; font-size: var(--type-body-sm); overflow-wrap: anywhere; }
+.dream-insight__fit { margin: 0; display: flex; align-items: center; gap: var(--space-3); font-size: var(--type-caption); color: var(--ink-soft); }
+.dream-insight__bar { flex: 1 1 auto; max-width: 200px; height: 6px; border-radius: 3px; background: var(--rule); overflow: hidden; }
+.dream-insight__bar span { display: block; height: 100%; background: var(--accent); }
+.dream-insight__sub { margin: var(--space-1) 0 0; font-size: var(--type-caption); font-weight: 600; }
+.dream-insight__list { margin: 0; padding-left: 1.2em; font-size: var(--type-body-sm); line-height: 1.5; list-style: disc; }
+ol.dream-insight__list { list-style: decimal; }
+.dream-insight__list li { display: list-item; }
+.dream-insight__checks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--type-body-sm); line-height: 1.5; }
+.dream-insight__checks li { display: block; padding-left: 1.8em; text-indent: -1.8em; }
+.dream-insight__tag { display: inline-block; width: 1.4em; margin-right: 0.4em; text-align: center; font-weight: 700; text-indent: 0; }
+.dream-insight__checks li[data-status="aligned"] .dream-insight__tag { color: #2e7d32; }
+.dream-insight__checks li[data-status="mismatch"] .dream-insight__tag { color: #b3261e; }
+.dream-insight__checks li[data-status="missing"] .dream-insight__tag { color: var(--ink-soft); }
+.dream-insight__again { margin: 0; }
+.dream-insight__again .btn[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
 .profile-src { display: grid; gap: var(--space-3); min-width: 0; }
 .profile-src + .profile-src { padding-top: var(--space-5); border-top: 1px solid var(--rule); }
 .profile-src__h,
