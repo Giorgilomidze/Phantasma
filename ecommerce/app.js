@@ -1172,7 +1172,10 @@
     card.appendChild(h('h2', { class: 'ecm-h2', id: 'ecm-team-h', text: 'Team' }));
     var box = h('div', null, h('p', { class: 'ecm-note', text: 'Loading…' }));
     card.appendChild(box);
-    rpc('ecom_list_members', { p_workspace: ws.id }).then(function (rows) {
+    // invitations (supabase/0042, 12 Nov 2026): people added before their first sign-in; without 0042 the list is empty
+    Promise.all([rpc('ecom_list_members', { p_workspace: ws.id }),
+                 rpc('ecom_list_invites', { p_workspace: ws.id }).catch(function () { return []; })]).then(function (res) {
+      var rows = res[0], invites = res[1] || [];
       box.innerHTML = '';
       var tbody = h('tbody');
       (rows || []).forEach(function (m) {
@@ -1186,6 +1189,17 @@
         }
         tr.appendChild(td);
         tbody.appendChild(tr);
+      });
+      invites.forEach(function (iv) {
+        var td = h('td');
+        if (isAdmin()) {
+          td.appendChild(h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Cancel', onclick: function () {
+            if (!window.confirm('Cancel the invitation for ' + iv.email + '?')) return;
+            rpc('ecom_cancel_invite', { p_workspace: ws.id, p_email: iv.email }).then(function () { renderTeam(card); }).catch(function (e) { toast(e.message, 'act'); });
+          } }));
+        }
+        tbody.appendChild(h('tr', null, [h('td', { text: iv.email }), h('td', { text: iv.role + ' · invited, joins at the first sign-in' }),
+          h('td', { text: fmtTime(iv.invited_at) }), td]));
       });
       box.appendChild(h('div', { class: 'ecm-tablewrap' }, h('table', { class: 'ecm-table' }, [
         h('caption', { class: 'visually-hidden', text: 'Members of this workspace' }),
@@ -1202,13 +1216,14 @@
           e.preventDefault(); err.textContent = '';
           if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim())) { err.textContent = 'Type a valid email address.'; return; }
           add.disabled = true;
-          rpc('ecom_add_member', { p_workspace: ws.id, p_email: email.value.trim(), p_role: role.value }).then(function () {
-            toast('Added ' + email.value.trim() + '.'); renderTeam(card);
+          var mail = email.value.trim();
+          rpc('ecom_add_member', { p_workspace: ws.id, p_email: mail, p_role: role.value }).then(function (id) {
+            toast(id ? 'Added ' + mail + '.' : 'Invited ' + mail + ': they join this workspace at their first sign-in.'); renderTeam(card);
           }).catch(function (e2) { err.textContent = e2.message; add.disabled = false; });
         });
         box.appendChild(form);
         box.appendChild(err);
-        box.appendChild(h('p', { class: 'ecm-note', text: 'The person must have signed in once on solvephantasma.com (for example with Google). Adding them also lets them into this service.' }));
+        box.appendChild(h('p', { class: 'ecm-note', text: 'Someone who has not signed in yet is invited: at their first sign-in on solvephantasma.com (for example with Google) they join this workspace. Adding or inviting someone also lets them into this service.' }));
       }
     }).catch(function (e) { box.innerHTML = ''; box.appendChild(h('p', { class: 'ecm-error', text: e.message })); });
   }
