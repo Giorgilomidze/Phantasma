@@ -741,3 +741,13 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
   .ads-sidebar, .ads-drawer, .ads-shell { transition: none !important; }
   .ads-skel__bar { animation: none; }
 }
+
+/* -------------------------------------------------------------------------
+   10c. Keys in Settings (0043) and the Audit log, 13 Nov 2026
+   ------------------------------------------------------------------------- */
+.ads-keyfound { margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface); }
+.ads-keyfound .ads-field { max-width: 520px; }
+.ads-audit__search { margin: 0; min-width: min(100%, 280px); }
+.ads-audit__when { white-space: nowrap; }
+.ads-audit__details { color: var(--ink-soft); overflow-wrap: anywhere; }
+.ads-audit tr.is-failed td { background: var(--surface); }

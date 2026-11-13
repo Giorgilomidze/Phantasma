@@ -516,7 +516,7 @@
   var NAV = [
     ['dashboard', 'nav.dashboard', false], ['campaigns', 'nav.campaigns', false], ['posts', 'nav.posts', false], ['messaging', 'msg.nav', false], ['approvals', 'ap.nav', false],
     ['images', 'nav.images', false], ['styles', 'sty.nav', false], ['brands', 'br.nav', false], ['products', 'nav.products', false], ['rotation', 'nav.rotation', true],
-    ['settings', 'nav.settings', false], ['audit', 'nav.audit', true]
+    ['settings', 'nav.settings', false], ['audit', 'nav.audit', false]
   ];
   function buildNav() {
     var ul = $('#ads-nav-list');
@@ -552,7 +552,8 @@
     if (name === 'images') return viewImages(tok);
     if (name === 'styles') return viewStyles(tok);
     if (name === 'products') return viewProducts(tok);
-    if (name === 'settings') return viewSettings();
+    if (name === 'settings') return viewSettings(tok);
+    if (name === 'audit') return viewAudit(tok);
     if (name === 'approvals') return viewApprovals(tok);
     if (name === 'messaging') return viewMessaging(tok);
     if (name === 'brands') return viewBrands(tok);
@@ -3436,18 +3437,31 @@
     ]],
     ['tools', ['monday', 'clickup', 'notion', 'trello', 'asana', 'slack'].map(function (k) { return { id: k, tool: k, connect: 'set.connectAccount' }; })],
     ['analytics', [{ id: 'ga', fields: [['set.f.measurementId', 'text'], ['set.f.apiSecret', 'password']] }]],
-    ['ai', [
-      { id: 'openai', fields: [['set.f.apiKey', 'password']] },
-      { id: 'gemini', fields: [['set.f.apiKey', 'password']] },
-      { id: 'claude', fields: [['set.f.apiKey', 'password']] }
-    ]],
     ['files', [
       { id: 'drive', tool: 'drive', connect: 'set.connectDrive' },
       { id: 'pos', fields: [['set.f.apiUrl', 'url'], ['set.f.apiKey', 'password']] }
     ]]
   ];
 
-  function viewSettings() {
+  // AI tools: one key each for the whole agency, used for every company (owner D-64, 13 Nov 2026).
+  var AI_SERVICES = [{ id: 'claude', fields: [['set.f.apiKey', 'password']] }, { id: 'gemini', fields: [['set.f.apiKey', 'password']] },
+    { id: 'openai', fields: [['set.f.apiKey', 'password']] }];
+  var KEY_LIVE = ['meta', 'claude', 'gemini', 'openai']; // keys that can be saved and tested today (0043 + ads-connections)
+  var openKey = null; // the key row to open again after the page is drawn anew
+  function viewSettings(tok) {
+    // Live: the stored keys first (only their status, last 4 characters and what the test found).
+    if (liveMode() && tok !== undefined && !viewSettings.loaded) {
+      render(h('div', {}, [pageHead('nav.settings'), skeleton(4)]), 'nav.settings');
+      api.listConnections().then(function (list) {
+        if (stale(tok)) return;
+        viewSettings.loaded = { list: list, err: null }; viewSettings(tok); viewSettings.loaded = null;
+      }, function (e) {
+        if (stale(tok)) return;
+        viewSettings.loaded = { list: [], err: e }; viewSettings(tok); viewSettings.loaded = null;
+      });
+      return;
+    }
+    var keys = viewSettings.loaded || { list: [], err: null };
     var live = liveMode(), L = settings.limits;
     var biz = settings.businesses.filter(function (b) { return b.id === ctx.business; })[0] || settings.businesses[0] || null;
     function card(id, titleKey, kids, mod) {
@@ -3455,8 +3469,103 @@
         [h('h2', { class: 'ads-h2', id: 'ads-set-' + id }, t(titleKey))].concat(kids));
     }
     function btns(list) { return h('div', { class: 'ads-btnrow' }, list); }
+    function connOf(provider, business) {
+      return keys.list.filter(function (c) { return c.provider === provider && (business ? c.business_id === business : !c.business_id); })[0] || null;
+    }
+    // A key that works today (live): Meta per company, AI tools for the agency. Opened, it shows the status,
+    // what the test found, a field to paste a (new) key, Test again and Remove.
+    function keyRow(s, business) {
+      var c = connOf(s.id, business);
+      var canEdit = !!access && access.role === 'admin' && (business ? true : access.allCompanies);
+      var legacy = !c && ((s.id === 'meta' && biz && biz.pageId) || s.id === 'gemini'); // the old server key still works
+      var st = c ? (c.status === 'ok' ? pill(t('key.st.ok', { hint: c.secret_hint || '' }), 'on') : pill(t('key.st.error'), 'out'))
+        : legacy ? pill(t('set.st.server'), 'on') : pill(t('set.st.none'), 'off');
+      var kids = [h('p', { class: 'ads-note' }, t('set.use.' + s.id))];
+      if (c) {
+        kids.push(h('p', { class: 'ads-sub' }, t('key.checked', { when: c.checked_at ? fmtDateTime(c.checked_at) : '—' })));
+        if (c.status !== 'ok' && c.status_message) kids.push(h('p', { class: 'ads-warn' }, c.status_message));
+        if (s.id === 'meta' && c.status === 'ok') kids.push(metaFound(c, business));
+        else if (c.info && c.info.models != null) kids.push(h('p', { class: 'ads-sub' }, t('key.models', { n: c.info.models })));
+      } else if (legacy) kids.push(h('p', { class: 'ads-hint' }, t(s.id === 'meta' ? 'key.legacyMeta' : 'key.legacyGemini')));
+      if (canEdit) {
+        var inId = 'ads-key-' + s.id + (business ? '-' + business : '');
+        var input = h('input', { type: 'password', id: inId, class: 'ads-input', autocomplete: 'off', spellcheck: 'false', placeholder: t(c ? 'key.replacePh' : 'key.pastePh') });
+        var msg = h('p', { class: 'ads-hint', 'aria-live': 'polite' });
+        var saveB = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
+          var v = input.value.trim();
+          if (!v) { msg.textContent = t('key.empty'); input.focus(); return; }
+          saveB.disabled = true; msg.textContent = t('key.testing');
+          api.saveConnection(s.id, business, v).then(function () {
+            input.value = ''; toast(t('key.saved', { name: t('set.svc.' + s.id) }), 'info'); openKey = s.id; refresh();
+          }, function (e) { saveB.disabled = false; msg.textContent = t('key.failed') + (e && e.message ? ' ' + e.message : ''); });
+        } }, t(c ? 'key.replace' : 'key.saveTest'));
+        kids.push(field(c ? 'key.newKey' : 'key.key', input, null, inId), msg);
+        var bl = [saveB];
+        if (c) {
+          bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function (ev) {
+            var b = ev.currentTarget; b.disabled = true;
+            api.testConnection(c.id).then(function () { toast(t('key.testOk'), 'info'); openKey = s.id; refresh(); },
+              function (e) { toast(t('key.failed') + (e && e.message ? ' ' + e.message : ''), 'act'); openKey = s.id; refresh(); });
+          } }, t('key.test')));
+          bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost', onclick: function () {
+            confirmDialog({ title: t('key.remove'), message: t('key.removeQ', { name: t('set.svc.' + s.id) }), confirmLabel: t('key.removeYes'), danger: true }).then(function (yes) {
+              if (!yes) return;
+              api.removeConnection(c.id).then(function () { toast(t('key.removed'), 'info'); refresh(); },
+                function (e) { toast(t('toast.failed') + (e && e.message ? ' ' + e.message : ''), 'act'); });
+            });
+          } }, t('key.remove')));
+        }
+        if (legacy && s.id === 'meta') bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function (e) { testMetaConnection(e.currentTarget); } }, t('health.btn')));
+        if (legacy && s.id === 'gemini') bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function (e) { testGemini(e.currentTarget); } }, t('health.btn')));
+        kids.push(btns(bl));
+      } else kids.push(h('p', { class: 'ads-hint' }, t(business ? 'key.onlyAdmins' : 'key.onlyAgencyAdmins')));
+      var d = h('details', { class: 'ads-svc' }, [
+        h('summary', { class: 'ads-svc__sum' }, [h('span', { class: 'ads-svc__name' }, t('set.svc.' + s.id)),
+          business && chosen(s) ? pill(t('set.chosen'), 'picture') : null, st]),
+        h('div', { class: 'ads-svc__body' }, kids)
+      ]);
+      if (openKey === s.id) d.open = true;
+      return d;
+    }
+    // What a Meta token reaches, and "Use for <company>": the Page (with its Instagram) and the ad account.
+    function metaFound(c, business) {
+      var info = c.info || {}, pages = info.pages || [], accts = info.ad_accounts || [];
+      var box = h('div', { class: 'ads-keyfound' }, [h('p', { class: 'ads-sub' }, t('key.meta.owner', { name: (info.owner && info.owner.name) || '—' }))]);
+      if (!pages.length && !accts.length) { box.appendChild(h('p', { class: 'ads-warn' }, t('key.meta.nothing'))); return box; }
+      var cur = settings.businesses.filter(function (b) { return b.id === business; })[0] || {};
+      var curAcct = cur.accounts && cur.accounts[0] ? cur.accounts[0].id : '';
+      // Preselect what the company uses now when the token reaches it, else the first thing the token reaches
+      // (never an empty choice by accident: that would clear the company's Page or ad account).
+      var has = function (list, id) { return !!id && list.some(function (x) { return x.id === id; }); };
+      var pageSel = select('ads-meta-page-' + business, [['', t('key.meta.noPage')]].concat(pages.map(function (x) {
+        return [x.id, x.name + (x.instagram ? ' · Instagram @' + x.instagram : '')];
+      })), has(pages, cur.pageId) ? cur.pageId : (pages[0] ? pages[0].id : ''), function () {});
+      var acctSel = select('ads-meta-acct-' + business, [['', t('key.meta.noAcct')]].concat(accts.map(function (x) {
+        return [x.id, x.name + ' (' + x.id + (x.currency ? ', ' + x.currency : '') + ')'];
+      })), has(accts, curAcct) ? curAcct : (accts[0] ? accts[0].id : ''), function () {});
+      var canUse = !!access && access.role === 'admin';
+      var use = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', disabled: !canUse, onclick: function () {
+        var pg = pages.filter(function (x) { return x.id === pageSel.value; })[0] || null;
+        var ac = accts.filter(function (x) { return x.id === acctSel.value; })[0] || null;
+        // Replacing a Page or ad account the company already uses needs a yes first.
+        var replaces = (cur.pageId && cur.pageId !== (pg ? pg.id : null)) || (curAcct && curAcct !== (ac ? ac.id : null));
+        (replaces ? confirmDialog({ title: t('key.meta.replaceTitle'), message: t('key.meta.replaceQ', { name: bizName(business) }), confirmLabel: t('key.meta.replaceYes') }) : Promise.resolve(true)).then(function (yes) {
+          if (!yes) return;
+          use.disabled = true;
+          api.setCompanyMeta(business, { pageId: pg ? pg.id : null, instagramId: pg ? pg.instagram_id : null, adAccountId: ac ? ac.id : null,
+            currency: ac ? ac.currency : null, timezone: ac ? ac.timezone : null }).then(function () {
+            toast(t('key.meta.used', { name: bizName(business) }), 'info'); openKey = 'meta'; return companiesChanged(null);
+          }, function (e) { use.disabled = false; toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+        });
+      } }, t('key.meta.use', { name: bizName(business) }));
+      append(box, [field('key.meta.page', pageSel, null, pageSel.id), field('key.meta.acct', acctSel, null, acctSel.id), btns([use])]);
+      if (info.pages_error) box.appendChild(h('p', { class: 'ads-hint' }, t('key.meta.pagesErr') + ' ' + info.pages_error));
+      if (info.ad_accounts_error) box.appendChild(h('p', { class: 'ads-hint' }, t('key.meta.acctErr') + ' ' + info.ad_accounts_error));
+      return box;
+    }
     // One service: a closed row (name + status chip); opened, it shows what it is for, the key fields and the buttons.
-    function service(s) {
+    function service(s, business) {
+      if (live && KEY_LIVE.indexOf(s.id) !== -1) return keyRow(s, business);
       var onServer = live && (s.id === 'meta' || s.id === 'gemini'); // live mode: these keys already sit in the server's secrets
       var kids = [h('p', { class: 'ads-note' }, t('set.use.' + s.id))];
       (s.fields || []).forEach(function (f, i) {
@@ -3487,8 +3596,12 @@
     SERVICES.forEach(function (g) {
       var list = g[1].filter(chosen).concat(g[1].filter(function (s) { return !chosen(s); }));
       conn.push(h('h3', { class: 'ads-h3 ads-svcgroup' }, t('set.grp.' + g[0])));
-      conn.push(h('div', { class: 'ads-svclist' }, list.map(function (s) { return service(s); })));
+      conn.push(h('div', { class: 'ads-svclist' }, list.map(function (s) { return service(s, biz ? biz.id : null); })));
     });
+    var ai = [h('p', {}, t('key.ai.intro')), h('p', { class: 'ads-warn' }, t('set.conn.security')),
+      keys.err ? h('p', { class: 'ads-warn' }, t('key.err.db')) : null,
+      h('div', { class: 'ads-svclist' }, AI_SERVICES.map(function (s) { return service(s, null); }))];
+    if (keys.err) conn.splice(2, 0, h('p', { class: 'ads-warn' }, t('key.err.db')));
     var notify = h('fieldset', { class: 'ads-fieldset', disabled: true }, [h('legend', { class: 'visually-hidden' }, t('set.notify'))].concat(['rejected', 'daily', 'lowStock', 'weekly'].map(function (k) {
       var id = 'ads-set-n-' + k;
       return h('label', { class: 'ads-option ads-option--off', for: id }, [h('input', { type: 'checkbox', id: id, disabled: true }), h('span', {}, t('set.n.' + k))]);
@@ -3502,6 +3615,7 @@
       h('p', { class: 'ads-note' }, t('set.intro')),
       card('account', 'set.account', [h('p', {}, t('set.signedIn', { email: user ? user.email : '' })), btns([soonBtn('set.changePassword'), soonBtn('set.signOutAll')])]),
       card('companies', 'co.title', companiesCard()),
+      card('ai', 'key.ai.title', ai),
       biz ? h('section', { class: 'ads-card', 'aria-labelledby': 'ads-set-conn' },
         [h('h2', { class: 'ads-h2', id: 'ads-set-conn' }, t('set.connFor', { name: biz.name })), h('p', { class: 'ads-note' }, t('set.conn.perCompany'))].concat(conn)) : null,
       card('limits', 'set.limits', [
@@ -3516,6 +3630,7 @@
       card('notify', 'set.notify', [h('p', { class: 'ads-note' }, t('set.notify.note')), notify]),
       card('data', 'set.data', [h('p', { class: 'ads-note' }, t('set.data.note'))].concat(danger), 'danger')
     ]), 'nav.settings');
+    openKey = null;
   }
 
   /* ---------------------------------------------------------------------
@@ -4257,6 +4372,75 @@
         h('p', { class: 'ads-bubble__text' }, m.text),
         h('span', { class: 'ads-bubble__at' }, fmtDateTime(m.at) + (m.sample ? ' · ' + t('msg.notSent') : ''))
       ]);
+    }
+  }
+
+  /* ---- Audit log (13 Nov 2026): who did what, when. The database records every change since 6 Nov
+         (ads_audit); internal Admins see their agency's entries, everyone else their own. ---- */
+  var AUDIT_GROUPS = [['all', null], ['pictures', /^(image|picture_settings|style|style_group|aimg)\./], ['products', /^(stock|product)\./],
+    ['campaigns', /^campaign\./], ['posts', /^(post|goal|brand)\./], ['team', /^(member|company|connection|workspace)\./]];
+  var auditGroup = 'all';
+  function auditLabel(a) {
+    var k = 'audit.a.' + a.replace(/[^a-z_.]/gi, '');
+    var v = t(k);
+    return v === k ? a : v;
+  }
+  // A short, readable line from the details (never more than ~140 characters).
+  function auditDetails(r) {
+    var p = r.payload || {}, parts = [];
+    if (p.detail) parts.push(String(p.detail));
+    ['name', 'email', 'role', 'provider', 'title', 'rows', 'new', 'updated', 'changed', 'count', 'note', 'error'].forEach(function (k) {
+      if (p[k] != null && p[k] !== '' && typeof p[k] !== 'object') parts.push(k + ': ' + p[k]);
+    });
+    if (Array.isArray(p.companies) && p.companies.length) parts.push(t('audit.companies', { list: p.companies.map(bizName).join(', ') }));
+    var line = parts.join(' · ');
+    return line.length > 140 ? line.slice(0, 139) + '…' : line;
+  }
+  function viewAudit(tok) {
+    var body = h('div', {}, skeleton(4)), rows = [], q = '';
+    var search = h('input', { type: 'search', id: 'ads-audit-q', class: 'ads-input', placeholder: t('audit.search'), oninput: function () { q = search.value.trim().toLowerCase(); draw(); } });
+    var groupBtns = AUDIT_GROUPS.map(function (g) {
+      return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(g[0] === auditGroup), onclick: function () {
+        auditGroup = g[0];
+        groupBtns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(AUDIT_GROUPS[i][0] === auditGroup)); });
+        draw();
+      } }, t('audit.g.' + g[0]));
+    });
+    render(h('div', {}, [
+      pageHead('nav.audit', [h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { load(); } }, t('common.refresh'))]),
+      h('p', { class: 'ads-note' }, t(liveMode() ? 'audit.intro' : 'audit.introSample')),
+      h('div', { class: 'ads-filters' }, [h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('audit.show') }, groupBtns),
+        h('div', { class: 'ads-field ads-audit__search' }, [h('label', { class: 'visually-hidden', for: 'ads-audit-q' }, t('audit.search')), search])]),
+      body
+    ]), 'nav.audit');
+    load();
+    function load() {
+      api.listAuditLog().then(function (list) { if (stale(tok)) return; rows = list; draw(); },
+        function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(function () { load(); })); } });
+    }
+    function draw() {
+      var re = AUDIT_GROUPS.filter(function (g) { return g[0] === auditGroup; })[0][1];
+      var list = rows.filter(function (r) {
+        if (re && !re.test(r.action)) return false;
+        if (!q) return true;
+        return (r.who + ' ' + r.action + ' ' + auditLabel(r.action) + ' ' + auditDetails(r)).toLowerCase().indexOf(q) !== -1;
+      });
+      body.innerHTML = '';
+      if (!list.length) { body.appendChild(h('p', { class: 'ads-note' }, t(rows.length ? 'audit.noMatch' : 'audit.none'))); return; }
+      body.appendChild(h('p', { class: 'ads-sub' }, t('audit.count', { n: list.length, total: rows.length })));
+      body.appendChild(h('div', { class: 'ads-tablewrap' }, h('table', { class: 'ads-table ads-audit' }, [
+        h('thead', {}, h('tr', {}, ['audit.when', 'audit.who', 'audit.what', 'audit.company', 'audit.details'].map(function (k) { return h('th', { scope: 'col' }, t(k)); }))),
+        h('tbody', {}, list.map(function (r) {
+          var p = r.payload || {}, biz = p.business_id || (r.entity === 'business' || r.entity === 'company' ? r.entityId : '');
+          return h('tr', { class: r.ok ? null : 'is-failed' }, [
+            h('td', { class: 'ads-audit__when' }, fmtDateTime(r.at)),
+            h('td', {}, r.who || '—'),
+            h('td', {}, [auditLabel(r.action), r.dryRun ? ' ' : null, r.dryRun ? pill(t('audit.dry'), 'off') : null, r.ok ? null : ' ', r.ok ? null : pill(t('audit.failed'), 'out')]),
+            h('td', {}, biz ? bizName(biz) : '—'),
+            h('td', { class: 'ads-audit__details' }, auditDetails(r) || '—')
+          ]);
+        }))
+      ])));
     }
   }
 

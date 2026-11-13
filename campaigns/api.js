@@ -122,7 +122,7 @@
   function loadLive() {
     if (!client) return Promise.reject(new Error('no client'));
     return Promise.all([
-      client.from('ads_businesses').select('id,name,page_id,ad_account_id,currency,active,about,goal,channels,tools,work_type,inbox_demo,created_at').order('created_at', { ascending: true }),
+      client.from('ads_businesses').select('id,name,page_id,instagram_id,ad_account_id,currency,timezone,active,about,goal,channels,tools,work_type,inbox_demo,created_at').order('created_at', { ascending: true }),
       client.from('ads_settings').select('max_daily_budget_minor,max_total_budget_minor,max_days,currency').eq('id', true).maybeSingle()
     ]).then(function (r) {
       if (r[0].error || r[1].error) throw new Error('live read failed');
@@ -141,7 +141,7 @@
   }
   // A company row of ads_businesses (0039: profile columns; the Meta ad account may be missing) in the UI shape.
   function liveCompany(b) {
-    return { id: b.id, name: b.name, currency: b.currency || null, pageId: b.page_id || null,
+    return { id: b.id, name: b.name, currency: b.currency || null, pageId: b.page_id || null, instagramId: b.instagram_id || null, timezone: b.timezone || null,
       accounts: b.ad_account_id ? [{ id: b.ad_account_id, name: b.name + ' (' + b.ad_account_id + ')' }] : [],
       about: b.about || '', goal: b.goal || '', channels: b.channels || [], tools: b.tools || [], workType: b.work_type || '',
       inbox: !!b.inbox_demo, createdAt: b.created_at || null };
@@ -846,6 +846,57 @@
       c.status = status === 'done' ? 'done' : 'open';
       save();
       return wait(c);
+    });
+  }
+
+  // Keys (13 Nov 2026, SQL 0043 + server function ads-connections): AI tools once for the agency (owner
+  // D-64), Meta per company (D-46 / D-66). The browser never gets a key back: only the last 4 characters,
+  // the status and what the test found. Live only. Row: { id, business_id (null = agency), provider,
+  // secret_hint, info, status ('ok' | 'error'), status_message, checked_at }.
+  function listConnections() {
+    if (!isLive()) return Promise.resolve([]);
+    return init().then(function () {
+      return client.from('ads_connections').select('id,business_id,provider,secret_hint,info,status,status_message,checked_at,updated_at');
+    }).then(function (r) {
+      if (r.error) { var e = new Error(r.error.message || 'read failed'); e.key = 'key.err.db'; throw e; }
+      return r.data || [];
+    });
+  }
+  function connCall(body) {
+    return callFn('ads-connections', body).then(function (r) {
+      if (r && r.ok) return r;
+      var e = new Error((r && r.error && r.error.message) || '');
+      e.code = (r && r.error && r.error.code) || 'server';
+      throw e;
+    });
+  }
+  function saveConnection(provider, business, secret) { return connCall({ action: 'save', provider: provider, business_id: business || null, secret: secret }); }
+  function testConnection(id) { return connCall({ action: 'test', id: id }); }
+  function removeConnection(id) { return connCall({ action: 'remove', id: id }); }
+  // The company's Facebook Page, Instagram account, ad account, currency, time zone (picked from the Meta test).
+  function setCompanyMeta(b, m) {
+    m = m || {};
+    return liveRpc('ads_set_company_meta', { p_business: b, p_page_id: m.pageId || null, p_instagram_id: m.instagramId || null,
+      p_ad_account_id: m.adAccountId || null, p_currency: m.currency || null, p_timezone: m.timezone || null });
+  }
+
+  // Audit log (13 Nov 2026): who did what, when. Live: table ads_audit (0020; 0039 rules: internal Admins see
+  // their agency, everyone else their own rows). Sample mode: the demo state's list. Newest first, at most 300.
+  // Row: { at, who, action, entity, entityId, ok, dryRun, payload }.
+  function listAuditLog() {
+    return init().then(function () {
+      if (!isLive()) {
+        return wait(state.audit.slice(0, 300).map(function (a) {
+          return { at: a.ts, who: a.user, action: a.action, entity: a.entityType, entityId: a.entityId, ok: true, dryRun: false, payload: a.detail ? { detail: a.detail } : {} };
+        }));
+      }
+      return client.from('ads_audit').select('id,at,actor_email,action,entity,entity_id,ok,dry_run,payload')
+        .order('at', { ascending: false }).range(0, 299).then(function (r) {
+          if (r.error) throw new Error(r.error.message || 'read failed');
+          return (r.data || []).map(function (a) {
+            return { at: a.at, who: a.actor_email || '', action: a.action, entity: a.entity || '', entityId: a.entity_id || '', ok: a.ok !== false, dryRun: !!a.dry_run, payload: a.payload || {} };
+          });
+        });
     });
   }
 
@@ -1647,6 +1698,9 @@
     myAccess: myAccess, acceptInvites: acceptInvites,
     goalRules: { textMax: GOAL_TEXT_MAX }, listGoals: listGoals, saveGoal: saveGoal, deleteGoal: deleteGoal,
     msgRules: { textMax: MSG_MAX }, listConversations: listConversations, openConversation: openConversation,
-    replyConversation: replyConversation, setConversationStatus: setConversationStatus
+    replyConversation: replyConversation, setConversationStatus: setConversationStatus,
+    // Keys (0043) and the audit log (13 Nov 2026)
+    listConnections: listConnections, saveConnection: saveConnection, testConnection: testConnection,
+    removeConnection: removeConnection, setCompanyMeta: setCompanyMeta, listAuditLog: listAuditLog
   };
 })();
