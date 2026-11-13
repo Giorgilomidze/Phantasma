@@ -514,7 +514,7 @@
      4. Router and shell
      --------------------------------------------------------------------- */
   var NAV = [
-    ['dashboard', 'nav.dashboard', false], ['campaigns', 'nav.campaigns', false], ['posts', 'nav.posts', false], ['approvals', 'ap.nav', false],
+    ['dashboard', 'nav.dashboard', false], ['campaigns', 'nav.campaigns', false], ['posts', 'nav.posts', false], ['messaging', 'msg.nav', false], ['approvals', 'ap.nav', false],
     ['images', 'nav.images', false], ['styles', 'sty.nav', false], ['brands', 'br.nav', false], ['products', 'nav.products', false], ['rotation', 'nav.rotation', true],
     ['settings', 'nav.settings', false], ['audit', 'nav.audit', true]
   ];
@@ -554,6 +554,7 @@
     if (name === 'products') return viewProducts(tok);
     if (name === 'settings') return viewSettings();
     if (name === 'approvals') return viewApprovals(tok);
+    if (name === 'messaging') return viewMessaging(tok);
     if (name === 'brands') return viewBrands(tok);
     var soon = NAV.filter(function (n) { return n[0] === name && n[2]; })[0];
     if (soon) {
@@ -1148,13 +1149,15 @@
       chipsBox.appendChild(chips(['all'].concat(POST_STATUSES), postsFilter, function (k) { return k === 'all' ? t('common.all') : t('status.' + k); }, function (k) { postsFilter = k; drawChips(); load(); }, t('camp.statusFilter')));
     }
     drawChips();
-    var viewSw = h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('posts.view') }, ['list', 'calendar'].map(function (v) {
+    var viewSw = h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('posts.view') }, ['list', 'calendar', 'facebook'].map(function (v) {
       return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(postsView === v), onclick: function () { postsView = v; refresh(); } }, t('posts.' + v));
     }));
     render(h('div', {}, [pageHead('nav.posts', [h('a', { class: 'ads-btn ads-btn--primary', href: '#/posts/new', onclick: function () { composerPrefill = null; } }, t('posts.new'))]),
       h('div', { class: 'ads-filters' }, [viewSw, chipsBox]), body]), 'nav.posts');
 
+    chipsBox.hidden = postsView === 'facebook';
     function load() {
+      if (postsView === 'facebook') return fbPosts();
       Promise.all([api.listPosts({ business: ctx.business }), api.listProducts(ctx.business)]).then(function (res) {
         if (stale(tok)) return;
         var posts = res[0].filter(function (p) { return postsFilter === 'all' || p.status === postsFilter; });
@@ -1162,6 +1165,33 @@
         if (!posts.length) { body.appendChild(emptyState('posts.emptyTitle', 'posts.emptyText')); return; }
         body.appendChild(postsView === 'calendar' ? calendar(posts) : list(posts, res[1]));
       }).catch(function () { if (!stale(tok)) { body.innerHTML = ''; body.appendChild(errorState(load)); } });
+    }
+    // The company's Facebook Page posts as Facebook shows them (live: Edge Function ads-list-posts). Numbers
+    // and campaign results come with the history import (plan ADS-46), then the AI can review them.
+    function fbPosts() {
+      body.innerHTML = '';
+      if (!liveMode()) { body.appendChild(emptyState('posts.fb.mockTitle', 'posts.fb.mockText')); return; }
+      body.appendChild(skeleton(3));
+      api.listPagePosts(ctx.business).then(function (list) {
+        if (stale(tok)) return;
+        body.innerHTML = '';
+        body.appendChild(h('p', { class: 'ads-note' }, t('posts.fb.note')));
+        if (!list.length) { body.appendChild(emptyState('posts.fb.emptyTitle', 'posts.fb.emptyText')); return; }
+        body.appendChild(h('ul', { class: 'ads-fbposts' }, list.map(function (x) {
+          return h('li', { class: 'ads-fbpost' }, [
+            x.picture ? h('img', { class: 'ads-fbpost__img', src: x.picture, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : h('span', { class: 'ads-fbpost__img ads-img-empty' }, t('common.noImage')),
+            h('div', { class: 'ads-fbpost__body' }, [
+              h('p', { class: 'ads-fbpost__text' }, x.message || t('posts.fb.noText')),
+              h('p', { class: 'ads-sub' }, x.created_time ? fmtDateTime(x.created_time) : ''),
+              x.permalink_url ? h('a', { class: 'ads-btn ads-btn--ghost ads-btn--small', href: x.permalink_url, target: '_blank', rel: 'noopener' }, t('posts.fb.open')) : null
+            ])
+          ]);
+        })));
+      }, function (e) {
+        if (stale(tok)) return;
+        body.innerHTML = '';
+        body.appendChild(h('p', { class: 'ads-warn', role: 'alert' }, t('posts.fb.failed') + (e && e.message ? ' ' + e.message : '')));
+      });
     }
     function list(posts, products) {
       var byId = {};
@@ -1398,13 +1428,28 @@
       var cap = h('textarea', { id: 'ads-p-caption', class: 'ads-input ads-textarea', rows: '6', 'aria-describedby': 'ads-p-count' }, post.caption);
       if (!editable) cap.disabled = true;
       cap.addEventListener('input', function () { post.caption = cap.value; upd(); });
+      // Post goal (13 Nov 2026): the goal's Georgian template writes the draft today; the AI writes it later
+      // from the goal's description (ADS-08 / plan ADS-45). The goal stays with the post.
+      var goalHint = h('p', { class: 'ads-hint', id: 'ads-p-goal-hint' });
+      var goalSel = select('ads-p-goal', [['', t('comp.goal.none')]].concat(goalsCache.map(function (g) { return [g.id, g.id + ' · ' + goalName(g)]; })), post.goalId || '', function (v) {
+        post.goalId = v || null; showGoal(); upd();
+      });
+      goalSel.disabled = !editable;
+      goalSel.setAttribute('aria-describedby', 'ads-p-goal-hint');
+      function showGoal() {
+        var g = goalsCache.filter(function (x) { return x.id === post.goalId; })[0];
+        goalHint.textContent = g ? g.description : t('comp.goal.hint');
+        tplBtn.textContent = t(g ? 'comp.goal.write' : 'comp.template');
+      }
       var tplBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', disabled: !editable, onclick: function () {
         var chosen = curProducts(), list = chosen.length ? chosen : products.slice(0, 1);
         if (!list.length) { toast(t('comp.noProducts'), 'act'); return; }
-        var tpl = settings.georgianTemplates[Math.floor(Math.random() * settings.georgianTemplates.length)];
+        var goal = goalsCache.filter(function (x) { return x.id === post.goalId; })[0];
+        var tpl = goal && goal.template_ka ? goal.template_ka : settings.georgianTemplates[Math.floor(Math.random() * settings.georgianTemplates.length)];
         var txt = fillTemplate(tpl, list);
         post.caption = (cap.value ? cap.value + '\n' : '') + txt; cap.value = post.caption; upd(); cap.focus();
       } }, t('comp.template'));
+      showGoal();
       function curProducts() { return post.productIds.map(function (x) { return byId[x]; }).filter(Boolean); }
       // Finished post pictures join the post in product order, up to the limit. Returns how many fit.
       function addPictures(list) {
@@ -1444,7 +1489,7 @@
           }
         }).then(function (ok) { return ok ? (dt ? { scheduledAt: new Date(dt.value).toISOString() } : {}) : null; });
       }
-      function saveCurrent() { return api.savePost({ id: post.id, business: post.business, productIds: post.productIds, caption: post.caption, imageIds: post.imageIds }); }
+      function saveCurrent() { return api.savePost({ id: post.id, business: post.business, productIds: post.productIds, caption: post.caption, imageIds: post.imageIds, goalId: post.goalId || null }); }
       function guard() { if (!post.caption.trim()) { toast(t('err.caption'), 'act'); cap.focus(); return false; } return true; }
       function fail(e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); }
       function moveTo(to, extra, msg) { return api.movePost(post.id, to, extra).then(function () { toast(t(msg)); go('#/posts/' + post.id); }).catch(fail); }
@@ -1470,6 +1515,7 @@
         h('p', {}, [t('col.status') + ': ', chip(post.status)]),
         editable ? null : h('p', { class: 'ads-note' }, t('comp.locked')),
         prodPick, imgPick.el, gen ? gen.el : null,
+        h('div', { class: 'ads-field' }, [h('label', { class: 'ads-label', for: 'ads-p-goal' }, t('comp.goal')), goalSel, goalHint]),
         h('div', { class: 'ads-field' }, [h('label', { class: 'ads-label', for: 'ads-p-caption' }, t('wiz.caption')), cap, count, tplBtn]),
         h('h3', { class: 'ads-h3' }, t('policy.title')), risk,
         h('div', { class: 'ads-btnrow' }, actions)
@@ -3466,6 +3512,7 @@
         btns([soonBtn('set.lim.change')])
       ]),
       card('team', 'set.team', teamCard()),
+      card('goals', 'goal.title', goalsCard()),
       card('notify', 'set.notify', [h('p', { class: 'ads-note' }, t('set.notify.note')), notify]),
       card('data', 'set.data', [h('p', { class: 'ads-note' }, t('set.data.note'))].concat(danger), 'danger')
     ]), 'nav.settings');
@@ -3659,7 +3706,6 @@
   }
   // Settings → Add / Edit company, and "+ Add company" in the top bar. Resolves with the saved company or null.
   function companyDialog(c) {
-    if (liveMode()) { toast(t('co.err.live'), 'info'); return Promise.resolve(null); }
     var f = companyForm(c), saved = null, err = formError();
     return openDialog({
       title: c ? t('co.editTitle', { name: c.name }) : t('co.addTitle'), wide: true,
@@ -3743,18 +3789,17 @@
           [t('co.k.work'), c.workType ? t('co.wt.' + c.workType) : t('co.none.dash')],
           [t('set.biz.accounts'), c.accounts.length ? c.accounts.map(function (a) { return a.name; }).join(', ') : t('co.noAccounts')]]),
         h('div', { class: 'ads-btnrow' }, [
-          live ? soonBtn('co.edit', { small: true }) : h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { companyDialog(c); } }, t('co.edit')),
+          h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { companyDialog(c); } }, t('co.edit')),
           cur ? null : h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { switchCompany(c.id); } }, t('co.switch'))
         ])
       ]);
     })) : h('p', {}, t('co.none.text'));
     return [h('p', { class: 'ads-note' }, t(live ? 'co.live' : 'co.note')), items,
-      h('div', { class: 'ads-btnrow' }, [live ? soonBtn('co.add') : h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { companyDialog(null); } }, t('co.add'))])];
+      h('div', { class: 'ads-btnrow' }, [h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { companyDialog(null); } }, t('co.add'))])];
   }
   function roleOptions() { return api.workspaceRules.roles.map(function (r) { return [r, 'role.' + r, 'role.' + r + '.d']; }); }
   // Invite (m = null) or change a member's role and companies. Resolves true when saved.
   function memberDialog(m) {
-    if (liveMode()) { toast(t('co.err.live'), 'info'); return Promise.resolve(false); }
     var ok = false, role = m ? m.role : 'viewer', err = formError();
     var email = h('input', { type: 'email', id: 'ads-tm-email', class: 'ads-input', maxlength: '200', autocomplete: 'off', spellcheck: 'false', value: m ? m.email : '', disabled: !!m });
     var cos = settings.businesses.length
@@ -3770,7 +3815,7 @@
         var d = { email: email.value, role: role, companies: cos.values ? cos.values() : [] };
         return (m ? api.updateMember(m.id, d) : api.inviteMember(d)).then(function (x) {
           ok = true;
-          toast(t(m ? 'team.saved' : 'team.sentSample', { email: x.email }), 'info');
+          toast(t(m ? 'team.saved' : liveMode() ? 'team.sentLive' : 'team.sentSample', { email: x.email || email.value }), 'info');
         }, function (e) { showFormError(err, e); if (!m) email.focus(); return false; });
       },
       onOpen: function () { if (!m) email.focus(); }
@@ -3778,10 +3823,15 @@
   }
   function teamCard() {
     var live = liveMode(), box = h('div', {}, skeleton(2));
-    var invite = live ? soonBtn('team.invite') : h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { memberDialog(null).then(function (ok) { if (ok) load(); }); } }, t('team.invite'));
+    var invite = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { memberDialog(null).then(function (ok) { if (ok) load(); }); } }, t('team.invite'));
     function scope(m) { return m.companies.length ? m.companies.map(bizName).join(', ') : t('team.allCos'); }
     function load() {
-      api.listMembers().then(draw, function () { box.innerHTML = ''; box.appendChild(errorState(load)); });
+      api.listMembers().then(draw, function (e) {
+        box.innerHTML = '';
+        // Only Admins for all companies manage the team (0039); others see a plain note.
+        if (e && e.key === 'team.err.notAllowed') { invite.hidden = true; box.appendChild(h('p', { class: 'ads-note' }, t('team.onlyAdmins'))); return; }
+        box.appendChild(errorState(load));
+      });
     }
     function draw(list) {
       box.innerHTML = '';
@@ -3811,6 +3861,8 @@
 
   /* ---- Approvals board (D-52): Waiting for approval / Approved / Running, posts and campaigns ---- */
   var apKind = 'all';
+  var access = null;     // { role, allCompanies, companies } of the signed-in person (live: ads_my_access, 0039)
+  var goalsCache = [];   // post goals, loaded at start and after edits in Settings
   function viewApprovals(tok) {
     var body = h('div', {}, skeleton(3));
     var kinds = ['all', 'post', 'campaign'].map(function (k) {
@@ -4047,6 +4099,167 @@
     }).then(function () { return saved || b || null; });
   }
 
+  /* ---- Post goals (13 Nov 2026, owner): what a post is for; the AI writes the text from it later ---- */
+  function goalName(g) { return AdsI18n.lang() === 'ka' && g.name_ka ? g.name_ka : g.name; }
+  function goalsCard() {
+    var box = h('div', {});
+    function draw() {
+      box.innerHTML = '';
+      if (!goalsCache.length) box.appendChild(h('p', { class: 'ads-note' }, t('goal.none')));
+      else {
+        box.appendChild(h('ul', { class: 'ads-goals' }, goalsCache.map(function (g) {
+          return h('li', { class: 'ads-goal' }, [
+            h('div', { class: 'ads-goal__head' }, [h('span', { class: 'ads-goal__code' }, g.id), h('strong', {}, goalName(g))]),
+            h('p', { class: 'ads-goal__text' }, g.description),
+            h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [
+              h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { goalDialog(g).then(function (x) { if (x) reload(); }); } }, t('goal.edit')),
+              h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost ads-btn--small', onclick: function () {
+                confirmDialog({ title: t('goal.delete'), message: t('goal.deleteQ', { name: g.id + ' · ' + goalName(g) }), confirmLabel: t('goal.deleteYes'), danger: true }).then(function (yes) {
+                  if (!yes) return;
+                  api.deleteGoal(g.id).then(reload, function (e) { toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+                });
+              } }, t('goal.delete'))
+            ])
+          ]);
+        })));
+      }
+    }
+    function reload() { return api.listGoals().then(function (list) { goalsCache = list; draw(); }); }
+    draw();
+    return [h('p', { class: 'ads-note' }, t('goal.intro')), liveMode() ? h('p', { class: 'ads-warn' }, t('goal.sample')) : null, box,
+      h('div', { class: 'ads-btnrow' }, [h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { goalDialog(null).then(function (x) { if (x) reload(); }); } }, t('goal.add'))])];
+  }
+  function goalDialog(g) {
+    var R = api.goalRules, saved = null, err = formError();
+    var name = h('input', { type: 'text', id: 'ads-goal-name', class: 'ads-input', maxlength: '60', value: g ? g.name : '' });
+    var nameKa = h('input', { type: 'text', id: 'ads-goal-ka', class: 'ads-input', maxlength: '60', value: g ? g.name_ka || '' : '' });
+    var desc = textArea('ads-goal-desc', g ? g.description : '', R.textMax, 3), tpl = textArea('ads-goal-tpl', g ? g.template_ka || '' : '', R.textMax, 3);
+    return openDialog({
+      title: g ? t('goal.editTitle', { code: g.id }) : t('goal.addTitle'), wide: true,
+      body: h('div', { class: 'ads-coform' }, [
+        h('div', { class: 'ads-row' }, [field('goal.f.name', name, null, 'ads-goal-name'), field('goal.f.nameKa', nameKa, null, 'ads-goal-ka')]),
+        field('goal.f.desc', desc, t('goal.f.desc.hint'), 'ads-goal-desc'),
+        field('goal.f.tpl', tpl, t('goal.f.tpl.hint'), 'ads-goal-tpl'),
+        err]),
+      actions: [{ value: 'save', label: t('goal.save') }],
+      onAction: function () {
+        err.hidden = true;
+        return api.saveGoal({ id: g ? g.id : null, name: name.value, name_ka: nameKa.value, description: desc.value, template_ka: tpl.value })
+          .then(function (x) { saved = x; toast(t('goal.saved', { code: x.id }), 'info'); }, function (e) { showFormError(err, e); return false; });
+      },
+      onOpen: function () { name.focus(); }
+    }).then(function () { return saved; });
+  }
+
+  /* ---- Messaging (13 Nov 2026, owner): Facebook Messenger, Instagram and WhatsApp in one place.
+         SAMPLE conversations until the channels are connected (plan ADS-43 / ADS-44; research notes
+         docs\research\ads-messaging-history-2026-11-13.md, ads-whatsapp-2026-11-13.md). ---- */
+  var MSG_CHANNELS = ['messenger', 'instagram', 'whatsapp'];
+  var msgChannel = 'all', msgStatus = 'open', msgOpen = null;
+  function viewMessaging(tok) {
+    var live = liveMode(), cache = [];
+    var listBox = h('div', { class: 'ads-inbox__list', 'aria-label': t('msg.list') });
+    var threadBox = h('div', { class: 'ads-inbox__thread', 'aria-live': 'polite' });
+    function chipRow(keys, cur, label, onPick) {
+      var btns = keys.map(function (k) {
+        return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === cur()), onclick: function () {
+          onPick(k); btns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(keys[i] === cur())); }); drawList();
+        } }, label(k));
+      });
+      return btns;
+    }
+    var chanBtns = chipRow(['all'].concat(MSG_CHANNELS), function () { return msgChannel; },
+      function (k) { return k === 'all' ? t('common.all') : t('msg.ch.' + k); }, function (k) { msgChannel = k; });
+    var statBtns = chipRow(['open', 'done', 'all'], function () { return msgStatus; },
+      function (k) { return t('msg.st.' + k); }, function (k) { msgStatus = k; });
+    var cards = h('div', { class: 'ads-msgch' }, MSG_CHANNELS.map(function (k) {
+      return h('div', { class: 'ads-msgch__card' }, [
+        h('div', { class: 'ads-msgch__head' }, [h('strong', {}, t('msg.ch.' + k)), pill(t('msg.notConnected'), 'off')]),
+        h('p', { class: 'ads-sub' }, t('msg.how.' + k)),
+        soonBtn('msg.connect', { small: true })
+      ]);
+    }));
+    render(h('div', {}, [
+      pageHead('msg.nav'),
+      h('p', { class: 'ads-note' }, t('msg.intro', { name: bizName(ctx.business) })),
+      h('p', { class: 'ads-warn' }, t(live ? 'msg.liveNote' : 'msg.sampleNote')),
+      cards,
+      h('div', { class: 'ads-filters' }, [
+        h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('msg.channel') }, chanBtns),
+        h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('msg.status') }, statBtns)]),
+      h('div', { class: 'ads-inbox' }, [listBox, threadBox])
+    ]), 'msg.nav');
+    load();
+    function load() {
+      api.listConversations(ctx.business).then(function (list) {
+        if (stale(tok)) return;
+        cache = list;
+        drawList();
+        if (msgOpen && cache.some(function (c) { return c.id === msgOpen; })) openThread(msgOpen); else drawEmptyThread();
+      }, function () { if (!stale(tok)) { listBox.innerHTML = ''; listBox.appendChild(errorState(load)); } });
+    }
+    function shown() {
+      return cache.filter(function (c) {
+        return (msgChannel === 'all' || c.channel === msgChannel) && (msgStatus === 'all' || c.status === msgStatus);
+      });
+    }
+    function drawList() {
+      var list = shown();
+      listBox.innerHTML = '';
+      if (!list.length) { listBox.appendChild(h('p', { class: 'ads-note' }, t(live ? 'msg.none.live' : 'msg.none'))); return; }
+      listBox.appendChild(h('ul', { class: 'ads-inbox__items' }, list.map(function (c) {
+        var last = c.messages[c.messages.length - 1] || { text: '', from: 'them' };
+        return h('li', {}, h('button', { type: 'button', class: 'ads-inbox__item' + (c.id === msgOpen ? ' is-open' : ''), 'aria-current': c.id === msgOpen ? 'true' : null,
+          onclick: function () { msgOpen = c.id; drawList(); openThread(c.id); } }, [
+          h('span', { class: 'ads-inbox__top' }, [h('strong', { class: 'ads-inbox__name' }, c.name),
+            c.unread ? h('span', { class: 'ads-inbox__unread', title: t('msg.unread', { n: c.unread }) }, String(c.unread)) : null]),
+          h('span', { class: 'ads-inbox__meta' }, [pill(t('msg.ch.' + c.channel), 'ch-' + c.channel), h('span', { class: 'ads-sub' }, fmtDateTime(c.at))]),
+          h('span', { class: 'ads-inbox__last' }, (last.from === 'us' ? t('msg.you') + ': ' : '') + last.text)
+        ]));
+      })));
+    }
+    function drawEmptyThread() {
+      threadBox.innerHTML = '';
+      threadBox.appendChild(h('p', { class: 'ads-note ads-inbox__pick' }, t(cache.length ? 'msg.pick' : live ? 'msg.none.live' : 'msg.none')));
+    }
+    function openThread(id) {
+      api.openConversation(id).then(function (c) {
+        if (stale(tok)) return;
+        cache.forEach(function (x) { if (x.id === id) x.unread = 0; });
+        drawList();
+        threadBox.innerHTML = '';
+        var msgs = h('ol', { class: 'ads-thread' }, c.messages.map(bubble));
+        var box = textArea('ads-msg-reply', '', api.msgRules.textMax, 3);
+        var send = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
+          send.disabled = true;
+          api.replyConversation(c.id, box.value).then(function (m) {
+            send.disabled = false;
+            if (stale(tok)) return;
+            msgs.appendChild(bubble(m)); box.value = ''; box.focus();
+            cache.forEach(function (x) { if (x.id === c.id) { x.messages.push(m); x.at = m.at; } });
+            drawList();
+            toast(t('msg.sentSample'), 'info');
+          }, function (e) { send.disabled = false; toast(errText(e) || t('toast.failed'), 'act'); });
+        } }, t('msg.send'));
+        var done = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () {
+          api.setConversationStatus(c.id, c.status === 'done' ? 'open' : 'done').then(function () { load(); });
+        } }, t(c.status === 'done' ? 'msg.reopen' : 'msg.done'));
+        append(threadBox, [
+          h('div', { class: 'ads-thread__head' }, [h('h2', { class: 'ads-h2' }, c.name), pill(t('msg.ch.' + c.channel), 'ch-' + c.channel), done]),
+          msgs,
+          h('div', { class: 'ads-thread__reply' }, [h('label', { class: 'ads-label', for: 'ads-msg-reply' }, t('msg.reply')), box,
+            h('p', { class: 'ads-hint' }, t('msg.window')), h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [send])])
+        ]);
+      }, function () { drawEmptyThread(); });
+    }
+    function bubble(m) {
+      return h('li', { class: 'ads-bubble ads-bubble--' + (m.from === 'us' ? 'us' : 'them') }, [
+        h('p', { class: 'ads-bubble__text' }, m.text),
+        h('span', { class: 'ads-bubble__at' }, fmtDateTime(m.at) + (m.sample ? ' · ' + t('msg.notSent') : ''))
+      ]);
+    }
+  }
+
   /* ---------------------------------------------------------------------
      13. Top bar, language, user menu
      --------------------------------------------------------------------- */
@@ -4059,10 +4272,15 @@
   function buildTopbar() {
     syncSideToggle();
     var biz = $('#ads-biz'), acc = $('#ads-account'), live = liveMode();
+    // Viewers and Approvers see their role next to the mode badge (the database refuses what they may not do).
+    var rp = $('#ads-role');
+    if (!rp) { rp = h('span', { id: 'ads-role', class: 'ads-badge ads-badge--role' }); $('#ads-badge').insertAdjacentElement('afterend', rp); }
+    rp.hidden = !access || access.role === 'admin';
+    rp.textContent = access && access.role !== 'admin' ? t('role.badge.' + access.role) : '';
     biz.innerHTML = '';
     if (!settings.businesses.length) biz.appendChild(h('option', { value: '' }, t('co.noneYet')));
     settings.businesses.forEach(function (b) { biz.appendChild(h('option', { value: b.id }, b.name)); });
-    if (!live) biz.appendChild(h('option', { value: '__add' }, t('co.addOption'))); // sample mode until ADS-37
+    if (!access || (access.role === 'admin' && access.allCompanies)) biz.appendChild(h('option', { value: '__add' }, t('co.addOption')));
     biz.value = ctx.business || '';
     fillAccounts();
     $('#ads-user-email').textContent = user ? user.email : '';
@@ -4198,9 +4416,11 @@
       return api.getSettings();
     });
     // Archived pictures too, so posts that use one still show it until it is deleted.
-    Promise.all([settingsP, api.listImages(undefined, { archived: true })]).then(function (r) {
+    Promise.all([settingsP, api.listImages(undefined, { archived: true }), api.myAccess().catch(function () { return null; }), api.listGoals()]).then(function (r) {
       settings = r[0];
       cacheImages(r[1]);
+      access = r[2] || { role: 'admin', allCompanies: true, companies: [] };
+      goalsCache = r[3] || [];
       main = $('#ads-main'); shell = $('#ads-shell'); scrim = $('#ads-scrim'); toastBox = $('#ads-toasts'); sidebar = $('#ads-sidebar'); assistant = $('#ads-assistant');
       loadCtx(); buildNav(); buildTopbar(); buildAssistant(); wireShell(); wireFeedback();
       $('#ads-gate').hidden = true; $('#ads-app').hidden = false;
@@ -4223,8 +4443,9 @@
       var s = res && res.data && res.data.session;
       if (res.error) return showGate('error');
       if (!s) return showGate('login');
-      // Members only (fail closed): signed-in people without a role see "No access".
-      return client.rpc('ads_is_member').then(function (m) {
+      // Members only (fail closed): signed-in people without a role see "No access". Invitations for this
+      // e-mail become memberships first (0039); every role gets in (Viewers see, Admins change).
+      return api.acceptInvites().then(function () { return client.rpc('ads_has_access'); }).then(function (m) {
         if (m.error) return showGate('error');
         if (m.data !== true) return showGate('denied');
         start(s);

@@ -122,18 +122,15 @@
   function loadLive() {
     if (!client) return Promise.reject(new Error('no client'));
     return Promise.all([
-      client.from('ads_businesses').select('id,name,page_id,ad_account_id,currency,active').order('created_at', { ascending: true }),
+      client.from('ads_businesses').select('id,name,page_id,ad_account_id,currency,active,about,goal,channels,tools,work_type,inbox_demo,created_at').order('created_at', { ascending: true }),
       client.from('ads_settings').select('max_daily_budget_minor,max_total_budget_minor,max_days,currency').eq('id', true).maybeSingle()
     ]).then(function (r) {
       if (r[0].error || r[1].error) throw new Error('live read failed');
       var rows = (r[0].data || []).filter(function (b) { return b.active; });
       var cap = r[1].data;
-      if (!rows.length || !cap) throw new Error('no live businesses or caps');
+      if (!cap) throw new Error('no live caps');
       return {
-        businesses: rows.map(function (b) {
-          return { id: b.id, name: b.name, currency: b.currency, pageId: b.page_id,
-            accounts: [{ id: b.ad_account_id, name: b.name + ' (' + b.ad_account_id + ')' }] };
-        }),
+        businesses: rows.map(liveCompany),
         limits: {
           minDailyBudget: 0.01, maxDailyBudget: cap.max_daily_budget_minor / 100,
           maxTotalBudget: cap.max_total_budget_minor / 100, maxDays: cap.max_days
@@ -142,11 +139,19 @@
       };
     });
   }
+  // A company row of ads_businesses (0039: profile columns; the Meta ad account may be missing) in the UI shape.
+  function liveCompany(b) {
+    return { id: b.id, name: b.name, currency: b.currency || null, pageId: b.page_id || null,
+      accounts: b.ad_account_id ? [{ id: b.ad_account_id, name: b.name + ' (' + b.ad_account_id + ')' }] : [],
+      about: b.about || '', goal: b.goal || '', channels: b.channels || [], tools: b.tools || [], workType: b.work_type || '',
+      inbox: !!b.inbox_demo, createdAt: b.created_at || null };
+  }
   // Calls an Edge Function. Always resolves with the parsed JSON body, also for
   // error statuses ({ ok:false, error:{ code, message } }); rejects only when offline.
   function callFn(name, body) {
     if (!client) return Promise.reject(new Error('no client'));
-    return client.functions.invoke(name, { body: body }).then(function (r) {
+    // Wrapped, so that even an error thrown at once becomes a rejection the screens can show.
+    return Promise.resolve().then(function () { return client.functions.invoke(name, { body: body }); }).then(function (r) {
       if (!r.error) return r.data;
       var res = r.error.context;
       if (res && typeof res.json === 'function') {
@@ -189,17 +194,18 @@
   var ready = null;
   function init() {
     if (ready) return ready;
-    var names = ['settings', 'products', 'images', 'insights', 'campaigns', 'posts', 'audit', 'workspace'];
+    var names = ['settings', 'products', 'images', 'insights', 'campaigns', 'posts', 'audit', 'workspace', 'goals-inbox'];
     ready = Promise.all(names.map(fetchJson)).then(function (d) {
-      fixed = { settings: d[0], products: d[1], images: d[2], insights: d[3], workspace: d[7] };
+      fixed = { settings: d[0], products: d[1], images: d[2], insights: d[3], workspace: d[7], extra: d[8] };
       var stored = lsGet();
       if (stored && stored.campaigns && stored.posts && stored.audit) {
         state = stored;
         if (!state.stock) state.stock = []; // demo states saved before 6 Nov 2026
         state.posts.forEach(normPost);      // ... and posts saved with one product / one picture
         if (!state.ws) { state.ws = seedWorkspace(d[7]); save(); } // ... and before the companies (11 Nov 2026)
+        if (!state.ws.goals || !state.ws.inbox) { fillWorkspace(state.ws); save(); } // ... and before goals / messaging (13 Nov 2026)
       } else {
-        state = { campaigns: seedCampaigns(d[4]), posts: seedPosts(d[5]), audit: seedAudit(d[6]), stock: [], ws: seedWorkspace(d[7]) };
+        state = { campaigns: seedCampaigns(d[4]), posts: seedPosts(d[5]), audit: seedAudit(d[6]), stock: [], ws: fillWorkspace(seedWorkspace(d[7])) };
         save();
       }
     });
@@ -492,10 +498,10 @@
       var p = d.id ? state.posts.filter(function (x) { return x.id === d.id; })[0] : null;
       if (p) {
         if (p.status !== 'draft') throw new Error('only drafts can be edited');
-        p.productIds = prods; p.caption = d.caption; p.imageIds = imgs;
+        p.productIds = prods; p.caption = d.caption; p.imageIds = imgs; p.goalId = d.goalId || null;
         audit('post.saved', 'post', p.id, 'draft updated | ' + prods.length + ' product(s), ' + imgs.length + ' picture(s)');
       } else {
-        p = { id: newId('post'), business: d.business, status: 'draft', productIds: prods, caption: d.caption, imageIds: imgs };
+        p = { id: newId('post'), business: d.business, status: 'draft', productIds: prods, caption: d.caption, imageIds: imgs, goalId: d.goalId || null };
         state.posts.unshift(p);
         audit('post.created', 'post', p.id, 'draft created' + (via ? ' | via ' + via : ''));
       }
@@ -579,8 +585,18 @@
 
   // Create (no id) or update a company. d: { id?, name, about, goal, channels, tools, workType, inbox }.
   function saveCompany(d) {
-    var stop = sampleOnly(); if (stop) return stop;
     d = d || {};
+    if (isLive()) {
+      return init().then(function () {
+        return client.rpc('ads_save_company', { p_id: d.id || null, p_name: d.name || '', p_about: d.about || '', p_goal: d.goal || '',
+          p_channels: only(d.channels, CHANNELS), p_tools: only(d.tools, WORK_TOOLS), p_work_type: d.workType || null, p_inbox: !!d.inbox });
+      }).then(function (r) {
+        if (r.error) throw rpcError(r.error, { name: textOf(d.name, 80) });
+        var c = r.data;
+        return companyItem(liveCompany({ id: c.id, name: c.name, about: c.about, goal: c.goal, channels: c.channels, tools: c.tools,
+          work_type: c.work_type, inbox_demo: c.inbox_demo, ad_account_id: c.ad_account_id, currency: c.currency, page_id: c.page_id, created_at: c.created_at }));
+      });
+    }
     return init().then(function () {
       var name = textOf(d.name, 80).replace(/\s+/g, ' ');
       if (!name) throw codeError('co.err.name');
@@ -626,8 +642,39 @@
   // status (invited | active), addedAt, me }.
   function listMembers() {
     return init().then(function () {
+      if (isLive()) {
+        return client.rpc('ads_team').then(function (r) {
+          if (r.error) throw rpcError(r.error);
+          var t = r.data || {};
+          return (t.members || []).map(function (m) {
+            return { id: m.user_id, email: m.email || '', role: m.role, companies: m.all_companies ? [] : (m.companies || []), status: 'active', addedAt: m.added_at, me: !!m.me };
+          }).concat((t.invites || []).map(function (i) {
+            return { id: 'inv:' + i.id, email: i.email, role: i.role, companies: i.companies || [], status: 'invited', addedAt: i.invited_at, me: false };
+          }));
+        });
+      }
       var me = { id: 'me', email: actor, role: 'admin', companies: [], status: 'active', addedAt: null, me: true };
-      return wait([me].concat(isLive() ? [] : state.ws.members));
+      return wait([me].concat(state.ws.members));
+    });
+  }
+  // Database answers (0039) as i18n keys the screens show. vars: extra text for the message.
+  function rpcError(e, vars) {
+    var m = String((e && e.message) || ''), k = null;
+    if (/bad_email/.test(m)) k = 'team.err.email';
+    else if (/bad_role/.test(m)) k = 'team.err.role';
+    else if (/already_member/.test(m)) k = 'team.err.exists';
+    else if (/last_admin/.test(m)) k = 'team.err.lastAdmin';
+    else if (/unknown company/.test(m)) k = 'co.err.gone';
+    else if (/unknown (member|invitation)/.test(m)) k = 'team.err.gone';
+    else if (/name_required/.test(m)) k = 'co.err.name';
+    else if (/name_taken/.test(m)) k = 'co.err.taken';
+    else if (/not allowed/.test(m) || (e && e.code === '42501')) k = 'team.err.notAllowed';
+    return k ? codeError(k, vars || {}) : new Error(m || 'request failed');
+  }
+  function liveRpc(name, args, vars) {
+    return init().then(function () { return client.rpc(name, args); }).then(function (r) {
+      if (r.error) throw rpcError(r.error, vars);
+      return r.data;
     });
   }
   function checkMember(d, selfId) {
@@ -638,8 +685,12 @@
     return { role: role, companies: cos };
   }
   function inviteMember(d) {
-    var stop = sampleOnly(); if (stop) return stop;
     d = d || {};
+    if (isLive()) {
+      var em = textOf(d.email, 200).toLowerCase();
+      return liveRpc('ads_invite', { p_email: em, p_role: d.role, p_companies: idList(d.companies) }, { email: em })
+        .then(function (id) { return { id: 'inv:' + id, email: em, role: d.role, companies: idList(d.companies), status: 'invited' }; });
+    }
     return init().then(function () {
       var email = textOf(d.email, 200).toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw codeError('team.err.email');
@@ -653,7 +704,13 @@
     });
   }
   function updateMember(id, d) {
-    var stop = sampleOnly(); if (stop) return stop;
+    d = d || {};
+    if (isLive()) {
+      // An open invitation is changed by inviting the same e-mail again (the database replaces it).
+      if (String(id).indexOf('inv:') === 0) return inviteMember(d);
+      return liveRpc('ads_member_set', { p_user: id, p_role: d.role, p_companies: idList(d.companies) })
+        .then(function () { return { id: id, email: d.email, role: d.role, companies: idList(d.companies) }; });
+    }
     return init().then(function () {
       var m = state.ws.members.filter(function (x) { return x.id === id; })[0];
       if (!m) throw codeError('team.err.gone');
@@ -665,7 +722,11 @@
     });
   }
   function removeMember(id) {
-    var stop = sampleOnly(); if (stop) return stop;
+    if (isLive()) {
+      return String(id).indexOf('inv:') === 0
+        ? liveRpc('ads_invite_cancel', { p_id: String(id).slice(4) }).then(function () { return { ok: true }; })
+        : liveRpc('ads_member_remove', { p_user: id }).then(function () { return { ok: true }; });
+    }
     return init().then(function () {
       var i = state.ws.members.findIndex(function (x) { return x.id === id; });
       if (i === -1) throw codeError('team.err.gone');
@@ -673,6 +734,118 @@
       audit('member.removed', 'member', m.id, m.email);
       save();
       return wait({ ok: true });
+    });
+  }
+
+  // The signed-in person's role here: live from ads_my_access() (0039), sample mode = Admin of everything.
+  // Resolves with { role, allCompanies, companies } (or null when live and not a member).
+  function myAccess() {
+    return init().then(function () {
+      if (!isLive()) return { role: 'admin', allCompanies: true, companies: [] };
+      return client.rpc('ads_my_access').then(function (r) {
+        var a = r && !r.error && Array.isArray(r.data) ? r.data[0] : null;
+        return a ? { role: a.role, allCompanies: !!a.all_companies, companies: a.companies || [] } : null;
+      });
+    });
+  }
+  // Invitations for the signed-in e-mail become memberships (0039). Never blocks the start.
+  function acceptInvites() {
+    if (!client) return Promise.resolve(0);
+    return client.rpc('ads_accept_invites').then(function (r) { return r && !r.error ? r.data : 0; }, function () { return 0; });
+  }
+
+  // Post goals (13 Nov 2026, owner: D1 Sell, D2 Stock replenishment ...). The goal's description tells
+  // the AI what the post is for; until the AI text exists (ADS-08) the goal's Georgian template fills
+  // a draft. Kept in the demo state in BOTH modes until the database update; the screens say so.
+  // Goal: { id ('D1'), name, name_ka, description, template_ka }.
+  var GOAL_TEXT_MAX = 600;
+  function fillWorkspace(ws) {
+    var x = fixed.extra || {};
+    if (!ws.goals) ws.goals = (x.goals || []).map(function (g) { return Object.assign({}, g); });
+    if (!ws.inbox) {
+      var now = Date.now();
+      ws.inbox = (x.conversations || []).map(function (c) {
+        return { id: c.id, business: c.business, channel: c.channel, name: c.name, status: c.status, unread: c.unread || 0, sample: true,
+          at: new Date(now - (c.minutesAgo || 0) * 60000).toISOString(),
+          messages: (c.messages || []).map(function (m) { return { from: m.from, text: m.text, at: new Date(now - (m.minutesAgo || 0) * 60000).toISOString() }; }) };
+      });
+    }
+    return ws;
+  }
+  function listGoals() { return init().then(function () { return wait(state.ws.goals); }); }
+  function saveGoal(d) {
+    d = d || {};
+    return init().then(function () {
+      var name = textOf(d.name, 60).replace(/\s+/g, ' ');
+      if (!name) throw codeError('goal.err.name');
+      var fields = { name: name, name_ka: textOf(d.name_ka, 60), description: textOf(d.description, GOAL_TEXT_MAX), template_ka: textOf(d.template_ka, GOAL_TEXT_MAX) };
+      if (!fields.description) throw codeError('goal.err.description');
+      var g = d.id ? state.ws.goals.filter(function (x) { return x.id === d.id; })[0] : null;
+      if (d.id && !g) throw codeError('goal.err.gone');
+      if (g) { Object.assign(g, fields); audit('goal.updated', 'goal', g.id, name); }
+      else {
+        var n = 1;
+        while (state.ws.goals.some(function (x) { return x.id === 'D' + n; })) n++;
+        g = Object.assign({ id: 'D' + n }, fields);
+        state.ws.goals.push(g);
+        audit('goal.created', 'goal', g.id, name);
+      }
+      save();
+      return wait(g);
+    });
+  }
+  function deleteGoal(id) {
+    return init().then(function () {
+      var i = state.ws.goals.findIndex(function (x) { return x.id === id; });
+      if (i === -1) throw codeError('goal.err.gone');
+      audit('goal.deleted', 'goal', id, state.ws.goals[i].name);
+      state.ws.goals.splice(i, 1);
+      save();
+      return wait({ ok: true });
+    });
+  }
+
+  // Messaging (13 Nov 2026): Facebook Messenger, Instagram and WhatsApp conversations of a company.
+  // SAMPLE conversations only: nothing is connected or sent yet (plan: research notes 13 Nov). Live mode
+  // has no conversations until the channels are connected. Conversation: { id, business, channel
+  // ('messenger' | 'instagram' | 'whatsapp'), name, status ('open' | 'done'), unread, at, messages: [{ from
+  // ('them' | 'us'), text, at }] }.
+  var MSG_MAX = 1000;
+  function listConversations(b) {
+    return init().then(function () {
+      if (isLive()) return wait([]);
+      return wait(state.ws.inbox.filter(function (c) { return !b || c.business === b; })
+        .sort(function (x, y) { return Date.parse(y.at) - Date.parse(x.at); }));
+    });
+  }
+  function convById(id) { return state.ws.inbox.filter(function (c) { return c.id === id; })[0] || null; }
+  // Opening a conversation marks it read.
+  function openConversation(id) {
+    return init().then(function () {
+      var c = convById(id); if (!c) throw codeError('msg.err.gone');
+      if (c.unread) { c.unread = 0; save(); }
+      return wait(c);
+    });
+  }
+  function replyConversation(id, text) {
+    var stop = sampleOnly(); if (stop) return stop;
+    return init().then(function () {
+      var c = convById(id); if (!c) throw codeError('msg.err.gone');
+      var body = textOf(text, MSG_MAX);
+      if (!body) throw codeError('msg.err.empty');
+      var m = { from: 'us', text: body, at: new Date().toISOString(), sample: true };
+      c.messages.push(m); c.at = m.at;
+      audit('message.reply', 'conversation', c.id, c.channel + ' | ' + body.slice(0, 60) + ' | (SAMPLE: nothing was sent)');
+      save();
+      return wait(m);
+    });
+  }
+  function setConversationStatus(id, status) {
+    return init().then(function () {
+      var c = convById(id); if (!c) throw codeError('msg.err.gone');
+      c.status = status === 'done' ? 'done' : 'open';
+      save();
+      return wait(c);
     });
   }
 
@@ -1469,6 +1642,11 @@
     saveCompany: saveCompany, skipOnboarding: skipOnboarding, startEmptyWorkspace: startEmptyWorkspace,
     listMembers: listMembers, inviteMember: inviteMember, updateMember: updateMember, removeMember: removeMember,
     listBrands: listBrands, saveBrand: saveBrand, deleteBrand: deleteBrand, addBrandFeedback: addBrandFeedback,
-    listApprovals: listApprovals, approveItem: approveItem, sendBack: sendBack
+    listApprovals: listApprovals, approveItem: approveItem, sendBack: sendBack,
+    // Live team + companies (0039), post goals and Messaging (13 Nov 2026)
+    myAccess: myAccess, acceptInvites: acceptInvites,
+    goalRules: { textMax: GOAL_TEXT_MAX }, listGoals: listGoals, saveGoal: saveGoal, deleteGoal: deleteGoal,
+    msgRules: { textMax: MSG_MAX }, listConversations: listConversations, openConversation: openConversation,
+    replyConversation: replyConversation, setConversationStatus: setConversationStatus
   };
 })();

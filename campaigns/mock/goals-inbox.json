@@ -1,0 +1,45 @@
+{
+  "_note": "MOCK DATA - post goals (13 Nov 2026, owner's D1 + D2, the rest written by C4) and sample conversations for the Messaging section. Georgian texts machine-written, not proofread. Not real people.",
+  "goals": [
+    { "id": "D1", "name": "Sell", "name_ka": "გაყიდვა",
+      "description": "I am posting several products that are in stock and selling well. The text should catch people's attention and make them buy. Short.",
+      "template_ka": "{product} — {price} ₾. პოპულარული არჩევანი, მარაგი შეზღუდულია. შეკვეთისთვის მოგვწერეთ!" },
+    { "id": "D2", "name": "Stock replenishment", "name_ka": "მარაგის შევსება",
+      "description": "Products that were out of stock or in high demand are available again. Tell customers the stock is here.",
+      "template_ka": "{product} ისევ მარაგშია! ფასი: {price} ₾. შეკვეთისთვის მოგვწერეთ." },
+    { "id": "D3", "name": "New arrival", "name_ka": "სიახლე",
+      "description": "A product we did not have before. Introduce it: what it is, who it is for, the price.",
+      "template_ka": "სიახლე ჩვენთან: {product}. ფასი: {price} ₾. დეტალებისთვის მოგვწერეთ." },
+    { "id": "D4", "name": "Offer or discount", "name_ka": "შეთავაზება",
+      "description": "A lower price or a special offer for a limited time. Say the price or the condition and until when it lasts.",
+      "template_ka": "შეთავაზება: {product} — {price} ₾. შეთავაზება მოქმედებს მარაგის ამოწურვამდე." },
+    { "id": "D5", "name": "Season or holiday", "name_ka": "სეზონი ან დღესასწაული",
+      "description": "A post tied to a season or a holiday (winter, New Year, school, summer): which products fit and why now.",
+      "template_ka": "სეზონის რჩევა: {product} — {price} ₾. მოგვწერეთ და დაგეხმარებით არჩევაში." },
+    { "id": "D6", "name": "Advice and trust", "name_ka": "რჩევა და ნდობა",
+      "description": "Useful advice or an explanation without pushing to buy. Builds trust in the brand; mention the product gently.",
+      "template_ka": "რჩევა: როგორ შევარჩიოთ {product}? მოგვწერეთ და ჩვენი სპეციალისტი დაგეხმარებათ." }
+  ],
+  "conversations": [
+    { "id": "cv1", "business": "edelweiss", "channel": "messenger", "name": "Nino K. (sample)", "status": "open", "unread": 2, "minutesAgo": 6,
+      "messages": [
+        { "from": "them", "text": "გამარჯობა, ორადგილიანი ოთახი თავისუფალია 20 დეკემბრიდან?", "minutesAgo": 9 },
+        { "from": "them", "text": "და საუზმე შედის ფასში?", "minutesAgo": 6 } ] },
+    { "id": "cv2", "business": "edelweiss", "channel": "instagram", "name": "@mestia.walks (sample)", "status": "open", "unread": 1, "minutesAgo": 40,
+      "messages": [
+        { "from": "them", "text": "Hi! Do you organise guided valley walks this weekend?", "minutesAgo": 42 },
+        { "from": "us", "text": "Hello! Yes, Saturday at 10:00. How many people?", "minutesAgo": 41 },
+        { "from": "them", "text": "Two adults. What is the price?", "minutesAgo": 40 } ] },
+    { "id": "cv3", "business": "edelweiss", "channel": "whatsapp", "name": "+995 5•• •• 12 34 (sample)", "status": "done", "unread": 0, "minutesAgo": 1500,
+      "messages": [
+        { "from": "them", "text": "სპა საღამოზე ჯავშანი მინდა ხვალისთვის.", "minutesAgo": 1510 },
+        { "from": "us", "text": "დიახ, 19:00 თავისუფალია. დაგიჯავშნოთ?", "minutesAgo": 1505 },
+        { "from": "them", "text": "კი, მადლობა!", "minutesAgo": 1500 } ] },
+    { "id": "cv4", "business": "breeze", "channel": "instagram", "name": "@batumi.food (sample)", "status": "open", "unread": 1, "minutesAgo": 15,
+      "messages": [ { "from": "them", "text": "Is the sunset table free tonight for two?", "minutesAgo": 15 } ] },
+    { "id": "cv5", "business": "breeze", "channel": "whatsapp", "name": "+995 5•• •• 98 76 (sample)", "status": "open", "unread": 0, "minutesAgo": 300,
+      "messages": [
+        { "from": "them", "text": "ხუთშაბათს ზღვის პროდუქტების საღამოა?", "minutesAgo": 305 },
+        { "from": "us", "text": "დიახ, 19:00-დან. მაგიდა დაგიჯავშნოთ?", "minutesAgo": 300 } ] }
+  ]
+}

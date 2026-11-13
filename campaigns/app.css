@@ -684,6 +684,48 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-fblist { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .ads-fblist__item { border-left: 3px solid var(--partner); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 .ads-fblist__item p { margin: 0 0 var(--space-1); font-size: var(--type-body-sm); }
+/* Role badge for Viewers / Approvers (top bar), 13 Nov 2026 */
+.ads-badge--role { background: var(--watch); }
+/* Posts → On Facebook (the Page's own posts) */
+.ads-fbposts { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.ads-fbpost { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--space-3); background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-3); }
+.ads-fbpost__img { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: var(--type-caption); }
+.ads-fbpost__body { min-width: 0; }
+.ads-fbpost__text { margin: 0 0 var(--space-1); white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+/* Settings → Post goals */
+.ads-goals { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.ads-goal { border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+.ads-goal__head { display: flex; align-items: center; gap: var(--space-2); }
+.ads-goal__code { font-family: ui-monospace, monospace; font-size: var(--type-caption); padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--surface); }
+.ads-goal__text { margin: var(--space-2) 0 0; color: var(--ink-soft); font-size: var(--type-body-sm); }
+/* Messaging: channel cards, then conversations (list | thread) from 900px, stacked below */
+.ads-msgch { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: var(--space-3); margin: 0 0 var(--space-4); }
+.ads-msgch__card { background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-3); }
+.ads-msgch__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ads-msgch__card .ads-sub { display: block; margin: var(--space-2) 0; }
+.ads-chip--ch-messenger { --c: #0866ff; }
+.ads-chip--ch-instagram { --c: #c13584; }
+.ads-chip--ch-whatsapp { --c: #128c4b; }
+.ads-inbox { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); margin-top: var(--space-4); }
+@media (min-width: 900px) { .ads-inbox { grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); align-items: start; } }
+.ads-inbox__items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ads-inbox__item { display: grid; gap: var(--space-1); width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--surface-raised); border: 1px solid var(--rule); border-radius: var(--radius-md); padding: var(--space-3); }
+.ads-inbox__item:hover { border-color: var(--ink-soft); }
+.ads-inbox__item.is-open { border-color: var(--accent-deep); box-shadow: 0 0 0 1px var(--accent-deep); }
+.ads-inbox__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.ads-inbox__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ads-inbox__unread { min-width: 22px; padding: 0 var(--space-2); border-radius: 999px; background: var(--accent); color: var(--ink); font-size: var(--type-caption); font-weight: 600; text-align: center; }
+.ads-inbox__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ads-inbox__last { color: var(--ink-soft); font-size: var(--type-body-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ads-inbox__thread { background: var(--surface); border-radius: var(--radius-md); padding: var(--space-4); min-width: 0; }
+.ads-thread__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.ads-thread__head .ads-h2 { margin: 0; flex: 1 1 auto; }
+.ads-thread { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.ads-bubble { max-width: 80%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--surface-raised); border: 1px solid var(--rule); }
+.ads-bubble--us { align-self: flex-end; background: var(--partner); color: var(--bg); border-color: var(--partner); }
+.ads-bubble__text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.ads-bubble__at { display: block; margin-top: var(--space-1); font-size: var(--type-caption); opacity: .8; }
+.ads-thread__reply .ads-label { display: block; margin-bottom: var(--space-1); }
 
 /* -------------------------------------------------------------------------
    11. Skeleton loading
