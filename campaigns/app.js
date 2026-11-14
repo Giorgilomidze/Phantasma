@@ -4430,7 +4430,9 @@
     if (c === 'window_closed') return t('msg.err.window');
     if (c === 'meta_permission') return t('msg.err.permission');
     if (c === 'no_claude_key' || c === 'claude_key') return t('msg.err.claudeKey');
-    if (c === 'no_suggestion' || c === 'claude_busy' || c === 'claude_error' || c === 'claude_network') return t('msg.err.claude');
+    if (c === 'claude_credit') return t('msg.err.claudeCredit');
+    if (c === 'claude_error') return t('msg.err.claude') + ' ' + ((e && e.message) || ''); // Claude's own reason, from the server
+    if (c === 'no_suggestion' || c === 'claude_busy' || c === 'claude_network') return t('msg.err.claude');
     if (companyErrText(c)) return companyErrText(c);
     if (c === 'network') return t('srv.network');
     return (e && e.message) || t('toast.failed');
@@ -4497,6 +4499,7 @@
         chans = {};
         (rows || []).forEach(function (r) { if (r.status === 'on') chans[r.channel] = r; });
         drawCards();
+        if (!cache.length) { drawList(); if (!thread) drawEmptyThread(); }
       }, function () { /* the cards stay "Not connected" */ });
     }
     function connect(k, btn) {
@@ -4530,6 +4533,8 @@
         return (msgChannel === 'all' || c.channel === msgChannel) && (msgStatus === 'all' || c.status === msgStatus);
       });
     }
+    // Empty page: no channel yet, or connected and waiting for the first message (sample page: no conversations).
+    function emptyKey() { return !live ? 'msg.none' : Object.keys(chans).length ? 'msg.none.waiting' : 'msg.none.live'; }
     function personName(c) { return c.name || t('msg.customer', { id: String(c.participant || '').slice(-4) }); }
     function lastLine(c) {
       if (c.messages && c.messages.length) {
@@ -4541,7 +4546,7 @@
     function drawList() {
       var list = shown();
       listBox.innerHTML = '';
-      if (!list.length) { listBox.appendChild(h('p', { class: 'ads-note' }, t(live ? 'msg.none.live' : 'msg.none'))); return; }
+      if (!list.length) { listBox.appendChild(h('p', { class: 'ads-note' }, t(emptyKey()))); return; }
       listBox.appendChild(h('ul', { class: 'ads-inbox__items' }, list.map(function (c) {
         return h('li', {}, h('button', { type: 'button', class: 'ads-inbox__item' + (c.id === msgOpen ? ' is-open' : ''), 'aria-current': c.id === msgOpen ? 'true' : null,
           onclick: function () { msgOpen = c.id; drawList(); openThread(c.id); } }, [
@@ -4555,7 +4560,7 @@
     function drawEmptyThread() {
       thread = null;
       threadBox.innerHTML = '';
-      threadBox.appendChild(h('p', { class: 'ads-note ads-inbox__pick' }, t(cache.length ? 'msg.pick' : live ? 'msg.none.live' : 'msg.none')));
+      threadBox.appendChild(h('p', { class: 'ads-note ads-inbox__pick' }, t(cache.length ? 'msg.pick' : emptyKey())));
     }
     // Meta's reply window: 24 hours after the customer's last message (7 days after a message ad — Meta decides).
     function windowLine(c, el) {
