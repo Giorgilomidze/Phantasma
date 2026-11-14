@@ -4413,14 +4413,36 @@
   }
 
   /* ---- Messaging (13 Nov 2026, owner): Facebook Messenger, Instagram and WhatsApp in one place.
-         SAMPLE conversations until the channels are connected (plan ADS-43 / ADS-44; research notes
-         docs\research\ads-messaging-history-2026-11-13.md, ads-whatsapp-2026-11-13.md). ---- */
+         Live since 15 Nov 2026 (ADS-43; owner D-69 a, D-70 a): Messenger + Instagram for real. A company Admin
+         switches a channel on (its Page is subscribed to our Meta app); Meta then sends every new message to the
+         server function ads-meta-webhook. Claude suggests a reply, a person reads, edits and sends it; Admins and
+         Approvers of the company reply, Viewers read. WhatsApp later (ADS-44). Sample conversations only on the
+         local test page. Plan: Phantasma Library\workstreams\ads-messaging-plan-2026-11-13.md. ---- */
   var MSG_CHANNELS = ['messenger', 'instagram', 'whatsapp'];
+  var MSG_LIVE = ['messenger', 'instagram'];          // the channels that can be switched on today
+  var MSG_MAX_LIVE = { messenger: 2000, instagram: 1000 }; // Meta's limits per message
+  var MSG_POLL_MS = 15000;                            // new messages show up without a reload
   var msgChannel = 'all', msgStatus = 'open', msgOpen = null;
+  function msgRole() { return access ? access.role : 'admin'; }
+  // Plain words for a failed messaging call (server codes of ads-messages), else the server's own sentence.
+  function msgErrText(e) {
+    var c = e && e.code;
+    if (c === 'window_closed') return t('msg.err.window');
+    if (c === 'meta_permission') return t('msg.err.permission');
+    if (c === 'no_claude_key' || c === 'claude_key') return t('msg.err.claudeKey');
+    if (c === 'no_suggestion' || c === 'claude_busy' || c === 'claude_error' || c === 'claude_network') return t('msg.err.claude');
+    if (companyErrText(c)) return companyErrText(c);
+    if (c === 'network') return t('srv.network');
+    return (e && e.message) || t('toast.failed');
+  }
   function viewMessaging(tok) {
-    var live = liveMode(), cache = [];
+    var live = liveMode(), cache = [], chans = {}, thread = null;
+    var canReply = !live || msgRole() === 'admin' || msgRole() === 'approver'; // D-70 a
+    var canAdmin = !live || msgRole() === 'admin';
+    var biz = settings.businesses.filter(function (b) { return b.id === ctx.business; })[0] || null;
     var listBox = h('div', { class: 'ads-inbox__list', 'aria-label': t('msg.list') });
     var threadBox = h('div', { class: 'ads-inbox__thread', 'aria-live': 'polite' });
+    var cardsBox = h('div', { class: 'ads-msgch' });
     function chipRow(keys, cur, label, onPick) {
       var btns = keys.map(function (k) {
         return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === cur()), onclick: function () {
@@ -4433,56 +4455,119 @@
       function (k) { return k === 'all' ? t('common.all') : t('msg.ch.' + k); }, function (k) { msgChannel = k; });
     var statBtns = chipRow(['open', 'done', 'all'], function () { return msgStatus; },
       function (k) { return t('msg.st.' + k); }, function (k) { msgStatus = k; });
-    var cards = h('div', { class: 'ads-msgch' }, MSG_CHANNELS.map(function (k) {
-      return h('div', { class: 'ads-msgch__card' }, [
-        h('div', { class: 'ads-msgch__head' }, [h('strong', {}, t('msg.ch.' + k)), pill(t('msg.notConnected'), 'off')]),
-        h('p', { class: 'ads-sub' }, t('msg.how.' + k)),
-        soonBtn('msg.connect', { small: true })
-      ]);
-    }));
     render(h('div', {}, [
       pageHead('msg.nav'),
       h('p', { class: 'ads-note' }, t('msg.intro', { name: bizName(ctx.business) })),
       h('p', { class: 'ads-warn' }, t(live ? 'msg.liveNote' : 'msg.sampleNote')),
-      cards,
+      cardsBox,
       h('div', { class: 'ads-filters' }, [
         h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('msg.channel') }, chanBtns),
         h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('msg.status') }, statBtns)]),
       h('div', { class: 'ads-inbox' }, [listBox, threadBox])
     ]), 'msg.nav');
-    load();
-    function load() {
+    drawCards(); loadChannels(); load(false);
+    if (live) {
+      var timer = setInterval(function () {
+        if (stale(tok)) { clearInterval(timer); return; }
+        if (!document.hidden) load(true);
+      }, MSG_POLL_MS);
+    }
+
+    // ---- channel cards: switched on or not; Admins of the company switch Messenger / Instagram on or off ----
+    function drawCards() {
+      cardsBox.innerHTML = '';
+      MSG_CHANNELS.forEach(function (k) {
+        var on = !!chans[k];
+        var kids = [h('div', { class: 'ads-msgch__head' }, [h('strong', {}, t('msg.ch.' + k)), on ? pill(t('msg.connected'), 'on') : pill(t('msg.notConnected'), 'off')]),
+          h('p', { class: 'ads-sub' }, t('msg.how.' + k))];
+        if (!live || MSG_LIVE.indexOf(k) === -1) kids.push(soonBtn('msg.connect', { small: true }));
+        else if (canAdmin) {
+          var need = !biz || !biz.pageId ? 'msg.needPage' : (k === 'instagram' && !biz.instagramId ? 'msg.needIg' : null);
+          if (on) kids.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function (e) { switchOff(k, e.currentTarget); } }, t('msg.switchOff')));
+          else if (need) kids.push(h('p', { class: 'ads-hint' }, t(need)));
+          else kids.push(h('button', { type: 'button', class: 'ads-btn ads-btn--primary ads-btn--small', onclick: function (e) { connect(k, e.currentTarget); } }, t('msg.connect')));
+        }
+        cardsBox.appendChild(h('div', { class: 'ads-msgch__card' }, kids));
+      });
+    }
+    function loadChannels() {
+      if (!live) return;
+      api.inboxChannels(ctx.business).then(function (rows) {
+        if (stale(tok)) return;
+        chans = {};
+        (rows || []).forEach(function (r) { if (r.status === 'on') chans[r.channel] = r; });
+        drawCards();
+      }, function () { /* the cards stay "Not connected" */ });
+    }
+    function connect(k, btn) {
+      btn.disabled = true;
+      api.connectInbox(ctx.business, k).then(function () {
+        toast(t('msg.connectedOk', { ch: t('msg.ch.' + k) }), 'info'); loadChannels();
+      }, function (e) { btn.disabled = false; showSrvError({ code: e.code, message: e.message }); });
+    }
+    function switchOff(k, btn) {
+      confirmDialog({ title: t('msg.switchOff.title'), message: t('msg.switchOff.q', { ch: t('msg.ch.' + k), name: bizName(ctx.business) }), confirmLabel: t('msg.switchOff') }).then(function (yes) {
+        if (!yes) return;
+        btn.disabled = true;
+        api.disconnectInbox(ctx.business, k).then(function () { toast(t('msg.switchedOff'), 'info'); loadChannels(); },
+          function (e) { btn.disabled = false; showSrvError({ code: e.code, message: e.message }); });
+      });
+    }
+
+    // ---- conversation list (quiet = the 15-second refresh: no loading states, the open thread keeps its reply box) ----
+    function load(quiet) {
       api.listConversations(ctx.business).then(function (list) {
         if (stale(tok)) return;
         cache = list;
         drawList();
-        if (msgOpen && cache.some(function (c) { return c.id === msgOpen; })) openThread(msgOpen); else drawEmptyThread();
-      }, function () { if (!stale(tok)) { listBox.innerHTML = ''; listBox.appendChild(errorState(load)); } });
+        var stillThere = msgOpen && cache.some(function (c) { return c.id === msgOpen; });
+        if (quiet) { if (stillThere && thread) refreshThread(); return; }
+        if (stillThere) openThread(msgOpen); else drawEmptyThread();
+      }, function () { if (!stale(tok) && !quiet) { listBox.innerHTML = ''; listBox.appendChild(errorState(function () { load(false); })); } });
     }
     function shown() {
       return cache.filter(function (c) {
         return (msgChannel === 'all' || c.channel === msgChannel) && (msgStatus === 'all' || c.status === msgStatus);
       });
     }
+    function personName(c) { return c.name || t('msg.customer', { id: String(c.participant || '').slice(-4) }); }
+    function lastLine(c) {
+      if (c.messages && c.messages.length) {
+        var l = c.messages[c.messages.length - 1];
+        return (l.from === 'us' ? t('msg.you') + ': ' : '') + l.text;
+      }
+      return (c.lastFrom === 'us' ? t('msg.you') + ': ' : '') + (c.lastText === '[attachment]' ? t('msg.attachment') : c.lastText);
+    }
     function drawList() {
       var list = shown();
       listBox.innerHTML = '';
       if (!list.length) { listBox.appendChild(h('p', { class: 'ads-note' }, t(live ? 'msg.none.live' : 'msg.none'))); return; }
       listBox.appendChild(h('ul', { class: 'ads-inbox__items' }, list.map(function (c) {
-        var last = c.messages[c.messages.length - 1] || { text: '', from: 'them' };
         return h('li', {}, h('button', { type: 'button', class: 'ads-inbox__item' + (c.id === msgOpen ? ' is-open' : ''), 'aria-current': c.id === msgOpen ? 'true' : null,
           onclick: function () { msgOpen = c.id; drawList(); openThread(c.id); } }, [
-          h('span', { class: 'ads-inbox__top' }, [h('strong', { class: 'ads-inbox__name' }, c.name),
+          h('span', { class: 'ads-inbox__top' }, [h('strong', { class: 'ads-inbox__name' }, personName(c)),
             c.unread ? h('span', { class: 'ads-inbox__unread', title: t('msg.unread', { n: c.unread }) }, String(c.unread)) : null]),
           h('span', { class: 'ads-inbox__meta' }, [pill(t('msg.ch.' + c.channel), 'ch-' + c.channel), h('span', { class: 'ads-sub' }, fmtDateTime(c.at))]),
-          h('span', { class: 'ads-inbox__last' }, (last.from === 'us' ? t('msg.you') + ': ' : '') + last.text)
+          h('span', { class: 'ads-inbox__last' }, lastLine(c))
         ]));
       })));
     }
     function drawEmptyThread() {
+      thread = null;
       threadBox.innerHTML = '';
       threadBox.appendChild(h('p', { class: 'ads-note ads-inbox__pick' }, t(cache.length ? 'msg.pick' : live ? 'msg.none.live' : 'msg.none')));
     }
+    // Meta's reply window: 24 hours after the customer's last message (7 days after a message ad — Meta decides).
+    function windowLine(c, el) {
+      if (!live || !el) return;
+      var last = c.lastCustomerAt ? Date.parse(c.lastCustomerAt) : NaN;
+      if (!isFinite(last)) { el.textContent = ''; return; }
+      var until = last + 24 * 3600 * 1000, open = Date.now() < until;
+      el.className = open ? 'ads-hint' : 'ads-warn';
+      el.textContent = t(open ? 'msg.window.open' : 'msg.window.closed', { time: fmtDateTime(new Date(until).toISOString()) });
+    }
+
+    // ---- one conversation: messages, Claude's suggestion, reply (Admins + Approvers), done / open again ----
     function openThread(id) {
       api.openConversation(id).then(function (c) {
         if (stale(tok)) return;
@@ -4490,32 +4575,75 @@
         drawList();
         threadBox.innerHTML = '';
         var msgs = h('ol', { class: 'ads-thread' }, c.messages.map(bubble));
-        var box = textArea('ads-msg-reply', '', api.msgRules.textMax, 3);
-        var send = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
-          send.disabled = true;
-          api.replyConversation(c.id, box.value).then(function (m) {
-            send.disabled = false;
-            if (stale(tok)) return;
-            msgs.appendChild(bubble(m)); box.value = ''; box.focus();
-            cache.forEach(function (x) { if (x.id === c.id) { x.messages.push(m); x.at = m.at; } });
-            drawList();
-            toast(t('msg.sentSample'), 'info');
-          }, function (e) { send.disabled = false; toast(errText(e) || t('toast.failed'), 'act'); });
-        } }, t('msg.send'));
-        var done = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () {
-          api.setConversationStatus(c.id, c.status === 'done' ? 'open' : 'done').then(function () { load(); });
-        } }, t(c.status === 'done' ? 'msg.reopen' : 'msg.done'));
-        append(threadBox, [
-          h('div', { class: 'ads-thread__head' }, [h('h2', { class: 'ads-h2' }, c.name), pill(t('msg.ch.' + c.channel), 'ch-' + c.channel), done]),
-          msgs,
-          h('div', { class: 'ads-thread__reply' }, [h('label', { class: 'ads-label', for: 'ads-msg-reply' }, t('msg.reply')), box,
-            h('p', { class: 'ads-hint' }, t('msg.window')), h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [send])])
-        ]);
+        var winEl = h('p', { class: 'ads-hint', 'aria-live': 'polite' });
+        thread = { id: c.id, msgs: msgs, count: c.messages.length, win: winEl };
+        var head = [h('h2', { class: 'ads-h2' }, personName(c)), pill(t('msg.ch.' + c.channel), 'ch-' + c.channel)];
+        if (canReply) {
+          head.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function (e) {
+            e.currentTarget.disabled = true;
+            api.setConversationStatus(c.id, c.status === 'done' ? 'open' : 'done').then(function () { load(false); },
+              function (er) { toast(msgErrText(er), 'act'); load(false); });
+          } }, t(c.status === 'done' ? 'msg.reopen' : 'msg.done')));
+        }
+        var kids = [h('div', { class: 'ads-thread__head' }, head), msgs];
+        if (canReply) kids.push(replyBox(c, msgs, winEl));
+        else kids.push(h('p', { class: 'ads-note' }, t('msg.viewOnly')));
+        append(threadBox, kids);
+        windowLine(c, winEl);
       }, function () { drawEmptyThread(); });
     }
+    function replyBox(c, msgs, winEl) {
+      var max = live ? (MSG_MAX_LIVE[c.channel] || 1000) : api.msgRules.textMax;
+      var box = textArea('ads-msg-reply', '', max, 3);
+      var send = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
+        if (!box.value.trim()) { toast(t('msg.err.empty'), 'act'); box.focus(); return; }
+        send.disabled = true;
+        api.replyConversation(c.id, box.value).then(function (m) {
+          send.disabled = false;
+          if (stale(tok)) return;
+          msgs.appendChild(bubble(m)); box.value = ''; box.focus();
+          if (thread) thread.count++;
+          cache.forEach(function (x) { if (x.id === c.id) { x.lastText = m.text; x.lastFrom = 'us'; x.at = m.at; if (x.messages) x.messages.push(m); } });
+          drawList();
+          toast(t(live ? 'msg.sent' : 'msg.sentSample'), 'info');
+        }, function (e) { send.disabled = false; toast(msgErrText(e), 'act'); });
+      } }, t('msg.send'));
+      var btns = [send];
+      if (live) {
+        // Claude only drafts (D-69 a): the text lands in the box, nothing is sent.
+        var sug = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () {
+          sug.disabled = true; sug.textContent = t('msg.suggesting');
+          api.suggestReply(c.id).then(function (text) {
+            sug.disabled = false; sug.textContent = t('msg.suggest');
+            if (stale(tok)) return;
+            box.value = text; box.focus();
+            toast(t('msg.suggested'), 'info');
+          }, function (e) { sug.disabled = false; sug.textContent = t('msg.suggest'); toast(msgErrText(e), 'act'); });
+        } }, t('msg.suggest'));
+        btns.unshift(sug);
+      }
+      return h('div', { class: 'ads-thread__reply' }, [h('label', { class: 'ads-label', for: 'ads-msg-reply' }, t('msg.reply')), box,
+        live ? winEl : h('p', { class: 'ads-hint' }, t('msg.window')), h('div', { class: 'ads-btnrow ads-btnrow--tight' }, btns)]);
+    }
+    // The 15-second refresh of the open conversation: new messages are added below, the reply box stays as it is.
+    function refreshThread() {
+      var cur = thread;
+      api.openConversation(cur.id).then(function (c) {
+        if (stale(tok) || thread !== cur) return;
+        if (c.messages.length > cur.count) {
+          c.messages.slice(cur.count).forEach(function (m) { cur.msgs.appendChild(bubble(m)); });
+          cur.count = c.messages.length;
+        }
+        windowLine(c, cur.win);
+      }, function () { /* the next refresh tries again */ });
+    }
     function bubble(m) {
+      var files = (m.attachments || []).filter(function (a) { return a && a.url; });
       return h('li', { class: 'ads-bubble ads-bubble--' + (m.from === 'us' ? 'us' : 'them') }, [
-        h('p', { class: 'ads-bubble__text' }, m.text),
+        m.text ? h('p', { class: 'ads-bubble__text' }, m.text) : null,
+        files.length ? h('p', { class: 'ads-bubble__text' }, files.map(function (a, i) {
+          return h('a', { class: 'ads-link', href: a.url, target: '_blank', rel: 'noopener noreferrer' }, t('msg.attachment') + (files.length > 1 ? ' ' + (i + 1) : ''));
+        })) : (!m.text && m.attachments && m.attachments.length ? h('p', { class: 'ads-bubble__text' }, t('msg.attachment')) : null),
         h('span', { class: 'ads-bubble__at' }, fmtDateTime(m.at) + (m.sample ? ' · ' + t('msg.notSent') : ''))
       ]);
     }

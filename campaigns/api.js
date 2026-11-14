@@ -817,9 +817,41 @@
   // ('messenger' | 'instagram' | 'whatsapp'), name, status ('open' | 'done'), unread, at, messages: [{ from
   // ('them' | 'us'), text, at }] }.
   var MSG_MAX = 1000;
+  // Live since 15 Nov 2026 (ADS-43, owner D-69 a / D-70 a; SQL 0044): Messenger + Instagram conversations stored by
+  // the server function ads-meta-webhook; replies, Claude's suggestions and channels through ads-messages. The
+  // conversation shape above, plus lastText, lastFrom, lastCustomerAt (Meta's 24-hour reply window) and participant.
+  var CONV_COLS = 'id,business_id,channel,participant_id,participant_name,status,unread,last_message_at,last_customer_at,last_text,last_from';
+  function liveConv(c) {
+    return { id: c.id, business: c.business_id, channel: c.channel, participant: c.participant_id, name: c.participant_name || '',
+      status: c.status, unread: c.unread || 0, at: c.last_message_at, lastText: c.last_text || '', lastFrom: c.last_from === 'company' ? 'us' : 'them',
+      lastCustomerAt: c.last_customer_at || null, messages: [] };
+  }
+  // An Edge Function answer -> the answer, or an Error with the server's code and plain-English message.
+  function msgCall(body) {
+    return callFn('ads-messages', body).then(function (r) {
+      if (r && r.ok) return r;
+      var e = new Error((r && r.error && r.error.message) || '');
+      e.code = (r && r.error && r.error.code) || (r && r.code === 'NOT_FOUND' ? 'not_deployed' : 'server');
+      throw e;
+    });
+  }
+  // Which channels the company has switched on: [{ channel, account_id, status, connected_at }] (live only).
+  function inboxChannels(b) {
+    if (!isLive()) return Promise.resolve([]);
+    return init().then(function () {
+      return client.from('ads_inbox_channels').select('business_id,channel,account_id,status,status_message,connected_at').eq('business_id', b);
+    }).then(mustDb);
+  }
+  function connectInbox(b, channel) { return msgCall({ action: 'connect', business_id: b, channel: channel }); }
+  function disconnectInbox(b, channel) { return msgCall({ action: 'disconnect', business_id: b, channel: channel }); }
+  // Claude drafts a reply (D-69 a): resolves with the text; a person reads, edits and sends it.
+  function suggestReply(id) { return msgCall({ action: 'suggest', conversation_id: id }).then(function (r) { return r.text; }); }
   function listConversations(b) {
     return init().then(function () {
-      if (isLive()) return wait([]);
+      if (isLive()) {
+        return client.from('ads_conversations').select(CONV_COLS).eq('business_id', b).order('last_message_at', { ascending: false }).limit(200)
+          .then(mustDb).then(function (rows) { return (rows || []).map(liveConv); });
+      }
       return wait(state.ws.inbox.filter(function (c) { return !b || c.business === b; })
         .sort(function (x, y) { return Date.parse(y.at) - Date.parse(x.at); }));
     });
@@ -828,13 +860,27 @@
   // Opening a conversation marks it read.
   function openConversation(id) {
     return init().then(function () {
+      if (isLive()) {
+        return Promise.all([
+          client.from('ads_conversations').select(CONV_COLS).eq('id', id).maybeSingle().then(mustDb),
+          client.from('ads_messages').select('direction,text,attachments,sent_at').eq('conversation_id', id).order('sent_at', { ascending: true }).limit(300).then(mustDb)
+        ]).then(function (r) {
+          if (!r[0]) throw codeError('msg.err.gone');
+          var c = liveConv(r[0]);
+          c.messages = (r[1] || []).map(function (m) {
+            return { from: m.direction === 'in' ? 'them' : 'us', text: m.text || '', at: m.sent_at, attachments: m.attachments || [] };
+          });
+          if (c.unread) client.rpc('ads_conversation_read', { p_id: id }).then(function () {}, function () {});
+          return c;
+        });
+      }
       var c = convById(id); if (!c) throw codeError('msg.err.gone');
       if (c.unread) { c.unread = 0; save(); }
       return wait(c);
     });
   }
   function replyConversation(id, text) {
-    var stop = sampleOnly(); if (stop) return stop;
+    if (isLive()) return msgCall({ action: 'send', conversation_id: id, text: String(text || '') }).then(function (r) { return r.message; });
     return init().then(function () {
       var c = convById(id); if (!c) throw codeError('msg.err.gone');
       var body = textOf(text, MSG_MAX);
@@ -847,6 +893,7 @@
     });
   }
   function setConversationStatus(id, status) {
+    if (isLive()) return liveRpc('ads_conversation_set_status', { p_id: id, p_status: status === 'done' ? 'done' : 'open' });
     return init().then(function () {
       var c = convById(id); if (!c) throw codeError('msg.err.gone');
       c.status = status === 'done' ? 'done' : 'open';
@@ -1704,6 +1751,7 @@
     myAccess: myAccess, acceptInvites: acceptInvites,
     goalRules: { textMax: GOAL_TEXT_MAX }, listGoals: listGoals, saveGoal: saveGoal, deleteGoal: deleteGoal,
     msgRules: { textMax: MSG_MAX }, listConversations: listConversations, openConversation: openConversation,
+    inboxChannels: inboxChannels, connectInbox: connectInbox, disconnectInbox: disconnectInbox, suggestReply: suggestReply,
     replyConversation: replyConversation, setConversationStatus: setConversationStatus,
     // Keys (0043) and the audit log (13 Nov 2026)
     listConnections: listConnections, saveConnection: saveConnection, testConnection: testConnection,
