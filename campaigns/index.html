@@ -21,7 +21,7 @@
 
   <!-- Site tokens (palette Signal, spacing, type), then the tool's own styles -->
   <link rel="stylesheet" href="../styles.css?v=20261112a" />
-  <link rel="stylesheet" href="./app.css?v=20261113a" />
+  <link rel="stylesheet" href="./app.css?v=20261114a" />
   <!-- Restore the desktop sidebar state before first paint (no flash) -->
   <script>try { if (localStorage.getItem('ads_side') === 'collapsed') document.documentElement.classList.add('ads-side-collapsed'); } catch (e) { /* ignore */ }</script>
 </head>
@@ -88,11 +88,12 @@
 
   <!-- supabase-js (UMD), same version as the main site; only used to read the session -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./i18n.js?v=20261113b"></script>
+  <script src="./i18n.js?v=20261114a"></script>
   <!-- Reads stock files (Excel / CSV); loads SheetJS from its CDN only when a file is used -->
   <script src="./stock-import.js?v=20261106d"></script>
   <script src="./api.js?v=20261113b"></script>
-  <script src="./app.js?v=20261113b"></script>
+  <script src="./logos.js?v=20261114a"></script>
+  <script src="./app.js?v=20261114a"></script>
   <!-- The website's Messages + Feedback window (files too); reaches Supabase through the client app.js hands over -->
   <script src="../career.js?v=20261111d"></script>
 </body>

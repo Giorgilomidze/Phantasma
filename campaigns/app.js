@@ -218,11 +218,16 @@
   }
   // ---- live backend: plain-word dialogs for server answers ----
   function liveMode() { return api.isLive(); }
+  // The server's company checks (go-live step 3, 14 Nov 2026), in the screen's language; '' for other codes.
+  function companyErrText(code) {
+    return code === 'not_allowed' ? t('srv.not_allowed') : code === 'no_meta_connection' ? t('srv.no_meta_connection') : '';
+  }
   function srvErrorBody(err) {
     err = err || {};
     var code = err.code || 'server', kids = [];
     if (code === 'network') return h('p', {}, t('srv.network'));
     if (code === 'not_member' || code === 'no_token' || code === 'bad_token') return h('p', {}, t('srv.access'));
+    if (companyErrText(code)) return h('p', {}, companyErrText(code));
     var known = ['over_daily_cap', 'over_total_cap', 'over_days_cap', 'meta_error', 'in_progress'].indexOf(code) !== -1;
     kids.push(h('p', {}, h('strong', {}, known ? t('srv.' + code) : t('srv.default'))));
     // The server sends its own plain-English sentence (amounts, Meta wording). Shown as is; not translated.
@@ -261,14 +266,17 @@
     var biz = ctx.business;
     api.metaHealth(biz).then(function (r) {
       btn.disabled = false;
-      var kids = [];
+      var kids = [], rows = [];
       if (r && r.error) return showSrvError(r.error);
       if (r.ad_account) {
         var a = r.ad_account;
-        kids.push(kv([[t('health.account'), a.name + ' (' + a.id + ')'], [t('health.status'), a.status], [t('health.currency'), a.currency],
+        rows.push([t('health.account'), a.name + ' (' + a.id + ')'], [t('health.status'), a.status], [t('health.currency'), a.currency],
           [t('health.page'), r.page ? r.page.name + ' (' + r.page.id + ')' : t('health.none')],
-          [t('health.mode'), r.live_mode ? t('health.liveOn') : t('health.dry')]]));
+          [t('health.mode'), r.live_mode ? t('health.liveOn') : t('health.dry')]);
       }
+      // Whose Meta key answered: the company's own, or (Edelweiss only, until its key is stored) the old server key.
+      if (r.token_source) rows.push([t('health.token'), r.token_source === 'company' ? t('health.tokenOwn') : t('health.tokenServer')]);
+      if (rows.length) kids.push(kv(rows));
       if (r.ok) kids.unshift(h('p', {}, h('strong', {}, t('health.okText'))));
       if (r.problems && r.problems.length) {
         kids.push(h('p', { class: 'ads-warn' }, [h('strong', {}, t('health.problems') + ': '), h('ul', {}, r.problems.map(function (x) { return h('li', {}, x); }))]));
@@ -1076,7 +1084,7 @@
               group.innerHTML = ''; status.innerHTML = '';
               more.open = true;
               status.appendChild(h('div', { class: 'ads-warn', role: 'alert' }, [
-                h('p', {}, (err && err.message) || t('wiz.posts.error')),
+                h('p', {}, companyErrText(err && err.code) || (err && err.message) || t('wiz.posts.error')),
                 h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: load }, t('wiz.posts.retry'))
               ]));
             });
@@ -1191,7 +1199,8 @@
       }, function (e) {
         if (stale(tok)) return;
         body.innerHTML = '';
-        body.appendChild(h('p', { class: 'ads-warn', role: 'alert' }, t('posts.fb.failed') + (e && e.message ? ' ' + e.message : '')));
+        var why = companyErrText(e && e.code) || (e && e.message) || '';
+        body.appendChild(h('p', { class: 'ads-warn', role: 'alert' }, t('posts.fb.failed') + (why ? ' ' + why : '')));
       });
     }
     function list(posts, products) {
@@ -1537,7 +1546,7 @@
   var genView = null; // the generator card on screen: { tok, status, refresh }
   var GEN_MAX_REFS = 6; // product photo + the chosen options' pictures (the Edge Function's limit)
   // After these errors the next products would fail the same way, so the run stops.
-  var GEN_STOP = ['daily_limit', 'not_deployed', 'no_gemini_key', 'gemini_key', 'not_member', 'no_token', 'bad_token', 'network'];
+  var GEN_STOP = ['daily_limit', 'not_deployed', 'no_gemini_key', 'gemini_key', 'not_member', 'not_allowed', 'no_token', 'bad_token', 'network'];
   var NAME_ZONE = 0.15, NAME_PAD = 0.06, NAME_COLOR = '#3E5C3A', NAME_FONT = '"Noto Sans Georgian", "Noto Sans", sans-serif';
 
   // The prompt for one product, exactly like the owner's Excel formula: the template, then every
@@ -2461,6 +2470,7 @@
     if (e && e.key) return t(e.key, e.vars);
     if (c === 'network') return t('srv.network');
     if (c === 'not_member' || c === 'no_token' || c === 'bad_token') return t('srv.access');
+    if (companyErrText(c)) return companyErrText(c);
     if (c === 'not_deployed') return t('aimg.err.notDeployed');
     if (c === 'daily_limit') return t('aimg.err.limit');
     if (c === 'no_gemini_key' || c === 'gemini_key') return t('aimg.err.key');
@@ -3443,10 +3453,43 @@
     ]]
   ];
 
+  // Settings icons (owner, 14 Nov 2026: "everything should have an icon" — ChatGPT was mistaken for Claude; then
+  // "use official logos of each integration company"). The logos are in logos.js (window.AdsLogos, sources and
+  // licences there); a service without a brand (the stock system) gets this plain box. Constant markup only.
+  var SVC_PLAIN = '<path d="M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8" fill="none" stroke="#5B6B7A" stroke-width="2" stroke-linejoin="round"/>';
+  var SVC_BADGE = {
+    ok: '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 8.5l2.5 2.5L12 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    warn: '<svg viewBox="0 0 20 18" aria-hidden="true" focusable="false"><path class="ads-svcicon__tri" d="M10 1.5L19 16.5H1z" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 6.3v4.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="13.7" r="1.15" fill="#fff"/></svg>'
+  };
+  // The icon of one service: its logo on a white square; a green tick (works) or a red warning sign (its key
+  // failed the last test) at the corner.
+  function svcIcon(id, state) {
+    var logo = (window.AdsLogos || {})[id] || null;
+    var img = h('span', { class: 'ads-svcicon__img' + (logo && logo[0] > 2 * logo[1] ? ' ads-svcicon__img--wide' : ''), 'aria-hidden': 'true' });
+    img.innerHTML = logo ? '<svg viewBox="0 0 ' + logo[0] + ' ' + logo[1] + '" aria-hidden="true" focusable="false">' + logo[2] + '</svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + SVC_PLAIN + '</svg>';
+    if (SVC_BADGE[state]) {
+      var badge = h('span', { class: 'ads-svcicon__badge ads-svcicon__badge--' + state });
+      badge.innerHTML = SVC_BADGE[state];
+      img.appendChild(badge);
+    }
+    return img;
+  }
+
   // AI tools: one key each for the whole agency, used for every company (owner D-64, 13 Nov 2026).
   var AI_SERVICES = [{ id: 'claude', fields: [['set.f.apiKey', 'password']] }, { id: 'gemini', fields: [['set.f.apiKey', 'password']] },
     { id: 'openai', fields: [['set.f.apiKey', 'password']] }];
   var KEY_LIVE = ['meta', 'claude', 'gemini', 'openai']; // keys that can be saved and tested today (0043 + ads-connections)
+  // Which service a pasted key belongs to, from how it starts (same rule in the server function ads-connections):
+  // Claude sk-ant-… (Admin keys sk-ant-admin…), ChatGPT sk-…, Gemini AIza…, Meta EAA…; null = unknown (the test decides).
+  function keyKind(v) {
+    if (/^sk-ant-admin/.test(v)) return 'claudeAdmin';
+    if (/^sk-ant-/.test(v)) return 'claude';
+    if (/^AIza/.test(v)) return 'gemini';
+    if (/^sk-/.test(v)) return 'openai';
+    if (/^EAA/.test(v)) return 'meta';
+    return null;
+  }
   var openKey = null; // the key row to open again after the page is drawn anew
   function viewSettings(tok) {
     // Live: the stored keys first (only their status, last 4 characters and what the test found).
@@ -3477,7 +3520,9 @@
     function keyRow(s, business) {
       var c = connOf(s.id, business);
       var canEdit = !!access && access.role === 'admin' && (business ? true : access.allCompanies);
-      var legacy = !c && ((s.id === 'meta' && biz && biz.pageId) || s.id === 'gemini'); // the old server key still works
+      // The old server key still works: Gemini for the agency; Meta only for Edelweiss with its Page (the server
+      // functions' rule since go-live step 3, 14 Nov 2026 — every other company needs its own token).
+      var legacy = !c && ((s.id === 'meta' && biz && biz.id === 'edelweiss' && biz.pageId) || s.id === 'gemini');
       var st = c ? (c.status === 'ok' ? pill(t('key.st.ok', { hint: c.secret_hint || '' }), 'on') : pill(t('key.st.error'), 'out'))
         : legacy ? pill(t('set.st.server'), 'on') : pill(t('set.st.none'), 'off');
       var kids = [h('p', { class: 'ads-note' }, t('set.use.' + s.id))];
@@ -3491,13 +3536,26 @@
         var inId = 'ads-key-' + s.id + (business ? '-' + business : '');
         var input = h('input', { type: 'password', id: inId, class: 'ads-input', autocomplete: 'off', spellcheck: 'false', placeholder: t(c ? 'key.replacePh' : 'key.pastePh') });
         var msg = h('p', { class: 'ads-hint', 'aria-live': 'polite' });
+        // A key that was not saved: a clearly visible warning, a toast, and an empty field (14 Nov 2026: a grey
+        // line under a still-filled field looked like "saved").
+        var notSaved = function (text) {
+          input.value = ''; msg.className = 'ads-warn'; msg.textContent = text; toast(t('key.notSaved'), 'act');
+        };
         var saveB = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
           var v = input.value.trim();
+          msg.className = 'ads-hint';
           if (!v) { msg.textContent = t('key.empty'); input.focus(); return; }
+          // A key of another service (e.g. a Claude key in the ChatGPT row) is refused here, before it goes anywhere.
+          var kind = keyKind(v);
+          if (kind === 'claudeAdmin') { notSaved(t('key.claudeAdmin')); return; }
+          if (kind && kind !== s.id) { notSaved(t('key.wrongKind', { kind: t('set.svc.' + kind), row: t('set.svc.' + s.id) })); return; }
           saveB.disabled = true; msg.textContent = t('key.testing');
           api.saveConnection(s.id, business, v).then(function () {
             input.value = ''; toast(t('key.saved', { name: t('set.svc.' + s.id) }), 'info'); openKey = s.id; refresh();
-          }, function (e) { saveB.disabled = false; msg.textContent = t('key.failed') + (e && e.message ? ' ' + e.message : ''); });
+          }, function (e) {
+            saveB.disabled = false;
+            notSaved(e && e.code === 'claude_workspace' ? t('key.claudeWorkspace') : t('key.failed') + (e && e.message ? ' ' + e.message : ''));
+          });
         } }, t(c ? 'key.replace' : 'key.saveTest'));
         kids.push(field(c ? 'key.newKey' : 'key.key', input, null, inId), msg);
         var bl = [saveB];
@@ -3516,16 +3574,12 @@
           } }, t('key.remove')));
         }
         if (legacy && s.id === 'meta') bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function (e) { testMetaConnection(e.currentTarget); } }, t('health.btn')));
-        if (legacy && s.id === 'gemini') bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function (e) { testGemini(e.currentTarget); } }, t('health.btn')));
+        if (legacy && s.id === 'gemini') bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function (e) { testGemini(e.currentTarget); } }, t('aimg.test.btn')));
         kids.push(btns(bl));
       } else kids.push(h('p', { class: 'ads-hint' }, t(business ? 'key.onlyAdmins' : 'key.onlyAgencyAdmins')));
-      var d = h('details', { class: 'ads-svc' }, [
-        h('summary', { class: 'ads-svc__sum' }, [h('span', { class: 'ads-svc__name' }, t('set.svc.' + s.id)),
-          business && chosen(s) ? pill(t('set.chosen'), 'picture') : null, st]),
-        h('div', { class: 'ads-svc__body' }, kids)
-      ]);
-      if (openKey === s.id) d.open = true;
-      return d;
+      // For its icon tile (svcTiles): works / problem / not connected, the status chip and what opens below.
+      return { id: s.id, state: c ? (c.status === 'ok' ? 'ok' : 'warn') : legacy ? 'ok' : 'none', pill: st,
+        chosen: !!business && chosen(s), body: kids };
     }
     // What a Meta token reaches, and "Use for <company>": the Page (with its Instagram) and the ad account.
     function metaFound(c, business) {
@@ -3578,15 +3632,50 @@
         b.push(live ? h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testMetaConnection(e.currentTarget); } }, t('health.btn')) : soonBtn('health.btn'));
       }
       if (s.id === 'gemini') {
-        b.push(live ? h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testGemini(e.currentTarget); } }, t('health.btn')) : soonBtn('health.btn'));
+        b.push(live ? h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testGemini(e.currentTarget); } }, t('aimg.test.btn')) : soonBtn('aimg.test.btn'));
       }
       kids.push(btns(b));
-      return h('details', { class: 'ads-svc' }, [
-        h('summary', { class: 'ads-svc__sum' }, [h('span', { class: 'ads-svc__name' }, t('set.svc.' + s.id)),
-          chosen(s) ? pill(t('set.chosen'), 'picture') : null,
-          pill(t(onServer ? 'set.st.server' : 'set.st.none'), onServer ? 'on' : 'off')]),
-        h('div', { class: 'ads-svc__body' }, kids)
-      ]);
+      return { id: s.id, state: onServer ? 'ok' : 'soon', pill: pill(t(onServer ? 'set.st.server' : 'set.st.none'), onServer ? 'on' : 'off'),
+        chosen: chosen(s), body: kids };
+    }
+    // Services as a row of icon tiles; a click opens that service in the panel below the row (one at a time),
+    // a second click, Close or Esc closes it. gid: the row's id; list: what keyRow() / service() return.
+    function svcTiles(gid, list) {
+      var panel = h('div', { class: 'ads-svcpanel', id: 'ads-svcpanel-' + gid, role: 'region', hidden: true });
+      var tiles = [];
+      function close(back) {
+        tiles.forEach(function (x) { x.setAttribute('aria-expanded', 'false'); });
+        panel.hidden = true; panel.innerHTML = '';
+        if (back) back.focus();
+      }
+      function open(it, tile) {
+        close(null);
+        tile.setAttribute('aria-expanded', 'true');
+        panel.setAttribute('aria-labelledby', tile.id);
+        append(panel, [h('div', { class: 'ads-svcpanel__head' }, [
+          h('h3', { class: 'ads-h3' }, t('set.svc.' + it.id)), it.chosen ? pill(t('set.chosen'), 'picture') : null, it.pill,
+          h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small ads-svcpanel__close', onclick: function () { close(tile); } }, t('common.close'))
+        ])].concat(it.body));
+        panel.hidden = false;
+      }
+      panel.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var tile = tiles.filter(function (x) { return x.getAttribute('aria-expanded') === 'true'; })[0];
+        e.stopPropagation(); close(tile || null);
+      });
+      list.forEach(function (it) {
+        var tile = h('button', { type: 'button', class: 'ads-svcicon ads-svcicon--' + it.state, id: 'ads-svctile-' + gid + '-' + it.id,
+          'aria-expanded': 'false', 'aria-controls': panel.id }, [
+          svcIcon(it.id, it.state),
+          h('span', { class: 'ads-svcicon__name' }, t('set.svc.' + it.id)),
+          it.state === 'soon' ? h('span', { class: 'ads-svcicon__soon', 'aria-hidden': 'true' }, t('set.tile.soon')) : null,
+          h('span', { class: 'visually-hidden' }, ', ' + t(it.state === 'soon' ? 'set.tile.soonLong' : 'set.tile.' + it.state))
+        ]);
+        tile.addEventListener('click', function () { if (tile.getAttribute('aria-expanded') === 'true') close(null); else open(it, tile); });
+        tiles.push(tile);
+        if (openKey === it.id) open(it, tile);
+      });
+      return [h('div', { class: 'ads-svcgrid' }, tiles), panel];
     }
     // The services ticked for this company (channels and work tools) come first in their group.
     function chosen(s) {
@@ -3596,11 +3685,11 @@
     SERVICES.forEach(function (g) {
       var list = g[1].filter(chosen).concat(g[1].filter(function (s) { return !chosen(s); }));
       conn.push(h('h3', { class: 'ads-h3 ads-svcgroup' }, t('set.grp.' + g[0])));
-      conn.push(h('div', { class: 'ads-svclist' }, list.map(function (s) { return service(s, biz ? biz.id : null); })));
+      conn = conn.concat(svcTiles(g[0], list.map(function (s) { return service(s, biz ? biz.id : null); })));
     });
     var ai = [h('p', {}, t('key.ai.intro')), h('p', { class: 'ads-warn' }, t('set.conn.security')),
-      keys.err ? h('p', { class: 'ads-warn' }, t('key.err.db')) : null,
-      h('div', { class: 'ads-svclist' }, AI_SERVICES.map(function (s) { return service(s, null); }))];
+      keys.err ? h('p', { class: 'ads-warn' }, t('key.err.db')) : null].concat(
+      svcTiles('ai', AI_SERVICES.map(function (s) { return service(s, null); })));
     if (keys.err) conn.splice(2, 0, h('p', { class: 'ads-warn' }, t('key.err.db')));
     var notify = h('fieldset', { class: 'ads-fieldset', disabled: true }, [h('legend', { class: 'visually-hidden' }, t('set.notify'))].concat(['rejected', 'daily', 'lowStock', 'weekly'].map(function (k) {
       var id = 'ads-set-n-' + k;
