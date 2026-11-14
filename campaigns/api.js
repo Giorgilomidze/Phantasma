@@ -41,7 +41,7 @@
   'use strict';
 
   var STORE_KEY = 'ads_mock_state_v2';   // v2: more sample data, 5 Nov 2026
-  var MODE_KEY = 'ads_backend_mode'; // 'mock' (default) | 'live'
+  var MODE_KEY = 'ads_backend_mode'; // test page only since 14 Nov 2026: 'mock' | 'live' (default)
   var REVIEW_DELAY_MS = 15000; // mock "Meta review" takes 15 seconds
 
   /* ---- Image library and stock rules (the bucket and the RPC enforce them again) ---- */
@@ -112,9 +112,15 @@
     });
   }
 
-  /* ---- backend mode (mock | live) ---- */
-  function mode() { try { return localStorage.getItem(MODE_KEY) === 'live' ? 'live' : 'mock'; } catch (e) { return 'mock'; } }
-  function setMode(m) { try { localStorage.setItem(MODE_KEY, m === 'live' ? 'live' : 'mock'); } catch (e) { /* private mode: stays mock */ } }
+  /* ---- backend mode: one mode, real data (owner D-63 a, 14 Nov 2026) ----
+     The sample data ("mock") is used only on Claude's local test page (campaigns/_harness.html sets
+     window.__adsTestPage). On the site a value stored by an older version ("mock") is ignored. */
+  var TEST_PAGE = window.__adsTestPage === true;
+  function mode() {
+    if (!TEST_PAGE) return 'live';
+    try { return localStorage.getItem(MODE_KEY) === 'mock' ? 'mock' : 'live'; } catch (e) { return 'live'; }
+  }
+  function setMode(m) { if (!TEST_PAGE) return; try { localStorage.setItem(MODE_KEY, m === 'mock' ? 'mock' : 'live'); } catch (e) { /* ignore */ } }
   function isLive() { return mode() === 'live'; }
 
   /* ---- live backend ---- */
@@ -1360,17 +1366,17 @@
     if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
     return callFn('ads-generate-image', { business_id: b, check: true }).then(fnResult);
   }
-  // Is the Gemini key accepted? { model } (a free call to Google, nothing is made).
-  function aiTest(b) {
+  // Is a picture maker's key accepted (maker: 'gemini' default, or 'openai')? { model } (a free call, nothing is made).
+  function aiTest(b, maker) {
     if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
-    return callFn('ads-generate-image', { business_id: b, test: true }).then(fnResult);
+    return callFn('ads-generate-image', { business_id: b, test: true, provider: maker || 'gemini' }).then(fnResult);
   }
   // Makes one picture and saves it in the library. o: { prompt, aspect, quality, refs: [library image ids],
-  // title (optional library title; a function without title support ignores it) }.
+  // maker ('gemini' or 'openai', owner D-68 — the server's default is Gemini), title (optional library title) }.
   // Resolves { image (library item), remaining, limit }.
   function generateImage(b, o) {
     if (!isLive()) return Promise.reject(codeError('aimg.err.mock'));
-    return callFn('ads-generate-image', { business_id: b, prompt: o.prompt, aspect_ratio: o.aspect, quality: o.quality, reference_ids: o.refs || [], title: o.title || undefined })
+    return callFn('ads-generate-image', { business_id: b, provider: o.maker || 'gemini', prompt: o.prompt, aspect_ratio: o.aspect, quality: o.quality, reference_ids: o.refs || [], title: o.title || undefined })
       .then(fnResult).then(function (r) {
         return { image: liveImage(r.image, r.image.url || '', { folder: 'ai', source: 'ai' }), remaining: r.remaining, limit: r.limit };
       });
@@ -1663,7 +1669,7 @@
     setActor: function (email, id) { actor = email || 'unknown'; actorId = id || null; },
     setClient: function (c) { client = c; },
     mode: mode, setMode: setMode, isLive: isLive,
-    metaHealth: metaHealth, listPagePosts: listPagePosts, newRequestId: newRequestId, createCampaignLive: createCampaignLive,
+    testPage: TEST_PAGE, metaHealth: metaHealth, listPagePosts: listPagePosts, newRequestId: newRequestId, createCampaignLive: createCampaignLive,
     canMove: function (kind, from, to) { return FLOW[kind][from].indexOf(to) !== -1; },
     findRisks: findRisks, total: total,
     init: init, getSettings: getSettings, listProducts: listProducts, listImages: listImages,

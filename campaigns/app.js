@@ -1546,7 +1546,8 @@
   var genView = null; // the generator card on screen: { tok, status, refresh }
   var GEN_MAX_REFS = 6; // product photo + the chosen options' pictures (the Edge Function's limit)
   // After these errors the next products would fail the same way, so the run stops.
-  var GEN_STOP = ['daily_limit', 'not_deployed', 'no_gemini_key', 'gemini_key', 'not_member', 'not_allowed', 'no_token', 'bad_token', 'network'];
+  var GEN_STOP = ['daily_limit', 'not_deployed', 'no_gemini_key', 'gemini_key', 'no_openai_key', 'openai_key', 'openai_verify', 'openai_quota',
+    'not_member', 'not_allowed', 'no_token', 'bad_token', 'network'];
   var NAME_ZONE = 0.15, NAME_PAD = 0.06, NAME_COLOR = '#3E5C3A', NAME_FONT = '"Noto Sans Georgian", "Noto Sans", sans-serif';
 
   // The prompt for one product, exactly like the owner's Excel formula: the template, then every
@@ -1579,7 +1580,7 @@
     if (!liveMode()) { card.appendChild(h('p', { class: 'ads-note' }, t('gen.mock'))); return out; }
     var inner = h('div', {}, h('p', { class: 'ads-note' }, t('gen.loading')));
     card.appendChild(inner);
-    var ps = null, groups = [], styles = [], ready = false;
+    var ps = null, groups = [], styles = [], ready = false, noMaker = false;
     var prodList, makeBtn, status, promptBox, promptHint, promptLabel;
     Promise.all([api.getPictureSettings(post.business), api.listStyleGroups(post.business), api.listStyles(post.business)]).then(function (r) {
       if (stale(tok)) return;
@@ -1614,6 +1615,16 @@
         genLast.mode, function (v) { genLast.mode = v; refresh(); });
       var quality = radioGroup('ads-gen-q', 'aimg.quality', [['standard', 'aimg.q.standard', 'aimg.q.standard.d'], ['high', 'aimg.q.high', 'aimg.q.high.d']],
         genLast.quality, function (v) { genLast.quality = v; });
+      // Picture maker (owner D-68): Gemini or ChatGPT; only makers with a working agency key can be chosen.
+      genLast.maker = genLast.maker || lastMaker();
+      var makers = makerField('ads-gen-mk', genLast.maker, function (m) { genLast.maker = m; });
+      api.aiImageStatus(post.business).then(function (r) {
+        if (stale(tok)) return;
+        genLast.maker = makers.setReady(r.makers) || genLast.maker;
+        noMaker = !makers.anyReady();
+        if (noMaker) status.textContent = t('aimg.maker.none');
+        refresh();
+      }, function () { /* the server answers again when the pictures are made */ });
       prodList = h('ul', { class: 'ads-gen__prods', 'aria-labelledby': 'ads-gen-prods' });
       makeBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: run });
       status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
@@ -1621,7 +1632,7 @@
       promptBox = h('textarea', { id: 'ads-gen-prompt', class: 'ads-input ads-textarea ads-prompt', rows: '8', readonly: true, spellcheck: 'false', 'aria-describedby': 'ads-gen-prompt-n' });
       promptHint = h('p', { class: 'ads-hint', id: 'ads-gen-prompt-n' });
       append(inner, [
-        h('p', { class: 'ads-note' }, t('gen.intro')), row, mode, quality,
+        h('p', { class: 'ads-note' }, t('gen.intro')), row, mode, makers, quality,
         h('p', { class: 'ads-label', id: 'ads-gen-prods' }, t('gen.prods')), prodList,
         h('div', { class: 'ads-btnrow' }, makeBtn), status,
         h('details', { class: 'ads-details ads-gen__prompt' }, [h('summary', {}, t('gen.showPrompt')), promptLabel, promptBox, promptHint,
@@ -1654,7 +1665,7 @@
         ]));
       });
       makeBtn.textContent = ok.length === 1 ? t('gen.makeOne') : t('gen.make', { n: ok.length });
-      makeBtn.disabled = !ok.length || !!genJob;
+      makeBtn.disabled = !ok.length || !!genJob || noMaker;
       promptLabel.textContent = first ? t('gen.promptFor', { name: prodName(first) }) : t('gen.showPrompt');
       promptBox.value = first ? assemblePrompt(ps, picks(), first, genLast.mode) : '';
       promptHint.textContent = first ? t('gen.chars', { n: num(promptBox.value.length) }) : t('gen.noProducts');
@@ -1663,7 +1674,7 @@
       if (genJob) { toast(t('gen.busy'), 'act'); return; }
       var list = chosen().filter(photoOf);
       if (!list.length) return;
-      var set = ps, pk = picks(), o = { mode: genLast.mode, quality: genLast.quality, aspect: ps.aspect || '3:4' };
+      var set = ps, pk = picks(), o = { mode: genLast.mode, quality: genLast.quality, aspect: ps.aspect || '3:4', maker: genLast.maker || lastMaker() };
       var made = [], failed = [], plain = [], notTried = [];
       genJob = { tok: tok, n: 1, total: list.length };
       toast(t('gen.started'));
@@ -1722,7 +1733,7 @@
     var nc = opts.filter(function (c) { return c.group.nameColor; })[0];
     var color = nc && /^#[0-9a-f]{6}$/i.test(nc.option.textColor || '') ? nc.option.textColor : null;
     return roomForAi().then(function () {
-      return api.generateImage(biz, { prompt: assemblePrompt(ps, chosen, p, o.mode), aspect: o.aspect, quality: o.quality, refs: refs.slice(0, GEN_MAX_REFS), title: 'Post: ' + name + ' · ' + codes });
+      return api.generateImage(biz, { prompt: assemblePrompt(ps, chosen, p, o.mode), aspect: o.aspect, quality: o.quality, maker: o.maker, refs: refs.slice(0, GEN_MAX_REFS), title: 'Post: ' + name + ' · ' + codes });
     }).then(function (r) {
       cacheImages([r.image]);
       if (o.mode !== 'overlay') return { image: r.image, plain: false };
@@ -2464,6 +2475,46 @@
   var AI_MAX_REFS = 3;
   var aiLast = { prompt: '', aspect: '1:1', quality: 'standard', refs: [] }; // the form opens with the last choices
 
+  // Picture makers (owner D-68, 14 Nov 2026): Claude is the brain; pictures come from Gemini or ChatGPT, chosen
+  // per picture. The last choice is kept in this browser and used by both picture windows.
+  var MAKERS = ['gemini', 'openai'];
+  function lastMaker() { try { return localStorage.getItem('ads_ai_maker') === 'openai' ? 'openai' : 'gemini'; } catch (e) { return 'gemini'; } }
+  function rememberMaker(m) { try { localStorage.setItem('ads_ai_maker', m); } catch (e) { /* ignore */ } }
+  // A service's logo, small, for a label (logos.js).
+  function logoMark(id) {
+    var logo = (window.AdsLogos || {})[id], s = h('span', { class: 'ads-logo-sm', 'aria-hidden': 'true' });
+    if (logo) s.innerHTML = '<svg viewBox="0 0 ' + logo[0] + ' ' + logo[1] + '" aria-hidden="true" focusable="false">' + logo[2] + '</svg>';
+    return s;
+  }
+  // "Picture maker" choice with the makers' logos. setReady(ready) switches off makers without a working agency
+  // key (ready = { gemini, openai } from the server; a server from before 14 Nov sends none = Gemini only) and
+  // moves the choice to a ready maker; it returns the maker in use, or null when none is ready.
+  function makerField(name, value, onPick) {
+    var radios = {}, notes = {}, ready = { gemini: true, openai: true };
+    var box = h('fieldset', { class: 'ads-fieldset ads-makers' }, [h('legend', { class: 'ads-label' }, t('aimg.maker'))].concat(MAKERS.map(function (m) {
+      var id = name + '-' + m;
+      radios[m] = h('input', { type: 'radio', name: name, id: id, value: m, checked: m === value, 'aria-describedby': id + '-d' });
+      radios[m].addEventListener('change', function () { rememberMaker(m); onPick(m); });
+      notes[m] = h('span', { class: 'ads-sub', id: id + '-d' }, t('aimg.maker.' + m + '.d'));
+      return h('label', { class: 'ads-option ads-maker', for: id }, [radios[m], logoMark(m), h('span', {}, [h('strong', {}, t('aimg.maker.' + m)), notes[m]])]);
+    })));
+    box.setReady = function (r) {
+      ready = r && typeof r === 'object' ? { gemini: !!r.gemini, openai: !!r.openai } : { gemini: true, openai: false };
+      MAKERS.forEach(function (m) {
+        radios[m].disabled = !ready[m];
+        notes[m].textContent = t(ready[m] ? 'aimg.maker.' + m + '.d' : 'aimg.maker.off');
+      });
+      var cur = MAKERS.filter(function (m) { return radios[m].checked; })[0];
+      if (cur && ready[cur]) return cur;
+      var next = MAKERS.filter(function (m) { return ready[m]; })[0] || null;
+      if (next) { radios[next].checked = true; onPick(next); }
+      return next;
+    };
+    box.anyReady = function () { return ready.gemini || ready.openai; };
+    box.isReady = function (m) { return !!ready[m]; };
+    return box;
+  }
+
   // Plain words for a failed AI call: known codes translated, otherwise the server's own English sentence.
   function aiErrText(e) {
     var c = e && e.code;
@@ -2474,6 +2525,9 @@
     if (c === 'not_deployed') return t('aimg.err.notDeployed');
     if (c === 'daily_limit') return t('aimg.err.limit');
     if (c === 'no_gemini_key' || c === 'gemini_key') return t('aimg.err.key');
+    if (c === 'no_openai_key' || c === 'openai_key') return t('aimg.err.keyOpenai');
+    if (c === 'openai_verify') return t('aimg.err.verify');
+    if (c === 'openai_quota') return t('aimg.err.quotaOpenai');
     return (e && e.message) || t('common.errorText');
   }
   // The form: description, format, quality, optional library pictures to start from.
@@ -2481,7 +2535,8 @@
     if (!liveMode()) { toast(t('aimg.err.mock'), 'act'); return; }
     if (aiJob) { toast(t('aimg.busy'), 'act'); return; }
     var biz = libTarget(), remaining = null, go = null;
-    var o = { prompt: aiLast.prompt, aspect: aiLast.aspect, quality: aiLast.quality, refs: aiLast.refs.slice() };
+    var o = { prompt: aiLast.prompt, aspect: aiLast.aspect, quality: aiLast.quality, refs: aiLast.refs.slice(), maker: lastMaker() };
+    var makers = makerField('ads-ai-mk', o.maker, function (m) { o.maker = m; upd(); });
     var quota = h('p', { class: 'ads-note', 'aria-live': 'polite' }, t('aimg.quota.loading'));
     var ta = h('textarea', { id: 'ads-ai-prompt', class: 'ads-input ads-textarea', rows: '5', maxlength: '2000', placeholder: t('aimg.prompt.ph'), 'aria-describedby': 'ads-ai-prompt-hint' });
     ta.value = o.prompt;
@@ -2493,7 +2548,7 @@
       return h('label', { class: 'ads-option', for: 'ads-ai-q-' + q }, [r, h('span', {}, [h('strong', {}, t('aimg.q.' + q)), h('span', { class: 'ads-sub' }, t('aimg.q.' + q + '.d'))])]);
     })));
     var refsBox = h('div', {}, h('p', { class: 'ads-note' }, t('aimg.loading')));
-    function upd() { if (go) go.disabled = !(remaining > 0 && o.prompt.replace(/\s+/g, ' ').trim().length >= 3); }
+    function upd() { if (go) go.disabled = !(remaining > 0 && makers.isReady(o.maker) && o.prompt.replace(/\s+/g, ' ').trim().length >= 3); }
 
     // The business's own uploads can be a starting point (a product photo, the logo).
     api.listImages(biz).then(function (list) {
@@ -2518,14 +2573,15 @@
 
     api.aiImageStatus(biz).then(function (r) {
       remaining = r.remaining;
-      quota.textContent = r.remaining > 0 ? t('aimg.quota', { n: r.remaining, limit: r.limit }) : t('aimg.err.limit');
-      if (r.remaining <= 0) quota.className = 'ads-warn';
+      o.maker = makers.setReady(r.makers) || o.maker;
+      quota.textContent = !makers.anyReady() ? t('aimg.maker.none') : r.remaining > 0 ? t('aimg.quota', { n: r.remaining, limit: r.limit }) : t('aimg.err.limit');
+      if (r.remaining <= 0 || !makers.anyReady()) quota.className = 'ads-warn';
       upd();
     }).catch(function (e) { quota.textContent = aiErrText(e); quota.className = 'ads-warn'; });
 
     openDialog({
       title: t('aimg.title'), wide: true,
-      body: h('div', {}, [quota, field('aimg.prompt', ta, t('aimg.prompt.hint'), 'ads-ai-prompt'), field('aimg.aspect', aspect, null, 'ads-ai-aspect'), quality,
+      body: h('div', {}, [quota, field('aimg.prompt', ta, t('aimg.prompt.hint'), 'ads-ai-prompt'), makers, field('aimg.aspect', aspect, null, 'ads-ai-aspect'), quality,
         h('fieldset', { class: 'ads-fieldset' }, [h('legend', { class: 'ads-label' }, t('aimg.refs', { max: AI_MAX_REFS })), refsBox])]),
       actions: [{ label: t('aimg.go'), value: 'go', disabled: true }],
       onOpen: function (dlg, btns) { go = btns.go; upd(); ta.focus(); }
@@ -2534,6 +2590,7 @@
   // Makes the picture in the background (10-30 s); the result opens wherever the user is by then.
   function runAi(biz, o) {
     aiLast = { prompt: o.prompt, aspect: o.aspect, quality: o.quality, refs: o.refs.slice() };
+    rememberMaker(o.maker);
     aiJob = { business: biz }; libSync();
     toast(t('aimg.started'));
     roomForAi().then(function () { return api.generateImage(biz, o); }).then(function (r) {
@@ -4562,6 +4619,10 @@
     bd.textContent = t(live ? 'top.badge.live' : 'top.badge.mock');
     bd.classList.toggle('ads-badge--live', live);
     $('#ads-mode').textContent = t(live ? 'menu.modeMock' : 'menu.modeLive');
+    // One mode since 14 Nov 2026 (owner D-63 a): the sample switch and "Reset demo data" exist only on
+    // Claude's local test page.
+    $('#ads-mode').hidden = !api.testPage;
+    $('#ads-reset').hidden = !api.testPage;
     $('#ads-lang').textContent = AdsI18n.lang() === 'en' ? 'ქართული' : 'English';
     function fillAccounts() {
       acc.innerHTML = '';
@@ -4681,13 +4742,10 @@
     started = true;
     user = session.user;
     api.setActor(user.email, user.id);
-    var liveFailed = false;
-    // If the live read fails (not a member, offline) fall back to mock instead of locking the tool.
-    var settingsP = api.getSettings().catch(function (e) {
-      if (!api.isLive()) throw e;
-      api.setMode('mock'); liveFailed = true;
-      return api.getSettings();
-    });
+    // One mode since 14 Nov 2026 (owner D-63 a): when the real data cannot be read (offline, server asleep) the
+    // tool says so and offers Retry (gate "error" below). It no longer falls back to sample data: that switched
+    // a browser to invented companies and people for good ("Breeze", "nino.sample@example.com").
+    var settingsP = api.getSettings();
     // Archived pictures too, so posts that use one still show it until it is deleted.
     Promise.all([settingsP, api.listImages(undefined, { archived: true }), api.myAccess().catch(function () { return null; }), api.listGoals()]).then(function (r) {
       settings = r[0];
@@ -4698,7 +4756,6 @@
       loadCtx(); buildNav(); buildTopbar(); buildAssistant(); wireShell(); wireFeedback();
       $('#ads-gate').hidden = true; $('#ads-app').hidden = false;
       route();
-      if (liveFailed) toast(t('mode.liveFailed'), 'act');
       if (!liveMode() && !settings.businesses.length && !(settings.onboarding && settings.onboarding.skipped)) openOnboarding();
     }).catch(function () { started = false; showGate('error'); });
   }
