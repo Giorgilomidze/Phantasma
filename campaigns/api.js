@@ -847,6 +847,14 @@
   function disconnectInbox(b, channel) { return msgCall({ action: 'disconnect', business_id: b, channel: channel }); }
   // Claude drafts a reply (D-69 a): resolves with the text; a person reads, edits and sends it.
   function suggestReply(id) { return msgCall({ action: 'suggest', conversation_id: id }).then(function (r) { return r.text; }); }
+  // How many conversations of the company have unread messages (the badge on the menu item Messaging).
+  function unreadCount(b) {
+    return init().then(function () {
+      if (!isLive()) return state.ws.inbox.filter(function (c) { return c.business === b && c.unread > 0; }).length;
+      return client.from('ads_conversations').select('id', { count: 'exact', head: true }).eq('business_id', b).gt('unread', 0)
+        .then(function (r) { if (r.error) throw dbError(r.error); return r.count || 0; });
+    });
+  }
   function listConversations(b) {
     return init().then(function () {
       if (isLive()) {
@@ -985,6 +993,78 @@
   // owner can try them with the real company names; the page says so. b: a company id, or none = all.
   // Brand: { id, business, name, about, look, elements, feel, voice, colors: ['#RRGGBB'], feedback:
   // [{ id, ts, user, right, wrong }] newest first, updatedAt }.
+  /* ---- Company information for Claude (SQL 0046, owner 15 Nov 2026): the fields and the text of uploaded
+          files. Admins of the company write (the database checks it); Claude reads it in ads-messages. ---- */
+  var KN_FIELDS = ['contacts', 'process', 'prices', 'delivery', 'payment', 'warranty', 'faq', 'rules', 'other'];
+  var KN_MAX = 8000, KN_FILES = 20;
+  function knFile(f) { return { id: f.id, name: f.name, kind: f.kind, bytes: f.bytes || 0, text: f.text || '', chars: (f.text || '').length, createdAt: f.created_at || f.createdAt || null }; }
+  function knStore() { return state.ws.knowledge || (state.ws.knowledge = {}); }
+  function knErr(err) {
+    var m = String((err && err.message) || '');
+    if (/knowledge_files_full/.test(m)) return codeError('kn.err.full', { n: KN_FILES });
+    if (String(err && err.code) === '42501' || /row-level security/i.test(m)) return codeError('kn.err.rights');
+    return dbError(err);
+  }
+  function getKnowledge(b) {
+    return init().then(function () {
+      if (!isLive()) { var k = knStore()[b] || { sections: {}, updatedAt: null, files: [] }; return wait(clone(k)); }
+      return Promise.all([
+        client.from('ads_knowledge').select('sections,updated_at').eq('business_id', b).maybeSingle().then(mustDb),
+        client.from('ads_knowledge_files').select('id,name,kind,bytes,text,created_at').eq('business_id', b).order('created_at', { ascending: true }).then(mustDb)
+      ]).then(function (r) {
+        return { sections: (r[0] && r[0].sections) || {}, updatedAt: r[0] ? r[0].updated_at : null, files: (r[1] || []).map(knFile) };
+      });
+    });
+  }
+  function saveKnowledge(b, sections) {
+    var clean = {}, chars = 0;
+    KN_FIELDS.forEach(function (k) { var v = String((sections || {})[k] || '').trim().slice(0, KN_MAX); if (v) { clean[k] = v; chars += v.length; } });
+    return init().then(function () {
+      if (!isLive()) {
+        var st = knStore(), cur = st[b] || { files: [] };
+        st[b] = { sections: clean, updatedAt: new Date().toISOString(), files: cur.files || [] };
+        audit('knowledge.saved', 'company', b, Object.keys(clean).length + ' fields | ' + chars + ' characters (SAMPLE)');
+        save();
+        return wait({ sections: clone(clean), updatedAt: st[b].updatedAt });
+      }
+      return client.from('ads_knowledge').upsert({ business_id: b, sections: clean }, { onConflict: 'business_id' }).select('sections,updated_at').maybeSingle()
+        .then(function (r) { if (r.error) throw knErr(r.error); return r.data; }).then(function (row) {
+          auditLive('knowledge.saved', 'company', b, { business_id: b, fields: Object.keys(clean).length, chars: chars });
+          return { sections: (row && row.sections) || clean, updatedAt: row ? row.updated_at : new Date().toISOString() };
+        });
+    });
+  }
+  // f = { name, kind, bytes, text } from AdsKnowledgeImport.read (only the text is kept).
+  function addKnowledgeFile(b, f) {
+    return init().then(function () {
+      if (!isLive()) {
+        var st = knStore(), cur = st[b] || (st[b] = { sections: {}, updatedAt: null, files: [] });
+        if (cur.files.length >= KN_FILES) throw codeError('kn.err.full', { n: KN_FILES });
+        var x = knFile({ id: newId('kn'), name: f.name, kind: f.kind, bytes: f.bytes, text: f.text, created_at: new Date().toISOString() });
+        cur.files.push(x);
+        audit('knowledge.file_added', 'company', b, f.name + ' | ' + f.text.length + ' characters (SAMPLE)');
+        save();
+        return wait(clone(x));
+      }
+      return client.from('ads_knowledge_files').insert({ business_id: b, name: f.name, kind: f.kind, bytes: f.bytes, text: f.text })
+        .select('id,name,kind,bytes,text,created_at').maybeSingle()
+        .then(function (r) { if (r.error) throw knErr(r.error); return r.data; }).then(function (row) {
+          auditLive('knowledge.file_added', 'company', b, { business_id: b, name: f.name, kind: f.kind, chars: f.text.length });
+          return knFile(row);
+        });
+    });
+  }
+  function deleteKnowledgeFile(b, id) {
+    return init().then(function () {
+      if (!isLive()) {
+        var cur = knStore()[b]; if (cur) cur.files = (cur.files || []).filter(function (x) { return x.id !== id; });
+        save(); return wait(true);
+      }
+      return client.from('ads_knowledge_files').delete().eq('id', id).eq('business_id', b).select('id,name')
+        .then(function (r) { if (r.error) throw knErr(r.error); if (!r.data || !r.data.length) throw codeError('kn.err.rights'); return r.data[0]; })
+        .then(function (row) { auditLive('knowledge.file_deleted', 'company', b, { business_id: b, name: row.name }); return true; });
+    });
+  }
   function listBrands(b) {
     return init().then(function () {
       return wait(state.ws.brands.filter(function (x) { return (!b || x.business === b) && !(x.sample && isLive()); }));
@@ -1774,13 +1854,14 @@
     saveCompany: saveCompany, skipOnboarding: skipOnboarding, startEmptyWorkspace: startEmptyWorkspace,
     listMembers: listMembers, inviteMember: inviteMember, updateMember: updateMember, removeMember: removeMember,
     listBrands: listBrands, saveBrand: saveBrand, deleteBrand: deleteBrand, addBrandFeedback: addBrandFeedback,
+    getKnowledge: getKnowledge, saveKnowledge: saveKnowledge, addKnowledgeFile: addKnowledgeFile, deleteKnowledgeFile: deleteKnowledgeFile, knowledgeRules: { fields: KN_FIELDS, max: KN_MAX, files: KN_FILES },
     listApprovals: listApprovals, approveItem: approveItem, sendBack: sendBack,
     // Live team + companies (0039), post goals and Messaging (13 Nov 2026)
     myAccess: myAccess, acceptInvites: acceptInvites,
     goalRules: { textMax: GOAL_TEXT_MAX }, listGoals: listGoals, saveGoal: saveGoal, deleteGoal: deleteGoal,
     msgRules: { textMax: MSG_MAX }, listConversations: listConversations, openConversation: openConversation,
     inboxChannels: inboxChannels, connectInbox: connectInbox, disconnectInbox: disconnectInbox, suggestReply: suggestReply,
-    replyConversation: replyConversation, setConversationStatus: setConversationStatus, pictureUrls: pictureUrls,
+    replyConversation: replyConversation, setConversationStatus: setConversationStatus, pictureUrls: pictureUrls, unreadCount: unreadCount,
     // Keys (0043) and the audit log (13 Nov 2026)
     listConnections: listConnections, saveConnection: saveConnection, testConnection: testConnection,
     removeConnection: removeConnection, setCompanyMeta: setCompanyMeta, listAuditLog: listAuditLog

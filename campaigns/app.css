@@ -728,6 +728,26 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-filter[aria-pressed="true"] .ads-logo-sm { background: var(--bg); border-radius: 50%; }
 .ads-msg__intro { max-width: 110ch; }
 .ads-chbar { margin: 0 0 var(--space-4); }
+/* Second round (owner, 15 Nov 2026): connections behind a gear on the title line, explanation on hover, badges */
+.ads-gearbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.ads-gearbar .ads-chstripe[hidden] { display: none; }
+.ads-tipwrap { position: relative; display: inline-flex; }
+.ads-gear { color: var(--ink); border: 1px solid var(--rule); background: var(--surface-raised); }
+.ads-gear[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.ads-gear svg { display: block; }
+.ads-tip { position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: 20; width: min(360px, 80vw); padding: var(--space-3);
+  border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: var(--type-caption); line-height: 1.5;
+  box-shadow: var(--shadow-lightbox); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .15s ease; }
+.ads-tipwrap:hover .ads-tip, .ads-gear:focus-visible + .ads-tip { opacity: 1; visibility: visible; }
+@media (prefers-reduced-motion: reduce) { .ads-tip { transition: none; } }
+.ads-msg__filters { margin: 0 0 var(--space-4); }
+.ads-gearbar ~ .ads-chpanel, .ads-pagehead + .ads-chpanel { margin: 0 0 var(--space-3); }
+.ads-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  background: var(--accent); color: var(--ink); font-size: 12px; font-weight: 700; line-height: 1; }
+.ads-badge[hidden] { display: none; }
+.ads-filter[aria-pressed="true"] .ads-badge { box-shadow: 0 0 0 2px var(--bg); }
+.ads-navbadge { margin-left: auto; }
+.ads-nav__link[aria-current="page"] .ads-navbadge { box-shadow: 0 0 0 2px var(--bg); }
 .ads-chstripe { display: flex; flex-wrap: wrap; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface-raised); }
 .ads-chstripe__item { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-3); border: 1px solid transparent;
   border-radius: var(--radius-sm); background: none; color: var(--ink); font: inherit; font-size: var(--type-body-sm); cursor: pointer; }
@@ -775,6 +795,27 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-bubble--us { align-self: flex-end; background: var(--partner); color: var(--bg); border-color: var(--partner); }
 .ads-bubble__text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 .ads-bubble__at { display: block; margin-top: var(--space-1); font-size: var(--type-caption); opacity: .8; }
+/* Information for Claude on the Brands page (owner, 15 Nov 2026; SQL 0046) */
+.ads-kn { padding: 0; }
+.ads-kn__sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3); padding: var(--space-4); cursor: pointer; list-style: none; }
+.ads-kn__sum::-webkit-details-marker { display: none; }
+.ads-kn__sum::before { content: "▸"; color: var(--ink-soft); transition: transform .15s ease; }
+.ads-kn[open] > .ads-kn__sum::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .ads-kn__sum::before { transition: none; } }
+.ads-kn__sum .ads-h2 { margin: 0; }
+.ads-kn__sum:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; border-radius: var(--radius-md); }
+.ads-kn__body { padding: 0 var(--space-4) var(--space-4); }
+.ads-kn__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--space-4); }
+@media (min-width: 900px) { .ads-kn__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ads-kn__filesbox { margin-top: var(--space-4); border-top: 1px solid var(--rule); }
+.ads-kn__files { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.ads-kn__file { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--surface); }
+.ads-kn__fname { font-weight: 500; overflow-wrap: anywhere; }
+.ads-kn__file .ads-sub { flex: 1 1 200px; }
+.ads-kn__text { max-height: 65vh; overflow: auto; margin: 0; padding: var(--space-3); background: var(--surface); border-radius: var(--radius-sm);
+  white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: var(--type-body-sm); }
+.ads-kn__products { margin: var(--space-3) 0 0; }
 /* Pictures in conversations (D-72, 15 Nov 2026) */
 .ads-bubble__pics { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-2); }
 .ads-bubble__pic { display: block; padding: 0; border: 0; background: none; line-height: 0; cursor: zoom-in; border-radius: var(--radius-sm); }

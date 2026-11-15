@@ -530,8 +530,28 @@
     var ul = $('#ads-nav-list');
     ul.innerHTML = '';
     NAV.forEach(function (n) {
-      ul.appendChild(h('li', {}, h('a', { href: '#/' + n[0], class: 'ads-nav__link', 'data-route': n[0] }, [t(n[1]), n[2] ? h('span', { class: 'ads-nav__soon' }, t('common.soon')) : null])));
+      var badge = n[0] === 'messaging' ? [h('span', { class: 'ads-badge ads-navbadge', id: 'ads-nav-msg-badge', 'aria-hidden': 'true', hidden: true }),
+        h('span', { class: 'visually-hidden', id: 'ads-nav-msg-sr' })] : null;
+      ul.appendChild(h('li', {}, h('a', { href: '#/' + n[0], class: 'ads-nav__link', 'data-route': n[0] },
+        [t(n[1]), n[2] ? h('span', { class: 'ads-nav__soon' }, t('common.soon')) : null].concat(badge || []))));
     });
+    setMsgBadge(msgUnread);
+  }
+  // Unread conversations of the company in the top bar (owner, 15 Nov 2026): a badge on the menu item Messaging.
+  // Refreshed on every page change, every minute, and by the Messaging page itself (every 15 seconds there).
+  var msgUnread = 0, unreadTimer = null;
+  function setMsgBadge(n) {
+    msgUnread = n || 0;
+    var b = document.getElementById('ads-nav-msg-badge'), sr = document.getElementById('ads-nav-msg-sr');
+    if (!b) return;
+    b.hidden = !msgUnread; b.textContent = msgUnread > 99 ? '99+' : String(msgUnread);
+    if (sr) sr.textContent = msgUnread ? ', ' + t('msg.unreadConv', { n: msgUnread }) : '';
+  }
+  function refreshUnread() {
+    if (!liveMode() || !ctx.business) { setMsgBadge(0); return; }
+    var b = ctx.business;
+    api.unreadCount(b).then(function (n) { if (ctx.business === b) setMsgBadge(n); }, function () { /* the badge keeps its number */ });
+    if (!unreadTimer) unreadTimer = setInterval(function () { if (!document.hidden) refreshUnread(); }, 60000);
   }
   function render(node, titleKey) {
     main.innerHTML = '';
@@ -550,6 +570,7 @@
     });
     var tok = viewTok;
     main.scrollTop = 0; window.scrollTo(0, 0);
+    if (hasCompany()) refreshUnread();
     // No company yet (D-49): the Library and Settings work; the other pages offer "Create a company".
     var navItem = NAV.filter(function (n) { return n[0] === name; })[0];
     if (!hasCompany() && name !== 'images' && name !== 'settings') return viewNoCompany(navItem ? navItem[1] : 'nav.dashboard');
@@ -4201,6 +4222,7 @@
     var add = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { brandDialog(null).then(function (b) { if (b) load(b.id); }); } }, t('br.new'));
     render(h('div', {}, [
       pageHead('br.nav', [add]),
+      knowledgeCard(tok),
       h('p', { class: 'ads-note' }, t('br.intro', { name: bizName(ctx.business) })),
       liveMode() ? h('p', { class: 'ads-warn' }, t('br.sample')) : null,
       body
@@ -4234,6 +4256,105 @@
         ])
       ]);
     }
+  }
+  // "Information for Claude" (owner, 15 Nov 2026; SQL 0046): what Claude reads before it suggests a reply in
+  // Messaging — the company's fields (contacts and branches, how it works, prices, …), the text of uploaded files
+  // and the Products list with stock and price. Admins of the company change it; everyone else reads it.
+  function knowledgeCard(tok) {
+    var R = api.knowledgeRules, live = liveMode(), canEdit = !live || msgRole() === 'admin';
+    var box = h('details', { class: 'ads-card ads-kn' });
+    var sum = h('summary', { class: 'ads-kn__sum' }, [h('span', { class: 'ads-h2' }, t('kn.title')), h('span', { class: 'ads-sub ads-kn__count' }, '…')]);
+    var inner = h('div', { class: 'ads-kn__body' }, skeleton(3));
+    append(box, [sum, inner]);
+    var data = null, areas = {};
+    Promise.all([api.getKnowledge(ctx.business), api.listProducts(ctx.business).catch(function () { return []; })]).then(function (r) {
+      if (stale(tok)) return;
+      data = r[0];
+      draw(r[1] || []);
+      box.open = !Object.keys(data.sections || {}).length && !data.files.length; // empty: open at once
+    }, function () { if (!stale(tok)) { inner.innerHTML = ''; inner.appendChild(errorState(function () { box.replaceWith(knowledgeCard(tok)); })); } });
+    function count() {
+      var filled = R.fields.filter(function (k) { return areas[k] ? areas[k].value.trim() : (data.sections || {})[k]; }).length;
+      sum.lastChild.textContent = t('kn.count', { n: filled, of: R.fields.length, files: data.files.length });
+    }
+    function draw(products) {
+      inner.innerHTML = '';
+      var grid = h('div', { class: 'ads-kn__grid' }, R.fields.map(function (k) {
+        var a = textArea('ads-kn-' + k, (data.sections || {})[k] || '', R.max, k === 'contacts' || k === 'faq' ? 6 : 4);
+        a.setAttribute('aria-describedby', 'ads-kn-' + k + '-hint');
+        a.disabled = !canEdit;
+        a.addEventListener('input', count);
+        areas[k] = a;
+        return field('kn.f.' + k, a, t('kn.h.' + k), 'ads-kn-' + k);
+      }));
+      var saveBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
+        var s = {}; R.fields.forEach(function (k) { s[k] = areas[k].value; });
+        saveBtn.disabled = true;
+        api.saveKnowledge(ctx.business, s).then(function (res) {
+          saveBtn.disabled = false; data.sections = res.sections; data.updatedAt = res.updatedAt; count();
+          savedLine.textContent = t('kn.saved', { when: fmtDateTime(res.updatedAt) });
+          toast(t('kn.savedToast'), 'info');
+        }, function (e) { saveBtn.disabled = false; toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+      } }, t('kn.save'));
+      var savedLine = h('p', { class: 'ads-hint' }, data.updatedAt ? t('kn.saved', { when: fmtDateTime(data.updatedAt) }) : '');
+      var inStock = products.filter(function (p) { return Number(p.quantity) > 0; }).length;
+      append(inner, [
+        h('p', { class: 'ads-note' }, t('kn.intro', { name: bizName(ctx.business) })),
+        canEdit ? null : h('p', { class: 'ads-hint' }, t('kn.viewOnly')),
+        grid,
+        canEdit ? h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [saveBtn, savedLine]) : savedLine,
+        filesPart(),
+        h('p', { class: 'ads-note ads-kn__products' }, [t('kn.products', { n: products.length, k: inStock }) + ' ',
+          h('a', { class: 'ads-link', href: '#/products' }, t('kn.productsLink'))])
+      ]);
+      count();
+    }
+    function filesPart() {
+      var list = h('ul', { class: 'ads-kn__files' });
+      function drawFiles() {
+        list.innerHTML = '';
+        if (!data.files.length) { list.appendChild(h('li', { class: 'ads-hint' }, t('kn.files.none'))); return; }
+        data.files.forEach(function (f) {
+          list.appendChild(h('li', { class: 'ads-kn__file' }, [
+            h('span', { class: 'ads-kn__fname' }, f.name),
+            h('span', { class: 'ads-sub' }, t('kn.files.meta', { kind: f.kind.toUpperCase(), chars: f.chars.toLocaleString(), when: fmtDate(f.createdAt) })),
+            h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () {
+              openDialog({ title: f.name, wide: true, noCancel: true, body: h('pre', { class: 'ads-kn__text' }, f.text) });
+            } }, t('kn.files.show')),
+            canEdit ? h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost ads-btn--small', onclick: function (e) {
+              var btn = e.currentTarget;
+              confirmDialog({ title: t('kn.files.delete'), message: t('kn.files.deleteQ', { name: f.name }), confirmLabel: t('kn.files.delete'), danger: true }).then(function (yes) {
+                if (!yes) return;
+                btn.disabled = true;
+                api.deleteKnowledgeFile(ctx.business, f.id).then(function () {
+                  data.files = data.files.filter(function (x) { return x.id !== f.id; }); drawFiles(); count();
+                }, function (er) { btn.disabled = false; toast(t('toast.failed') + ' ' + errText(er), 'act'); });
+              });
+            } }, t('kn.files.delete')) : null]));
+        });
+      }
+      drawFiles();
+      var kids = [h('h3', { class: 'ads-h3' }, t('kn.files.title')), h('p', { class: 'ads-hint' }, t('kn.files.hint', { n: R.files })), list];
+      if (canEdit && window.AdsKnowledgeImport) {
+        var input = h('input', { type: 'file', accept: window.AdsKnowledgeImport.accept, class: 'visually-hidden', tabindex: '-1', 'aria-hidden': 'true' });
+        var up = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { input.click(); } }, t('kn.files.upload'));
+        input.addEventListener('change', function () {
+          var f = input.files && input.files[0]; input.value = '';
+          if (!f) return;
+          up.disabled = true; up.textContent = t('kn.files.reading');
+          window.AdsKnowledgeImport.read(f).then(function (res) {
+            return api.addKnowledgeFile(ctx.business, res).then(function (x) {
+              data.files.push(x); drawFiles(); count();
+              toast(t(res.cut ? 'kn.files.addedCut' : 'kn.files.added', { name: res.name, chars: res.text.length.toLocaleString() }), res.cut ? 'act' : 'info');
+            });
+          }).catch(function (e) { toast(f.name + ': ' + (e && e.key && e.key.indexOf('kn.') === 0 ? t(e.key, e.vars) : t('toast.failed') + ' ' + errText(e)), 'act'); })
+            .then(function () { up.disabled = false; up.textContent = t('kn.files.upload'); });
+        });
+        kids.push(h('div', { class: 'ads-btnrow ads-btnrow--tight' }, [up, input]));
+      }
+      return h('div', { class: 'ads-kn__filesbox' }, kids);
+    }
+    return box;
   }
   function swatches(colors) {
     return h('div', { class: 'ads-swatches', 'aria-hidden': 'true' }, (colors || []).map(function (c) {
@@ -4420,6 +4541,9 @@
          local test page. Plan: Phantasma Library\workstreams\ads-messaging-plan-2026-11-13.md. ---- */
   var MSG_CHANNELS = ['messenger', 'instagram', 'whatsapp'];
   var MSG_LOGO = { messenger: 'messenger', instagram: 'instagram', whatsapp: 'whatsapp', telegram: 'telegram' }; // logos.js ids
+  // Gear of the channel connections — "settings" icon of Feather Icons (feathericons.com), MIT License, (c) Cole Bemis.
+  var GEAR_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
   var MSG_LIVE = ['messenger', 'instagram'];          // the channels that can be switched on today
   var MSG_MAX_LIVE = { messenger: 2000, instagram: 1000 }; // Meta's limits per message
   var MSG_POLL_MS = 15000;                            // new messages show up without a reload
@@ -4445,12 +4569,20 @@
     var biz = settings.businesses.filter(function (b) { return b.id === ctx.business; })[0] || null;
     var listBox = h('div', { class: 'ads-inbox__list', 'aria-label': t('msg.list') });
     var threadBox = h('div', { class: 'ads-inbox__thread', 'aria-live': 'polite' });
-    // Layout (owner, 15 Nov 2026): the channel filter sits on the title line (right), one line of explanation, then a
-    // slim stripe with one logo + state per channel whose arrow opens that channel's details below it; Open / Done
-    // above the conversation list. A new channel (Telegram, …) = one more entry in MSG_CHANNELS + MSG_LOGO + texts.
-    var stripe = h('div', { class: 'ads-chstripe', role: 'group', 'aria-label': t('msg.channels') });
+    // Layout (owner, 15 Nov 2026, second round): the channel filter (with unread badges) under the title; the
+    // connections behind a gear on the right of the title — the explanation shows on hover, a click shows the channel
+    // logos (each opens its details below the title); Open / Done above the list. A new channel (Telegram, …) = one
+    // more entry in MSG_CHANNELS + MSG_LOGO + texts.
+    var stripe = h('div', { class: 'ads-chstripe', id: 'ads-chstripe', role: 'group', 'aria-label': t('msg.channels'), hidden: true });
     var chPanel = h('div', { class: 'ads-chpanel', id: 'ads-chpanel', hidden: true });
-    var openCh = null;
+    var openCh = null, stripeTouched = false, chanBadges = {};
+    var gear = h('button', { type: 'button', class: 'ads-iconbtn ads-gear', 'aria-expanded': 'false', 'aria-controls': 'ads-chstripe',
+      'aria-label': t('msg.channels'), 'aria-describedby': 'ads-msg-tip', onclick: function () { stripeTouched = true; showStripe(stripe.hidden); } });
+    gear.innerHTML = GEAR_SVG;
+    function showStripe(on) {
+      stripe.hidden = !on; gear.setAttribute('aria-expanded', String(on));
+      if (!on && openCh) { openCh = null; drawCards(); }
+    }
     function chipRow(keys, cur, label, onPick) {
       var btns = keys.map(function (k) {
         return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === cur()), onclick: function () {
@@ -4459,14 +4591,29 @@
       });
       return btns;
     }
-    var chanBtns = chipRow(['all'].concat(MSG_CHANNELS), function () { return msgChannel; },
-      function (k) { return k === 'all' ? t('common.all') : [logoMark(MSG_LOGO[k]), h('span', {}, t('msg.ch.' + k))]; }, function (k) { msgChannel = k; });
+    function chipLabel(k) {   // logo + name + unread badge (the number is read out by screen readers as "N unread")
+      var x = { b: h('span', { class: 'ads-badge', 'aria-hidden': 'true', hidden: true }), sr: h('span', { class: 'visually-hidden' }) };
+      chanBadges[k] = x;
+      return [k === 'all' ? null : logoMark(MSG_LOGO[k]), h('span', {}, k === 'all' ? t('common.all') : t('msg.ch.' + k)), x.b, x.sr];
+    }
+    function drawBadges() {
+      var n = { all: 0 };
+      cache.forEach(function (c) { if (c.unread > 0) { n.all++; n[c.channel] = (n[c.channel] || 0) + 1; } });
+      Object.keys(chanBadges).forEach(function (k) {
+        var x = chanBadges[k], v = n[k] || 0;
+        x.b.hidden = !v; x.b.textContent = v > 99 ? '99+' : String(v);
+        x.sr.textContent = v ? ', ' + t('msg.unreadConv', { n: v }) : '';
+      });
+      if (live) setMsgBadge(n.all);
+    }
+    var chanBtns = chipRow(['all'].concat(MSG_CHANNELS), function () { return msgChannel; }, chipLabel, function (k) { msgChannel = k; });
     var statBtns = chipRow(['open', 'done', 'all'], function () { return msgStatus; },
       function (k) { return t('msg.st.' + k); }, function (k) { msgStatus = k; });
     render(h('div', {}, [
-      pageHead('msg.nav', [h('div', { class: 'ads-chips ads-chips--tight', role: 'group', 'aria-label': t('msg.channel') }, chanBtns)]),
-      h('p', { class: 'ads-note ads-msg__intro' }, t('msg.intro', { name: bizName(ctx.business) }) + ' ' + t(live ? 'msg.liveNote' : 'msg.sampleNote')),
-      h('div', { class: 'ads-chbar' }, [stripe, chPanel]),
+      pageHead('msg.nav', [h('div', { class: 'ads-gearbar' }, [stripe, h('span', { class: 'ads-tipwrap' }, [gear,
+        h('span', { class: 'ads-tip', id: 'ads-msg-tip', role: 'tooltip' }, t('msg.intro', { name: bizName(ctx.business) }) + ' ' + t(live ? 'msg.liveNote' : 'msg.sampleNote'))])])]),
+      chPanel,
+      h('div', { class: 'ads-chips ads-chips--tight ads-msg__filters', role: 'group', 'aria-label': t('msg.channel') }, chanBtns),
       h('div', { class: 'ads-inbox' }, [
         h('div', { class: 'ads-inbox__col' }, [h('div', { class: 'ads-chips ads-chips--tight', role: 'group', 'aria-label': t('msg.status') }, statBtns), listBox]),
         threadBox])
@@ -4512,6 +4659,7 @@
         if (stale(tok)) return;
         chans = {};
         (rows || []).forEach(function (r) { if (r.status === 'on') chans[r.channel] = r; });
+        if (!stripeTouched) showStripe(!Object.keys(chans).length); // nothing switched on yet: show the channels at once
         drawCards();
         if (!cache.length) { drawList(); if (!thread) drawEmptyThread(); }
       }, function () { /* the cards stay "Not connected" */ });
@@ -4536,7 +4684,7 @@
       api.listConversations(ctx.business).then(function (list) {
         if (stale(tok)) return;
         cache = list;
-        drawList();
+        drawList(); drawBadges();
         var stillThere = msgOpen && cache.some(function (c) { return c.id === msgOpen; });
         if (quiet) { if (stillThere && thread) refreshThread(); return; }
         if (stillThere) openThread(msgOpen); else drawEmptyThread();
@@ -4591,7 +4739,7 @@
       api.openConversation(id).then(function (c) {
         if (stale(tok)) return;
         cache.forEach(function (x) { if (x.id === id) x.unread = 0; });
-        drawList();
+        drawList(); drawBadges();
         threadBox.innerHTML = '';
         var msgs = h('ol', { class: 'ads-thread' }, c.messages.map(bubble));
         var winEl = h('p', { class: 'ads-hint', 'aria-live': 'polite' });
