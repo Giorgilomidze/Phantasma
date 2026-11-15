@@ -4594,26 +4594,35 @@
         if (canReply) kids.push(replyBox(c, msgs, winEl));
         else kids.push(h('p', { class: 'ads-note' }, t('msg.viewOnly')));
         append(threadBox, kids);
+        fillPictures(msgs);
         windowLine(c, winEl);
       }, function () { drawEmptyThread(); });
     }
     function replyBox(c, msgs, winEl) {
       var max = live ? (MSG_MAX_LIVE[c.channel] || 1000) : api.msgRules.textMax;
       var box = textArea('ads-msg-reply', '', max, 3);
+      var pic = picturePick();
       var send = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
-        if (!box.value.trim()) { toast(t('msg.err.empty'), 'act'); box.focus(); return; }
+        var chosen = pic.chosen();
+        if (!box.value.trim() && !chosen) { toast(t('msg.err.empty'), 'act'); box.focus(); return; }
         send.disabled = true;
-        api.replyConversation(c.id, box.value).then(function (m) {
+        api.replyConversation(c.id, box.value, chosen ? chosen.id : null).then(function (list) {
           send.disabled = false;
           if (stale(tok)) return;
-          msgs.appendChild(bubble(m)); box.value = ''; box.focus();
-          if (thread) thread.count++;
-          cache.forEach(function (x) { if (x.id === c.id) { x.lastText = m.text; x.lastFrom = 'us'; x.at = m.at; if (x.messages) x.messages.push(m); } });
+          list.forEach(function (m) { msgs.appendChild(bubble(m)); });
+          fillPictures(msgs);
+          box.value = ''; pic.clear(); box.focus();
+          if (thread) thread.count += list.length;
+          var last = list[list.length - 1];
+          cache.forEach(function (x) { if (x.id === c.id) { x.lastText = last.text || '[attachment]'; x.lastFrom = 'us'; x.at = last.at; if (x.messages) Array.prototype.push.apply(x.messages, list); } });
           drawList();
           toast(t(live ? 'msg.sent' : 'msg.sentSample'), 'info');
-        }, function (e) { send.disabled = false; toast(msgErrText(e), 'act'); });
+        }, function (e) {
+          send.disabled = false; toast(msgErrText(e), 'act');
+          if (thread) refreshThread(); // a picture may have gone out before the text failed
+        });
       } }, t('msg.send'));
-      var btns = [send];
+      var btns = [pic.button, send];
       if (live) {
         // Claude only drafts (D-69 a): the text lands in the box, nothing is sent.
         var sug = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () {
@@ -4627,8 +4636,66 @@
         } }, t('msg.suggest'));
         btns.unshift(sug);
       }
-      return h('div', { class: 'ads-thread__reply' }, [h('label', { class: 'ads-label', for: 'ads-msg-reply' }, t('msg.reply')), box,
+      return h('div', { class: 'ads-thread__reply' }, [h('label', { class: 'ads-label', for: 'ads-msg-reply' }, t('msg.reply')), box, pic.chip, pic.panel,
         live ? winEl : h('p', { class: 'ads-hint' }, t('msg.window')), h('div', { class: 'ads-btnrow ads-btnrow--tight' }, btns)]);
+    }
+    // The Picture button of the reply box (D-72): one picture of this company's Image Library, or an upload from
+    // the computer that lands in the library (Uploads) first. JPG or PNG up to 8 MB (what Messenger and
+    // Instagram take; the library keeps no GIF). Returns { button, chip, panel, chosen(), clear() }.
+    function picturePick() {
+      var chosen = null, open = false;
+      var chip = h('div', { class: 'ads-msgpic__chosen', hidden: true });
+      var panel = h('div', { class: 'ads-msgpic', id: 'ads-msgpic', role: 'group', 'aria-label': t('msg.pic.choose'), hidden: true });
+      var button = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', 'aria-expanded': 'false', 'aria-controls': 'ads-msgpic', onclick: function () { show(!open); } }, t('msg.pic.btn'));
+      function sendable(im) {
+        return im && im.business === ctx.business && !im.archivedAt && im.folder !== 'elements' && (!live || !im.sample)
+          && (!im.mime || /^image\/(jpeg|png)$/.test(im.mime)) && !(im.bytes > 8 * 1048576);
+      }
+      function setChosen(im) {
+        chosen = im || null;
+        chip.innerHTML = ''; chip.hidden = !chosen;
+        if (!chosen) return;
+        append(chip, [imageEl(chosen.id, 'ads-msgpic__thumb'), h('span', { class: 'ads-msgpic__name' }, t('msg.pic.chosen', { title: lname(chosen, 'title') })),
+          h('button', { type: 'button', class: 'ads-iconbtn', 'aria-label': t('msg.pic.remove'), onclick: function () { setChosen(null); syncRadios(); button.focus(); } }, '✕')]);
+      }
+      function syncRadios() {
+        Array.prototype.forEach.call(panel.querySelectorAll('input[type=radio]'), function (rb) { rb.checked = !!chosen && rb.value === chosen.id; });
+      }
+      function show(on) {
+        open = on; panel.hidden = !on; button.setAttribute('aria-expanded', on ? 'true' : 'false');
+        if (!on) return;
+        panel.innerHTML = ''; panel.appendChild(skeleton(1));
+        api.listImages(ctx.business).then(function (list) { if (open) draw(cacheImages(list).filter(sendable)); },
+          function () { if (open) { panel.innerHTML = ''; panel.appendChild(h('p', { class: 'ads-warn' }, t('msg.pic.loadFail'))); } });
+      }
+      function draw(list) {
+        panel.innerHTML = '';
+        var file = h('input', { type: 'file', accept: 'image/jpeg,image/png', class: 'visually-hidden', tabindex: '-1', 'aria-hidden': 'true' });
+        var up = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { file.click(); } }, t('msg.pic.upload'));
+        file.addEventListener('change', function () {
+          var f = file.files && file.files[0]; file.value = '';
+          if (!f) return;
+          if (!/^image\/(jpeg|png)$/.test(f.type)) { toast(t('msg.pic.types'), 'act'); return; }
+          if (f.size > 8 * 1048576) { toast(t('msg.pic.big'), 'act'); return; }
+          var bad = api.checkImageFile(f);
+          if (bad) { toast(f.name + ': ' + t(bad.key, bad.vars), 'act'); return; }
+          up.disabled = true; up.textContent = t('msg.pic.uploading');
+          api.uploadImage(ctx.business, f, { folder: 'uploads', source: 'upload' }).then(function (im) {
+            cacheImages([im]); setChosen(im); show(false); button.focus();
+            toast(t('msg.pic.uploaded'), 'info');
+          }, function (e) { up.disabled = false; up.textContent = t('msg.pic.upload'); toast(t('toast.failed') + ' ' + errText(e), 'act'); });
+        });
+        var head = h('div', { class: 'ads-msgpic__head' }, [h('p', { class: 'ads-hint' }, t('msg.pic.choose')), up, file,
+          h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function () { show(false); button.focus(); } }, t('common.close'))]);
+        var grid = list.length ? h('div', { class: 'ads-imggrid ads-msgpic__grid' }, list.map(function (im) {
+          var rb = h('input', { type: 'radio', name: 'ads-msgpic-choice', id: 'ads-msgpic-' + im.id, value: im.id });
+          rb.addEventListener('change', function () { if (rb.checked) setChosen(im); });
+          return h('label', { class: 'ads-imgpick', for: 'ads-msgpic-' + im.id }, [rb, imageEl(im.id, 'ads-imgpick__img'), h('span', { class: 'ads-imgpick__cap' }, lname(im, 'title'))]);
+        })) : h('p', { class: 'ads-note' }, t('msg.pic.none'));
+        append(panel, [head, grid]);
+        syncRadios();
+      }
+      return { button: button, chip: chip, panel: panel, chosen: function () { return chosen; }, clear: function () { setChosen(null); show(false); } };
     }
     // The 15-second refresh of the open conversation: new messages are added below, the reply box stays as it is.
     function refreshThread() {
@@ -4638,19 +4705,56 @@
         if (c.messages.length > cur.count) {
           c.messages.slice(cur.count).forEach(function (m) { cur.msgs.appendChild(bubble(m)); });
           cur.count = c.messages.length;
+          fillPictures(cur.msgs);
         }
         windowLine(c, cur.win);
       }, function () { /* the next refresh tries again */ });
     }
+    // Pictures (D-72): our copies (ads-inbox) and Image Library pictures show inside the conversation (click =
+    // larger); a Meta link without a copy opens on Meta; after 90 days only "picture deleted" is left.
     function bubble(m) {
-      var files = (m.attachments || []).filter(function (a) { return a && a.url; });
+      var pics = [], links = [], notes = [];
+      (m.attachments || []).forEach(function (a) {
+        if (!a) return;
+        if (a.gone) notes.push(t('msg.pic.gone'));
+        else if (a.previewUrl || (a.path && (a.bucket === 'ads-inbox' || a.bucket === 'ads-library'))) pics.push(a);
+        else if (a.url) links.push(a);
+        else notes.push(t('msg.attachment'));
+      });
       return h('li', { class: 'ads-bubble ads-bubble--' + (m.from === 'us' ? 'us' : 'them') }, [
+        pics.length ? h('div', { class: 'ads-bubble__pics' }, pics.map(picEl)) : null,
         m.text ? h('p', { class: 'ads-bubble__text' }, m.text) : null,
-        files.length ? h('p', { class: 'ads-bubble__text' }, files.map(function (a, i) {
-          return h('a', { class: 'ads-link', href: a.url, target: '_blank', rel: 'noopener noreferrer' }, t('msg.attachment') + (files.length > 1 ? ' ' + (i + 1) : ''));
-        })) : (!m.text && m.attachments && m.attachments.length ? h('p', { class: 'ads-bubble__text' }, t('msg.attachment')) : null),
+        links.length ? h('p', { class: 'ads-bubble__text' }, links.map(function (a, i) {
+          var pic = a.type === 'image' || a.type === 'sticker';
+          return h('a', { class: 'ads-link', href: a.url, target: '_blank', rel: 'noopener noreferrer' }, t(pic ? 'msg.pic.meta' : 'msg.attachment') + (links.length > 1 ? ' ' + (i + 1) : ''));
+        })) : null,
+        notes.length ? h('p', { class: 'ads-bubble__note' }, notes.join(' · ')) : null,
         h('span', { class: 'ads-bubble__at' }, fmtDateTime(m.at) + (m.sample ? ' · ' + t('msg.notSent') : ''))
       ]);
+    }
+    function picEl(a) {
+      var sticker = a.type === 'sticker';
+      var img = h('img', { class: 'ads-bubble__img', alt: t(sticker ? 'msg.pic.sticker' : 'msg.pic.alt'), decoding: 'async' });
+      if (a.previewUrl) img.src = a.previewUrl;
+      else img.setAttribute('data-pic', a.bucket + '|' + a.path);
+      return h('button', { type: 'button', class: 'ads-bubble__pic' + (sticker ? ' ads-bubble__pic--sticker' : ''), 'aria-label': t('msg.pic.open'), onclick: function () {
+        if (!img.getAttribute('src')) return;
+        openDialog({ title: t('msg.pic.title'), wide: true, noCancel: true, body: h('img', { class: 'ads-zoom__img', src: img.src, alt: img.alt }) });
+      } }, img);
+    }
+    // Signs the pictures of the bubbles in root that have no address yet (one call per bucket).
+    function fillPictures(root) {
+      var imgs = Array.prototype.slice.call(root.querySelectorAll('img[data-pic]:not([src])'));
+      if (!imgs.length) return;
+      var list = imgs.map(function (im) { var k = im.getAttribute('data-pic'), i = k.indexOf('|'); return { bucket: k.slice(0, i), path: k.slice(i + 1) }; });
+      api.pictureUrls(list).then(function (urls) {
+        imgs.forEach(function (im) {
+          var u = urls[im.getAttribute('data-pic')];
+          if (u) { im.src = u; return; }
+          var btn = im.parentNode;
+          if (btn && btn.parentNode) btn.parentNode.replaceChild(h('span', { class: 'ads-bubble__note' }, t('msg.pic.missing')), btn);
+        });
+      }, function () { /* they stay empty; opening the conversation again tries again */ });
     }
   }
 

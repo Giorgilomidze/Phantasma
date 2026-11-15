@@ -745,6 +745,23 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-bubble--us { align-self: flex-end; background: var(--partner); color: var(--bg); border-color: var(--partner); }
 .ads-bubble__text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 .ads-bubble__at { display: block; margin-top: var(--space-1); font-size: var(--type-caption); opacity: .8; }
+/* Pictures in conversations (D-72, 15 Nov 2026) */
+.ads-bubble__pics { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-2); }
+.ads-bubble__pic { display: block; padding: 0; border: 0; background: none; line-height: 0; cursor: zoom-in; border-radius: var(--radius-sm); }
+.ads-bubble__pic:focus-visible { outline: 3px solid var(--accent-deep); outline-offset: 2px; }
+.ads-bubble__img { display: block; width: auto; height: auto; max-width: min(240px, 100%); max-height: 240px; min-width: 48px; min-height: 48px;
+  object-fit: contain; border-radius: var(--radius-sm); background: var(--surface); }
+.ads-bubble__pic--sticker .ads-bubble__img { max-width: 96px; max-height: 96px; background: transparent; }
+.ads-bubble__note { margin: 0; font-size: var(--type-body-sm); font-style: italic; opacity: .85; }
+.ads-msgpic { margin-top: var(--space-2); padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface-raised); }
+.ads-msgpic__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.ads-msgpic__head .ads-hint { flex: 1 1 240px; margin: 0; }
+.ads-msgpic__grid { max-height: 320px; overflow: auto; }
+.ads-msgpic__chosen { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.ads-msgpic__chosen[hidden], .ads-msgpic[hidden] { display: none; }
+.ads-msgpic__thumb { width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius-sm); }
+.ads-msgpic__name { font-size: var(--type-body-sm); overflow-wrap: anywhere; }
+.ads-zoom__img { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; object-fit: contain; }
 .ads-thread__reply .ads-label { display: block; margin-bottom: var(--space-1); }
 
 /* -------------------------------------------------------------------------

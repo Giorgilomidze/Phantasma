@@ -879,18 +879,45 @@
       return wait(c);
     });
   }
-  function replyConversation(id, text) {
-    if (isLive()) return msgCall({ action: 'send', conversation_id: id, text: String(text || '') }).then(function (r) { return r.message; });
+  // A reply: text and / or one Image Library picture (D-72). Resolves with the messages sent, in order (Meta
+  // sends a picture and a text as two messages: the picture first).
+  function replyConversation(id, text, imageId) {
+    if (isLive()) {
+      var body = { action: 'send', conversation_id: id, text: String(text || '') };
+      if (imageId) body.image_id = String(imageId);
+      return msgCall(body).then(function (r) { return r.messages && r.messages.length ? r.messages : [r.message]; });
+    }
     return init().then(function () {
       var c = convById(id); if (!c) throw codeError('msg.err.gone');
-      var body = textOf(text, MSG_MAX);
-      if (!body) throw codeError('msg.err.empty');
-      var m = { from: 'us', text: body, at: new Date().toISOString(), sample: true };
-      c.messages.push(m); c.at = m.at;
-      audit('message.reply', 'conversation', c.id, c.channel + ' | ' + body.slice(0, 60) + ' | (SAMPLE: nothing was sent)');
+      var txt = textOf(text, MSG_MAX);
+      var im = imageId ? uploads.concat(fixed.images).filter(function (x) { return x.id === imageId; })[0] || null : null;
+      if (!txt && !im) throw codeError('msg.err.empty');
+      var at = new Date().toISOString(), out = [];
+      if (im) out.push({ from: 'us', text: '', at: at, sample: true, attachments: [{ type: 'image', previewUrl: im.url }] });
+      if (txt) out.push({ from: 'us', text: txt, at: at, sample: true });
+      out.forEach(function (m) { c.messages.push(m); });
+      c.at = at;
+      audit('message.reply', 'conversation', c.id, c.channel + ' | ' + (im ? '[picture] ' : '') + txt.slice(0, 60) + ' | (SAMPLE: nothing was sent)');
       save();
-      return wait(m);
+      return wait(out);
     });
+  }
+  // Short links for pictures in conversations (D-72): [{ bucket, path }] -> { 'bucket|path': url }. Only the two
+  // buckets a conversation uses; the database decides who may see which file (0045 / 0028).
+  function pictureUrls(list) {
+    if (!isLive()) return Promise.resolve({});
+    var by = {};
+    (list || []).forEach(function (a) {
+      if (a && (a.bucket === 'ads-inbox' || a.bucket === IMG_BUCKET) && a.path) (by[a.bucket] = by[a.bucket] || []).push(a.path);
+    });
+    var out = {};
+    return init().then(function () {
+      return Promise.all(Object.keys(by).map(function (bucket) {
+        return client.storage.from(bucket).createSignedUrls(by[bucket], 3600).then(function (s) {
+          (s.data || []).forEach(function (x) { if (x && x.signedUrl && !x.error) out[bucket + '|' + x.path] = x.signedUrl; });
+        }, function () { /* those pictures stay empty */ });
+      }));
+    }).then(function () { return out; });
   }
   function setConversationStatus(id, status) {
     if (isLive()) return liveRpc('ads_conversation_set_status', { p_id: id, p_status: status === 'done' ? 'done' : 'open' });
@@ -1752,7 +1779,7 @@
     goalRules: { textMax: GOAL_TEXT_MAX }, listGoals: listGoals, saveGoal: saveGoal, deleteGoal: deleteGoal,
     msgRules: { textMax: MSG_MAX }, listConversations: listConversations, openConversation: openConversation,
     inboxChannels: inboxChannels, connectInbox: connectInbox, disconnectInbox: disconnectInbox, suggestReply: suggestReply,
-    replyConversation: replyConversation, setConversationStatus: setConversationStatus,
+    replyConversation: replyConversation, setConversationStatus: setConversationStatus, pictureUrls: pictureUrls,
     // Keys (0043) and the audit log (13 Nov 2026)
     listConnections: listConnections, saveConnection: saveConnection, testConnection: testConnection,
     removeConnection: removeConnection, setCompanyMeta: setCompanyMeta, listAuditLog: listAuditLog
