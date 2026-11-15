@@ -4409,12 +4409,21 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
 .account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(5) { min-width: 200px; }
 .account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(6),
 .account-table:not(.account-table--vac):not(.account-table--sends):not(.account-table--co) td:nth-child(7) { white-space: nowrap; width: 1%; }
-/* Vacancy tables: arrow column first, so every column shifts by one. */
+/* Vacancy tables: arrow column first, so every column shifts by one. Since 15 Nov
+   2026 (owner) column 6 is Match % ("Why it matches" became its hover tip), and
+   Position takes the slack, so long titles need fewer lines. */
 .account-table--vac td:nth-child(2), .account-table--vac td:nth-child(3) { white-space: nowrap; width: 1%; }
-.account-table--vac td:nth-child(4) { min-width: 120px; }
-.account-table--vac td:nth-child(5) { min-width: 200px; max-width: 320px; }
-.account-table--vac td:nth-child(6) { min-width: 200px; }
-.account-table--vac td:nth-child(7), .account-table--vac td:nth-child(8) { white-space: nowrap; width: 1%; }
+.account-table--vac td:nth-child(4) { min-width: 150px; }
+.account-table--vac td:nth-child(5) { min-width: 280px; }
+.account-table--vac td:nth-child(6), .account-table--vac td:nth-child(7),
+.account-table--vac td:nth-child(8) { white-space: nowrap; width: 1%; }
+.t-match { font-variant-numeric: tabular-nums; }
+.t-match[data-why] {                             /* a reason is there: point at it to read it */
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ink-soft);
+  text-underline-offset: 3px;
+  cursor: help;
+}
 .account-table--sends td:nth-child(2) { min-width: 120px; }
 .account-table--sends td:nth-child(3) { min-width: 200px; max-width: 320px; }
 .account-table--sends td:nth-child(n+4) { white-space: nowrap; }

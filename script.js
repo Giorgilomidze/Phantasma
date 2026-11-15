@@ -3061,7 +3061,8 @@
          { text: '#', sort: (r) => numKey(r.rank) },
          { text: 'Company', sort: companyKey },
          { text: 'Position', sort: titleKey },
-         { text: 'Why it matches', sort: (r) => r.why_matches || short((r.vacancies || {}).description, 140) || null },
+         { text: 'Match %', sort: (r) => numKey(r.score),
+           title: 'How well the vacancy fits your profile, 0–100. Point at a number to see why it matches.' },
          { text: 'Source', sort: (r) => { const v = r.vacancies || {}; return SOURCE[v.source] || v.source || null; } },
          { text: 'Deadline', sort: (r) => dateKey((r.vacancies || {}).deadline_at) },
          { text: 'Send', cls: 't-send', title: 'Tick to have us send your application, with your CV, to this company.' }],
@@ -3072,7 +3073,7 @@
             fmtDate(r.week), r.rank,
             { company: company(v) },
             { href: v.url, text: v.title || '—', sub: [v.location, r.salary_text].filter(Boolean).join(' · ') },
-            r.why_matches || short(v.description, 140),
+            matchCell(r),
             SOURCE[v.source] || v.source,
             fmtDate(v.deadline_at),
             { check: true, id: r.id, on: r.client_decision === 'interested', locked: isSent(sent, r) },
@@ -3081,6 +3082,42 @@
         { cls: 'account-table--vac', detail: (r) => (r.vacancies && r.vacancies.title) || '',
           filter: { key: key, get: (r) => r.week } });
     }
+
+    // Match % (CAR-18, shortlists.score, "—" until the pipeline fills it). Since
+    // 15 Nov 2026 (owner) "Why it matches" is no longer a column: it is the hover
+    // tip of the number (#match-why-tip; a tap on a phone shows it). The row's
+    // details still list it.
+    function matchCell(r) {
+      const s = document.createElement('span');
+      s.className = 't-match';
+      const sc = numKey(r.score);
+      s.textContent = sc == null || isNaN(sc) ? '—' : Math.round(Math.max(0, Math.min(100, sc))) + '%';
+      const why = String(r.why_matches || '').trim();
+      if (why) s.dataset.why = why;
+      return s;
+    }
+    const whyTip = document.createElement('p');      // one tip for every vacancy table
+    whyTip.className = 'account-tip';
+    whyTip.id = 'match-why-tip';
+    whyTip.setAttribute('role', 'tooltip');
+    whyTip.hidden = true;
+    root.appendChild(whyTip);
+    const matchOf = (t) => (t && t.closest ? t.closest('.t-match[data-why]') : null);
+    function showWhy(m) {
+      whyTip.textContent = 'Why it matches: ' + m.dataset.why;
+      placeTip(m, whyTip);
+    }
+    pBody.addEventListener('mouseover', (e) => { const m = matchOf(e.target); if (m) showWhy(m); });
+    pBody.addEventListener('mouseout', (e) => {
+      const m = matchOf(e.target);
+      if (m && !m.contains(e.relatedTarget)) whyTip.hidden = true;
+    });
+    document.addEventListener('click', (e) => {
+      const m = matchOf(e.target);
+      if (m && pBody.contains(m)) showWhy(m); else whyTip.hidden = true;
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') whyTip.hidden = true; });
+    window.addEventListener('scroll', () => { whyTip.hidden = true; }, { passive: true, capture: true });
 
     // "Selected by you" = rows the client ticked (client_decision = interested)
     // plus every sent vacancy, once per vacancy, so it is never lower than
@@ -5384,20 +5421,24 @@
     // #delete-tip (.account-tip, fixed, kept on screen): hover or keyboard
     // focus shows them; leaving, Esc, blur or scrolling hides them. A click /
     // tap on the chip shows its tip too (phones have no hover).
+    // Shows a fixed tip under its anchor (above it when there is no room), kept on screen.
+    function placeTip(anchor, tip) {
+      tip.hidden = false;
+      tip.style.left = '0px';                      // measure at full width
+      tip.style.top = '0px';
+      const r = anchor.getBoundingClientRect();
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      let top = r.bottom + EDGE;
+      if (top + h > window.innerHeight - EDGE) top = Math.max(EDGE, r.top - EDGE - h);
+      tip.style.left = Math.max(EDGE, Math.min(r.left + (r.width - w) / 2, window.innerWidth - w - EDGE)) + 'px';
+      tip.style.top = top + 'px';
+    }
     function hoverTip(anchor, tip) {
       let timer = 0;
       function show() {
         clearTimeout(timer);
         if (!tip.textContent) return;
-        tip.hidden = false;
-        tip.style.left = '0px';                    // measure at full width
-        tip.style.top = '0px';
-        const r = anchor.getBoundingClientRect();
-        const w = tip.offsetWidth, h = tip.offsetHeight;
-        let top = r.bottom + EDGE;
-        if (top + h > window.innerHeight - EDGE) top = Math.max(EDGE, r.top - EDGE - h);
-        tip.style.left = Math.max(EDGE, Math.min(r.left + (r.width - w) / 2, window.innerWidth - w - EDGE)) + 'px';
-        tip.style.top = top + 'px';
+        placeTip(anchor, tip);
       }
       function hide(later) {
         clearTimeout(timer);
