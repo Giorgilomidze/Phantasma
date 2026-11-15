@@ -563,7 +563,8 @@
   function companyItem(c) {
     return { id: c.id, name: c.name, about: c.about || '', goal: c.goal || '', channels: only(c.channels, CHANNELS),
       tools: only(c.tools, WORK_TOOLS), workType: WORK_TYPES.indexOf(c.workType) !== -1 ? c.workType : '', inbox: !!c.inbox,
-      accounts: Array.isArray(c.accounts) ? c.accounts : [], currency: c.currency || null, pageId: c.pageId || null, createdAt: c.createdAt || null };
+      accounts: Array.isArray(c.accounts) ? c.accounts : [], currency: c.currency || null, pageId: c.pageId || null,
+      instagramId: c.instagramId || null, createdAt: c.createdAt || null }; // instagramId: the Messaging Instagram card needs it (15 Nov 2026)
   }
   function seedWorkspace(w) {
     w = w || {};
