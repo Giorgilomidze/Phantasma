@@ -3265,12 +3265,14 @@
       accept: '.xlsx,.xls,.ods,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet,text/csv' });
     picker.addEventListener('change', function () { var f = picker.files && picker.files[0]; picker.value = ''; if (f) readFile(f); });
     render(h('div', {}, [
+      // The file format shows when the pointer rests on (or the keyboard reaches) Upload stock file (owner, 15 Nov 2026).
       pageHead('nav.products', [
-        h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () { if (busy) toast(t('lib.busy'), 'act'); else picker.click(); } }, t('stock.upload')),
+        h('span', { class: 'ads-tipwrap' }, [
+          h('button', { type: 'button', class: 'ads-btn ads-btn--primary', 'aria-describedby': 'ads-s-fmt', onclick: function () { if (busy) toast(t('lib.busy'), 'act'); else picker.click(); } }, t('stock.upload')),
+          h('span', { class: 'ads-tip ads-tip--start', id: 'ads-s-fmt', role: 'tooltip' }, [h('strong', { class: 'ads-tip__title' }, t('stock.fmt.title')), h('span', {}, rich(t('stock.fmt')))])]),
         h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: getTemplate }, t('stock.template')),
         soonBtn('stock.connect')
       ]),
-      h('section', { class: 'ads-format', 'aria-labelledby': 'ads-s-fmt' }, [h('h2', { class: 'ads-h3', id: 'ads-s-fmt' }, t('stock.fmt.title')), h('p', {}, rich(t('stock.fmt')))]),
       picker, status, body
     ]), 'nav.products');
     load();
