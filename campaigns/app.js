@@ -4419,6 +4419,7 @@
          Approvers of the company reply, Viewers read. WhatsApp later (ADS-44). Sample conversations only on the
          local test page. Plan: Phantasma Library\workstreams\ads-messaging-plan-2026-11-13.md. ---- */
   var MSG_CHANNELS = ['messenger', 'instagram', 'whatsapp'];
+  var MSG_LOGO = { messenger: 'messenger', instagram: 'instagram', whatsapp: 'whatsapp', telegram: 'telegram' }; // logos.js ids
   var MSG_LIVE = ['messenger', 'instagram'];          // the channels that can be switched on today
   var MSG_MAX_LIVE = { messenger: 2000, instagram: 1000 }; // Meta's limits per message
   var MSG_POLL_MS = 15000;                            // new messages show up without a reload
@@ -4444,7 +4445,12 @@
     var biz = settings.businesses.filter(function (b) { return b.id === ctx.business; })[0] || null;
     var listBox = h('div', { class: 'ads-inbox__list', 'aria-label': t('msg.list') });
     var threadBox = h('div', { class: 'ads-inbox__thread', 'aria-live': 'polite' });
-    var cardsBox = h('div', { class: 'ads-msgch' });
+    // Layout (owner, 15 Nov 2026): the channel filter sits on the title line (right), one line of explanation, then a
+    // slim stripe with one logo + state per channel whose arrow opens that channel's details below it; Open / Done
+    // above the conversation list. A new channel (Telegram, …) = one more entry in MSG_CHANNELS + MSG_LOGO + texts.
+    var stripe = h('div', { class: 'ads-chstripe', role: 'group', 'aria-label': t('msg.channels') });
+    var chPanel = h('div', { class: 'ads-chpanel', id: 'ads-chpanel', hidden: true });
+    var openCh = null;
     function chipRow(keys, cur, label, onPick) {
       var btns = keys.map(function (k) {
         return h('button', { type: 'button', class: 'ads-filter', 'aria-pressed': String(k === cur()), onclick: function () {
@@ -4454,18 +4460,16 @@
       return btns;
     }
     var chanBtns = chipRow(['all'].concat(MSG_CHANNELS), function () { return msgChannel; },
-      function (k) { return k === 'all' ? t('common.all') : t('msg.ch.' + k); }, function (k) { msgChannel = k; });
+      function (k) { return k === 'all' ? t('common.all') : [logoMark(MSG_LOGO[k]), h('span', {}, t('msg.ch.' + k))]; }, function (k) { msgChannel = k; });
     var statBtns = chipRow(['open', 'done', 'all'], function () { return msgStatus; },
       function (k) { return t('msg.st.' + k); }, function (k) { msgStatus = k; });
     render(h('div', {}, [
-      pageHead('msg.nav'),
-      h('p', { class: 'ads-note' }, t('msg.intro', { name: bizName(ctx.business) })),
-      h('p', { class: 'ads-warn' }, t(live ? 'msg.liveNote' : 'msg.sampleNote')),
-      cardsBox,
-      h('div', { class: 'ads-filters' }, [
-        h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('msg.channel') }, chanBtns),
-        h('div', { class: 'ads-chips', role: 'group', 'aria-label': t('msg.status') }, statBtns)]),
-      h('div', { class: 'ads-inbox' }, [listBox, threadBox])
+      pageHead('msg.nav', [h('div', { class: 'ads-chips ads-chips--tight', role: 'group', 'aria-label': t('msg.channel') }, chanBtns)]),
+      h('p', { class: 'ads-note ads-msg__intro' }, t('msg.intro', { name: bizName(ctx.business) }) + ' ' + t(live ? 'msg.liveNote' : 'msg.sampleNote')),
+      h('div', { class: 'ads-chbar' }, [stripe, chPanel]),
+      h('div', { class: 'ads-inbox' }, [
+        h('div', { class: 'ads-inbox__col' }, [h('div', { class: 'ads-chips ads-chips--tight', role: 'group', 'aria-label': t('msg.status') }, statBtns), listBox]),
+        threadBox])
     ]), 'msg.nav');
     drawCards(); loadChannels(); load(false);
     if (live) {
@@ -4475,22 +4479,32 @@
       }, MSG_POLL_MS);
     }
 
-    // ---- channel cards: switched on or not; Admins of the company switch Messenger / Instagram on or off ----
+    // ---- channel stripe: logo, name and state per channel; the arrow opens the details (Admins of the company switch
+    //      Messenger / Instagram on or off there) ----
     function drawCards() {
-      cardsBox.innerHTML = '';
+      stripe.innerHTML = '';
       MSG_CHANNELS.forEach(function (k) {
-        var on = !!chans[k];
-        var kids = [h('div', { class: 'ads-msgch__head' }, [h('strong', {}, t('msg.ch.' + k)), on ? pill(t('msg.connected'), 'on') : pill(t('msg.notConnected'), 'off')]),
-          h('p', { class: 'ads-sub' }, t('msg.how.' + k))];
-        if (!live || MSG_LIVE.indexOf(k) === -1) kids.push(soonBtn('msg.connect', { small: true }));
-        else if (canAdmin) {
-          var need = !biz || !biz.pageId ? 'msg.needPage' : (k === 'instagram' && !biz.instagramId ? 'msg.needIg' : null);
-          if (on) kids.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function (e) { switchOff(k, e.currentTarget); } }, t('msg.switchOff')));
-          else if (need) kids.push(h('p', { class: 'ads-hint' }, t(need)));
-          else kids.push(h('button', { type: 'button', class: 'ads-btn ads-btn--primary ads-btn--small', onclick: function (e) { connect(k, e.currentTarget); } }, t('msg.connect')));
-        }
-        cardsBox.appendChild(h('div', { class: 'ads-msgch__card' }, kids));
+        var on = !!chans[k], soon = !live || MSG_LIVE.indexOf(k) === -1;
+        var state = on ? 'on' : soon ? 'soon' : 'off';
+        stripe.appendChild(h('button', { type: 'button', class: 'ads-chstripe__item', 'aria-expanded': String(openCh === k), 'aria-controls': 'ads-chpanel',
+          onclick: function () { openCh = openCh === k ? null : k; drawCards(); } }, [
+          logoMark(MSG_LOGO[k]), h('span', { class: 'ads-chstripe__name' }, t('msg.ch.' + k)),
+          h('span', { class: 'ads-chstripe__state ads-chstripe__state--' + state }, t(on ? 'msg.connected' : soon ? 'soon.chip' : 'msg.notConnected')),
+          h('span', { class: 'ads-chstripe__chev', 'aria-hidden': 'true' }, '▾')]));
       });
+      chPanel.innerHTML = '';
+      chPanel.hidden = !openCh;
+      if (!openCh) return;
+      var k = openCh, on = !!chans[k];
+      var kids = [h('p', { class: 'ads-sub' }, t('msg.how.' + k))];
+      if (!live || MSG_LIVE.indexOf(k) === -1) kids.push(soonBtn('msg.connect', { small: true }));
+      else if (canAdmin) {
+        var need = !biz || !biz.pageId ? 'msg.needPage' : (k === 'instagram' && !biz.instagramId ? 'msg.needIg' : null);
+        if (on) kids.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost ads-btn--small', onclick: function (e) { switchOff(k, e.currentTarget); } }, t('msg.switchOff')));
+        else if (need) kids.push(h('p', { class: 'ads-hint' }, t(need)));
+        else kids.push(h('button', { type: 'button', class: 'ads-btn ads-btn--primary ads-btn--small', onclick: function (e) { connect(k, e.currentTarget); } }, t('msg.connect')));
+      } else kids.push(h('p', { class: 'ads-hint' }, t('msg.adminOnly')));
+      append(chPanel, kids);
     }
     function loadChannels() {
       if (!live) return;
