@@ -498,6 +498,7 @@
   // beside them (the bars only show the size). More than BARS_MAX campaigns: the rest is one "Other" row.
   // Same colour as the spend line of the daily chart. The campaigns table below is the table view.
   var BARS_MAX = 6;
+  var DASH_CAMPAIGNS = 5; // owner, 17 Nov 2026: the Dashboard shows the 5 biggest campaigns (bars and table)
   function spendBars(rows) {
     var list = rows.filter(function (c) { return c.spend > 0; }).sort(function (a, b) { return b.spend - a.spend; });
     if (!list.length) return h('p', { class: 'ads-note' }, t('dash.noSpend'));
@@ -607,23 +608,28 @@
       h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { toast(t('dash.refreshed')); refresh(); } }, t('common.refresh'))
     ];
     if (liveMode()) tools.push(h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testMetaConnection(e.currentTarget); } }, t('health.btn')));
-    // No notes under the title (owner, 16 Nov 2026): the amounts carry their currency, sample campaigns say (MOCK).
-    render(h('div', {}, [pageHead('nav.dashboard', tools), body]), 'nav.dashboard');
+    // No visible title and no notes (owner, 16 + 17 Nov 2026): the five numbers sit on the filter line; the title stays
+    // for screen readers. At most 5 numbers, 5 campaigns in the bars and the table.
+    var kpiBox = h('ul', { class: 'ads-kpis', 'aria-label': t('nav.dashboard') });
+    render(h('div', {}, [h('h1', { class: 'ads-h1 visually-hidden', tabindex: '-1' }, t('nav.dashboard')),
+      h('div', { class: 'ads-dashhead' }, [kpiBox, h('div', { class: 'ads-pagehead__tools' }, tools)]), body]), 'nav.dashboard');
     api.getDashboard({ range: dashRange, business: ctx.business, account: ctx.account }).then(function (d) {
       if (stale(tok)) return;
       body.innerHTML = '';
       var k = d.kpis;
       var cards = [['col.spend', money(k.spend)], ['dash.reach', num(k.reach)], ['col.messages', num(k.messages)], ['col.cpm', money(k.costPerMessage)], ['dash.active', num(k.activeCampaigns)]];
-      body.appendChild(h('ul', { class: 'ads-kpis' }, cards.map(function (c) {
+      kpiBox.innerHTML = '';
+      append(kpiBox, cards.map(function (c) {
         return h('li', { class: 'ads-kpi' }, [h('span', { class: 'ads-kpi__label' }, t(c[0])), h('span', { class: 'ads-kpi__value' }, c[1])]);
-      })));
+      }));
+      var top = d.campaigns.slice().sort(function (a, b) { return (b.spend || 0) - (a.spend || 0); }).slice(0, DASH_CAMPAIGNS);
       // The daily chart and, beside it, where the money went (one row on wide screens, stacked below 1400px).
       body.appendChild(h('div', { class: 'ads-dashrow' }, [
         h('section', { class: 'ads-card ads-card--fill', 'aria-labelledby': 'ads-d-chart' }, [h('h2', { class: 'ads-h2', id: 'ads-d-chart' }, t('dash.chartTitle')), lineChart(d.series)]),
         h('section', { class: 'ads-card', 'aria-labelledby': 'ads-d-bars' }, [h('h2', { class: 'ads-h2', id: 'ads-d-bars' }, t('dash.byCampaign')),
-          h('p', { class: 'ads-chart__legend' }, t('dash.byCampaignNote', { n: dashRange })), spendBars(d.campaigns)])
+          h('p', { class: 'ads-chart__legend' }, t('dash.byCampaignNote', { n: dashRange })), spendBars(top)])
       ]));
-      var tbody = h('tbody', {}, d.campaigns.map(function (c) {
+      var tbody = h('tbody', {}, top.map(function (c) {
         var cpm = c.messages ? c.spend / c.messages : null;
         return h('tr', {}, [
           h('td', { 'data-label': t('col.name') }, h('a', { href: '#/campaigns', class: 'ads-link' }, c.name)),
@@ -3264,6 +3270,8 @@
 
   function viewProducts(tok) {
     var SI = window.AdsStockImport, busy = false, tplBusy = false;
+    var shopTip = h('span', { class: 'ads-tip', id: 'ads-shop-tip', role: 'tooltip' });
+    var shopBtn = h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', hidden: true, 'aria-describedby': 'ads-shop-tip' }, t('shop.sync'));
     var current = []; // this business's stock products (no samples): "new" and "updated" are counted against it
     var body = h('div', {}, skeleton(4));
     var status = h('p', { class: 'ads-note ads-status', 'aria-live': 'polite' });
@@ -3277,11 +3285,44 @@
           h('button', { type: 'button', class: 'ads-btn ads-btn--primary', 'aria-describedby': 'ads-s-fmt', onclick: function () { if (busy) toast(t('lib.busy'), 'act'); else picker.click(); } }, t('stock.upload')),
           h('span', { class: 'ads-tip ads-tip--start', id: 'ads-s-fmt', role: 'tooltip' }, [h('strong', { class: 'ads-tip__title' }, t('stock.fmt.title')), h('span', {}, rich(t('stock.fmt')))])]),
         h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: getTemplate }, t('stock.template')),
-        soonBtn('stock.connect')
+        liveMode() ? h('span', { class: 'ads-tipwrap' }, [shopBtn, shopTip]) : soonBtn('stock.connect')
       ]),
       picker, status, body
     ]), 'nav.products');
-    load();
+    load(); loadShop();
+
+    // Shopify (owner, 17 Nov 2026): connected → "Sync from Shopify" (store and last sync on hover; older than an hour:
+    // synced at once for Admins); not connected → "Connect Shopify" opens Settings at the Shopify tile.
+    function loadShop() {
+      if (!liveMode()) return;
+      api.shopifyConnection(ctx.business).then(function (c) {
+        if (stale(tok)) return;
+        shopBtn.hidden = false;
+        if (!c) { shopBtn.textContent = t('shop.connect'); shopTip.textContent = t('shop.connectTip'); shopBtn.onclick = function () { openKey = 'shopify'; location.hash = '#/settings'; }; return; }
+        var info = c.info || {}, sh = info.shop || {};
+        shopBtn.textContent = t('shop.sync');
+        shopBtn.onclick = function () { syncShop(false); };
+        shopTip.textContent = info.last_sync_at ? t('shop.line', { name: sh.name || sh.domain || 'Shopify', when: fmtDateTime(info.last_sync_at), n: info.last_sync_products || 0 })
+          : t('shop.lineNever', { name: sh.name || sh.domain || 'Shopify' });
+        var old = !info.last_sync_at || Date.now() - Date.parse(info.last_sync_at) > 3600e3;
+        if (old && c.status === 'ok' && msgRole() === 'admin') syncShop(true);
+      }, function () { /* no Shopify button then */ });
+    }
+    function syncShop(quiet) {
+      shopBtn.disabled = true; shopBtn.textContent = t('shop.syncing');
+      api.syncShopify(ctx.business).then(function (r) {
+        if (stale(tok)) return;
+        shopBtn.disabled = false; shopBtn.textContent = t('shop.sync');
+        shopTip.textContent = t('shop.line', { name: r.shop || 'Shopify', when: fmtDateTime(r.at), n: r.products });
+        if (!quiet || r.added) toast(t('shop.synced', { n: r.products, a: r.added, u: r.updated }), 'info');
+        load();
+      }, function (e) {
+        if (stale(tok)) return;
+        shopBtn.disabled = false; shopBtn.textContent = t('shop.sync');
+        if (!quiet) toast(t('shop.failed') + (e && e.message ? ' ' + e.message : ''), 'act');
+        else shopTip.textContent = t('shop.autoFailed') + (e && e.message ? ' ' + e.message : '');
+      });
+    }
 
     function load() {
       // The library comes along for the product photos (a failed library read only hides them).
@@ -3704,7 +3745,60 @@
       return box;
     }
     // One service: a closed row (name + status chip); opened, it shows what it is for, the key fields and the buttons.
+    // Shopify (owner, 17 Nov 2026): the store address and the Client ID + Client secret of the company's Shopify app
+    // (Dev Dashboard), tested and kept like the other keys; Products then brings names, stock and prices over.
+    function shopifyRow(s, business) {
+      var c = connOf('shopify', business), info = (c && c.info) || {}, sh = info.shop || {};
+      var canEdit = !!access && access.role === 'admin';
+      var st = c ? (c.status === 'ok' ? pill(t('shop.st.ok', { name: sh.name || sh.domain || 'Shopify' }), 'on') : pill(t('key.st.error'), 'out')) : pill(t('set.st.none'), 'off');
+      var kids = [h('p', { class: 'ads-note' }, t('set.use.shopify'))];
+      if (c) {
+        kids.push(h('p', { class: 'ads-sub' }, t('shop.found', { name: sh.name || '—', domain: sh.domain || '—', cur: sh.currency || '—' })));
+        kids.push(h('p', { class: 'ads-sub' }, info.last_sync_at ? t('shop.lastSync', { when: fmtDateTime(info.last_sync_at), n: info.last_sync_products || 0 }) : t('shop.neverSynced')));
+        if (c.status !== 'ok' && c.status_message) kids.push(h('p', { class: 'ads-warn' }, c.status_message));
+      }
+      if (canEdit) {
+        var pre = 'ads-shop-' + business;
+        var shopIn = h('input', { type: 'text', id: pre + '-shop', class: 'ads-input', autocomplete: 'off', spellcheck: 'false', placeholder: 'my-store.myshopify.com' });
+        shopIn.value = sh.domain || '';
+        var idIn = h('input', { type: 'text', id: pre + '-id', class: 'ads-input', autocomplete: 'off', spellcheck: 'false', placeholder: t('shop.idPh') });
+        var secIn = h('input', { type: 'password', id: pre + '-secret', class: 'ads-input', autocomplete: 'off', spellcheck: 'false', placeholder: 'shpss_…' });
+        var msg = h('p', { class: 'ads-hint', 'aria-live': 'polite' });
+        var saveB = h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function () {
+          var v = { shop: shopIn.value.trim(), client_id: idIn.value.trim(), client_secret: secIn.value.trim() };
+          msg.className = 'ads-hint';
+          if (!v.shop || !v.client_id || !v.client_secret) { msg.textContent = t('shop.fill'); (!v.shop ? shopIn : !v.client_id ? idIn : secIn).focus(); return; }
+          saveB.disabled = true; msg.textContent = t('key.testing');
+          api.saveConnection('shopify', business, JSON.stringify(v)).then(function () {
+            secIn.value = ''; toast(t('key.saved', { name: 'Shopify' }), 'info'); openKey = 'shopify'; refresh();
+          }, function (e) {
+            saveB.disabled = false; secIn.value = ''; msg.className = 'ads-warn';
+            msg.textContent = t('key.failed') + (e && e.message ? ' ' + e.message : ''); toast(t('key.notSaved'), 'act');
+          });
+        } }, t(c ? 'key.replace' : 'key.saveTest'));
+        kids.push(field('set.f.shopDomain', shopIn, null, shopIn.id), field('shop.f.clientId', idIn, null, idIn.id),
+          field('shop.f.secret', secIn, t('shop.where'), secIn.id), msg);
+        var bl = [saveB];
+        if (c) {
+          bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function (ev) {
+            var b = ev.currentTarget; b.disabled = true;
+            api.testConnection(c.id).then(function () { toast(t('key.testOk'), 'info'); openKey = 'shopify'; refresh(); },
+              function (e) { toast(t('key.failed') + (e && e.message ? ' ' + e.message : ''), 'act'); openKey = 'shopify'; refresh(); });
+          } }, t('key.test')));
+          bl.push(h('button', { type: 'button', class: 'ads-btn ads-btn--danger-ghost', onclick: function () {
+            confirmDialog({ title: t('key.remove'), message: t('key.removeQ', { name: 'Shopify' }), confirmLabel: t('key.removeYes'), danger: true }).then(function (yes) {
+              if (!yes) return;
+              api.removeConnection(c.id).then(function () { toast(t('key.removed'), 'info'); refresh(); },
+                function (e) { toast(t('toast.failed') + (e && e.message ? ' ' + e.message : ''), 'act'); });
+            });
+          } }, t('key.remove')));
+        }
+        kids.push(btns(bl));
+      } else kids.push(h('p', { class: 'ads-hint' }, t('key.onlyAdmins')));
+      return { id: 'shopify', state: c ? (c.status === 'ok' ? 'ok' : 'warn') : 'none', pill: st, chosen: !!business && chosen(s), body: kids };
+    }
     function service(s, business) {
+      if (live && s.id === 'shopify' && business) return shopifyRow(s, business);
       if (live && KEY_LIVE.indexOf(s.id) !== -1) return keyRow(s, business);
       var onServer = live && (s.id === 'meta' || s.id === 'gemini'); // live mode: these keys already sit in the server's secrets
       var kids = [h('p', { class: 'ads-note' }, t('set.use.' + s.id))];

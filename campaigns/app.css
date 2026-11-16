@@ -197,6 +197,10 @@
 .ads-kpi__label { font-size: var(--type-caption); color: var(--ink-soft); }
 .ads-kpi__value { font-family: var(--font-display); font-size: clamp(1rem, 0.9rem + 0.3vw, 1.25rem); line-height: 1.1; }
 .ads-kpis--small { margin-top: var(--space-3); }
+/* Dashboard head (owner, 17 Nov 2026): the five numbers on the same line as the filters, no visible title */
+.ads-dashhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+.ads-dashhead .ads-kpis { flex: 1 1 560px; max-width: 860px; margin: 0; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 767px) { .ads-dashhead .ads-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .ads-tablewrap { overflow-x: auto; }
 .ads-table { width: 100%; border-collapse: collapse; font-size: var(--type-body-sm); }

@@ -961,6 +961,22 @@
   }
   function saveConnection(provider, business, secret) { return connCall({ action: 'save', provider: provider, business_id: business || null, secret: secret }); }
   function testConnection(id) { return connCall({ action: 'test', id: id }); }
+  // Shopify (17 Nov 2026): the company's connection (store, last sync) and the sync (server function ads-shopify).
+  function shopifyConnection(b) {
+    if (!isLive()) return Promise.resolve(null);
+    return init().then(function () {
+      return client.from('ads_connections').select('id,business_id,provider,secret_hint,info,status,status_message,checked_at')
+        .eq('provider', 'shopify').eq('business_id', b).maybeSingle();
+    }).then(mustDb);
+  }
+  function syncShopify(b) {
+    return callFn('ads-shopify', { action: 'sync', business_id: b }).then(function (r) {
+      if (r && r.ok) return r;
+      var e = new Error((r && r.error && r.error.message) || '');
+      e.code = (r && r.error && r.error.code) || (r && r.code === 'NOT_FOUND' ? 'not_deployed' : 'server');
+      throw e;
+    });
+  }
   function removeConnection(id) { return connCall({ action: 'remove', id: id }); }
   // The company's Facebook Page, Instagram account, ad account, currency, time zone (picked from the Meta test).
   function setCompanyMeta(b, m) {
@@ -1863,7 +1879,7 @@
     inboxChannels: inboxChannels, connectInbox: connectInbox, disconnectInbox: disconnectInbox, suggestReply: suggestReply,
     replyConversation: replyConversation, setConversationStatus: setConversationStatus, pictureUrls: pictureUrls, unreadCount: unreadCount,
     // Keys (0043) and the audit log (13 Nov 2026)
-    listConnections: listConnections, saveConnection: saveConnection, testConnection: testConnection,
+    listConnections: listConnections, saveConnection: saveConnection, testConnection: testConnection, shopifyConnection: shopifyConnection, syncShopify: syncShopify,
     removeConnection: removeConnection, setCompanyMeta: setCompanyMeta, listAuditLog: listAuditLog
   };
 })();
