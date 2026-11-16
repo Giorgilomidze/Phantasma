@@ -607,7 +607,8 @@
       h('button', { type: 'button', class: 'ads-btn ads-btn--ghost', onclick: function () { toast(t('dash.refreshed')); refresh(); } }, t('common.refresh'))
     ];
     if (liveMode()) tools.push(h('button', { type: 'button', class: 'ads-btn ads-btn--primary', onclick: function (e) { testMetaConnection(e.currentTarget); } }, t('health.btn')));
-    render(h('div', {}, [pageHead('nav.dashboard', tools), h('p', { class: 'ads-note' }, currencyNote()), liveMode() ? h('p', { class: 'ads-warn' }, t('mode.liveNote')) : null, body]), 'nav.dashboard');
+    // No notes under the title (owner, 16 Nov 2026): the amounts carry their currency, sample campaigns say (MOCK).
+    render(h('div', {}, [pageHead('nav.dashboard', tools), body]), 'nav.dashboard');
     api.getDashboard({ range: dashRange, business: ctx.business, account: ctx.account }).then(function (d) {
       if (stale(tok)) return;
       body.innerHTML = '';
@@ -616,7 +617,6 @@
       body.appendChild(h('ul', { class: 'ads-kpis' }, cards.map(function (c) {
         return h('li', { class: 'ads-kpi' }, [h('span', { class: 'ads-kpi__label' }, t(c[0])), h('span', { class: 'ads-kpi__value' }, c[1])]);
       })));
-      body.appendChild(h('p', { class: 'ads-note' }, t('dash.updated', { time: new Date(d.updatedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }), n: dashRange })));
       // The daily chart and, beside it, where the money went (one row on wide screens, stacked below 1400px).
       body.appendChild(h('div', { class: 'ads-dashrow' }, [
         h('section', { class: 'ads-card ads-card--fill', 'aria-labelledby': 'ads-d-chart' }, [h('h2', { class: 'ads-h2', id: 'ads-d-chart' }, t('dash.chartTitle')), lineChart(d.series)]),
@@ -666,7 +666,6 @@
     search.addEventListener('input', function () { campQuery = search.value; load(); });
     render(h('div', {}, [
       pageHead('nav.campaigns', [h('a', { class: 'ads-btn ads-btn--primary', href: '#/campaigns/new', onclick: function () { wizard = null; } }, t('camp.new'))]),
-      h('p', { class: 'ads-note' }, currencyNote()),
       h('div', { class: 'ads-filters' }, [chipsBox, h('div', { class: 'ads-filters__row' }, [acct, search])]), body]), 'nav.campaigns');
 
     function load() {
@@ -2502,9 +2501,16 @@
   function lastMaker() { try { return localStorage.getItem('ads_ai_maker') === 'openai' ? 'openai' : 'gemini'; } catch (e) { return 'gemini'; } }
   function rememberMaker(m) { try { localStorage.setItem('ads_ai_maker', m); } catch (e) { /* ignore */ } }
   // A service's logo, small, for a label (logos.js).
+  // Every drawing of a logo gets its own colour ids (logos.js names them lg-<service>-…): with two copies of one logo
+  // on a page (channel strip + filter), a copy inside a hidden part would otherwise take the colours of both.
+  var logoSeq = 0;
+  function logoSvg(logo) {
+    var n = ++logoSeq;
+    return '<svg viewBox="0 0 ' + logo[0] + ' ' + logo[1] + '" aria-hidden="true" focusable="false">' + logo[2].replace(/lg-/g, 'lg' + n + '-') + '</svg>';
+  }
   function logoMark(id) {
     var logo = (window.AdsLogos || {})[id], s = h('span', { class: 'ads-logo-sm', 'aria-hidden': 'true' });
-    if (logo) s.innerHTML = '<svg viewBox="0 0 ' + logo[0] + ' ' + logo[1] + '" aria-hidden="true" focusable="false">' + logo[2] + '</svg>';
+    if (logo) s.innerHTML = logoSvg(logo);
     return s;
   }
   // "Picture maker" choice with the makers' logos. setReady(ready) switches off makers without a working agency
@@ -3546,7 +3552,7 @@
   function svcIcon(id, state) {
     var logo = (window.AdsLogos || {})[id] || null;
     var img = h('span', { class: 'ads-svcicon__img' + (logo && logo[0] > 2 * logo[1] ? ' ads-svcicon__img--wide' : ''), 'aria-hidden': 'true' });
-    img.innerHTML = logo ? '<svg viewBox="0 0 ' + logo[0] + ' ' + logo[1] + '" aria-hidden="true" focusable="false">' + logo[2] + '</svg>'
+    img.innerHTML = logo ? logoSvg(logo)
       : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + SVC_PLAIN + '</svg>';
     if (SVC_BADGE[state]) {
       var badge = h('span', { class: 'ads-svcicon__badge ads-svcicon__badge--' + state });
