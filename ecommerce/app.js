@@ -153,6 +153,7 @@
 
   var client = null, user = null, ws = null, conns = [], connId = null, started = false;
   var poll = { on: false, timer: null, last: null };
+  var syncPage = 0;   // page of the sync job list (30 per page)
 
   /* 2. Helpers ------------------------------------------------------------ */
   function $(sel, root) { return (root || document).querySelector(sel); }
@@ -514,19 +515,27 @@
     var legend = h('ul', { class: 'ecm-legend' }, cfg.series.map(function (s) {
       return h('li', null, [h('span', { class: 'ecm-legend__dot', style: 'background:' + s.color, 'aria-hidden': 'true' }), s.name]);
     }));
+    var nbody = h('tbody');
     var tbl = h('table', { class: 'ecm-table' }, [
       h('thead', null, h('tr', null, [h('th', { scope: 'col', text: cfg.xName || 'Date' })].concat(cfg.series.map(function (s) {
         return h('th', { scope: 'col', class: 'is-num', text: s.name }); })))),
-      h('tbody', null, labels.map(function (lab, i) {
-        return h('tr', null, [h('td', { text: xf(lab) })].concat(cfg.series.map(function (s) {
-          var val = s.values[i]; return h('td', { class: 'is-num', text: val == null ? '' : tf(val) }); })));
-      }))
+      nbody
     ]);
+    function numberRows(page) {   // "Show the numbers": 30 rows per page, like every table
+      nbody.innerHTML = '';
+      for (var i = page * PAGE_ROWS; i < Math.min(n, (page + 1) * PAGE_ROWS); i++) {
+        nbody.appendChild(h('tr', null, [h('td', { text: xf(labels[i]) })].concat(cfg.series.map(function (s) {
+          var val = s.values[i]; return h('td', { class: 'is-num', text: val == null ? '' : tf(val) }); }))));
+      }
+    }
+    var npager = pagerBar(numberRows);
+    npager.set(n, 0);
+    numberRows(0);
     return h('figure', { class: 'ecm-chart' }, [
       h('figcaption', { class: 'ecm-chart__title', text: cfg.title }),
       cfg.note ? h('p', { class: 'ecm-note', text: cfg.note }) : null,
       legend, n ? svg : h('p', { class: 'ecm-note', text: 'No data in this range.' }),
-      n ? h('details', { class: 'ecm-chart__data' }, [h('summary', { text: 'Show the numbers' }), h('div', { class: 'ecm-tablewrap' }, tbl)]) : null
+      n ? h('details', { class: 'ecm-chart__data' }, [h('summary', { text: 'Show the numbers' }), h('div', { class: 'ecm-tablewrap' }, tbl), npager.el]) : null
     ]);
   }
   // Every month (or day) between the first and the last key, so gaps show as zero.
@@ -794,6 +803,32 @@
     var v = c.calc ? c.calc(r) : r[c.k];
     return c.f ? c.f(v) : v;
   }
+  // ---- Tables show 30 rows at a time (owner, 16 Nov 2026: "tables are very long … the longest should be 30 lines").
+  //      Search, sorting and the CSV download still cover every row. onGo(page) draws the rows of that page.
+  var PAGE_ROWS = 30;
+  function pagerBar(onGo) {
+    var st = { page: 0, total: 0 };
+    var prev = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: '‹ Previous' });
+    var next = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Next ›' });
+    var info = h('span', { class: 'ecm-pager__info', 'aria-live': 'polite' });
+    var el = h('div', { class: 'ecm-pager', role: 'navigation', 'aria-label': 'Table pages' }, [prev, info, next]);
+    function pages() { return Math.max(1, Math.ceil(st.total / PAGE_ROWS)); }
+    function paint() {
+      var from = st.page * PAGE_ROWS + 1, to = Math.min(st.total, (st.page + 1) * PAGE_ROWS);
+      info.textContent = 'Rows ' + fmtInt(from) + '–' + fmtInt(to) + ' of ' + fmtInt(st.total) + ' · page ' + (st.page + 1) + ' of ' + pages();
+      prev.disabled = st.page === 0;
+      next.disabled = st.page >= pages() - 1;
+      el.hidden = st.total <= PAGE_ROWS;
+    }
+    function go(p) { st.page = p; paint(); onGo(p); }
+    prev.addEventListener('click', function () { if (st.page > 0) go(st.page - 1); });
+    next.addEventListener('click', function () { if (st.page < pages() - 1) go(st.page + 1); });
+    return {
+      el: el,
+      set: function (total, page) { st.total = total; st.page = Math.min(Math.max(0, page || 0), pages() - 1); paint(); },
+      page: function () { return st.page; }
+    };
+  }
   // The table under a view: search, sort, CSV. `outer(row)` = the view's filter bar (marketplace + dates).
   function dataTable(id, cfg, rows, conn, outer) {
     var st = { q: '', sort: cfg.sort || null, dir: cfg.sortDir || 1 };
@@ -803,6 +838,7 @@
     var thead = h('thead'), tbody = h('tbody');
     var table = h('table', { class: 'ecm-table' }, [h('caption', { class: 'visually-hidden', text: cfg.title + ' of ' + conn.label }), thead, tbody]);
     var shown = [];
+    var pager = pagerBar(drawRows);
 
     function headRow() {
       thead.innerHTML = '';
@@ -834,8 +870,15 @@
         });
       }
       headRow();
+      pager.set(shown.length, 0);   // every search, sort or filter change starts at page 1
+      drawRows();
+      count.textContent = 'Showing ' + fmtInt(shown.length) + ' of ' + fmtInt(rows.length) +
+        (shown.length > PAGE_ROWS ? ' · ' + PAGE_ROWS + ' per page; the download has all' : '');
+    }
+    function drawRows() {
       tbody.innerHTML = '';
-      shown.slice(0, 2000).forEach(function (r) {
+      var start = pager.page() * PAGE_ROWS;
+      shown.slice(start, start + PAGE_ROWS).forEach(function (r) {
         var tr = h('tr');
         cfg.cols.forEach(function (c) {
           var v = cellValue(c, r);
@@ -844,7 +887,6 @@
         });
         tbody.appendChild(tr);
       });
-      count.textContent = 'Showing ' + shown.length + ' of ' + rows.length + (shown.length > 2000 ? ' (first 2,000 on screen; the download has all)' : '');
     }
     search.addEventListener('input', function () { st.q = this.value.trim(); apply(); });
     csvBtn.addEventListener('click', function () {
@@ -853,7 +895,7 @@
         shown.map(function (r) { return cfg.cols.map(function (c) { return cellValue(c, r); }); }));
     });
     apply();
-    return { el: h('div', null, [h('div', { class: 'ecm-tools' }, [search, csvBtn, count]), h('div', { class: 'ecm-tablewrap' }, table)]), refresh: apply };
+    return { el: h('div', null, [h('div', { class: 'ecm-tools' }, [search, csvBtn, count]), h('div', { class: 'ecm-tablewrap' }, table), pager.el]), refresh: apply };
   }
 
   // ---- money in several currencies: never added together. The main currency (largest amount, or the one the
@@ -1288,25 +1330,35 @@
       h('span', { style: 'width:' + pct + '%' })));
     card.appendChild(h('p', { class: 'ecm-note', 'aria-live': 'polite', text: done + ' of ' + jobs.length + ' finished' + (open ? '…' : '.') }));
     var tbody = h('tbody');
-    jobs.forEach(function (j) {
-      tbody.appendChild(h('tr', null, [
-        h('td', { text: DATASET[j.dataset] || j.dataset }),
-        h('td', { text: j.marketplace_id ? mpCode(j.marketplace_id) : 'All' }),
-        h('td', null, status(j.status)),
-        h('td', { class: 'is-num', text: j.rows_written ? fmtNum(j.rows_written, 0) : '' }),
-        h('td', { class: 'is-wide', text: j.message || '' }),
-        h('td', { text: fmtTime(j.finished_at || j.updated_at) })
-      ]));
-    });
+    // 30 jobs per page; the page is kept while the list refreshes every few seconds during a sync
+    function jobRows(page) {
+      syncPage = page;
+      tbody.innerHTML = '';
+      jobs.slice(page * PAGE_ROWS, (page + 1) * PAGE_ROWS).forEach(function (j) {
+        tbody.appendChild(h('tr', null, [
+          h('td', { text: DATASET[j.dataset] || j.dataset }),
+          h('td', { text: j.marketplace_id ? mpCode(j.marketplace_id) : 'All' }),
+          h('td', null, status(j.status)),
+          h('td', { class: 'is-num', text: j.rows_written ? fmtNum(j.rows_written, 0) : '' }),
+          h('td', { class: 'is-wide', text: j.message || '' }),
+          h('td', { text: fmtTime(j.finished_at || j.updated_at) })
+        ]));
+      });
+    }
+    var jpager = pagerBar(jobRows);
+    jpager.set(jobs.length, syncPage);
+    jobRows(jpager.page());
     card.appendChild(h('div', { class: 'ecm-tablewrap' }, h('table', { class: 'ecm-table' }, [
       h('caption', { class: 'visually-hidden', text: 'Jobs of the latest sync' }),
       h('thead', null, h('tr', null, ['Data set', 'Market', 'Status', 'Rows', 'Message', 'Time'].map(function (t, i) { return h('th', { scope: 'col', class: i === 3 ? 'is-num' : null, text: t }); }))),
       tbody
     ])));
+    card.appendChild(jpager.el);
   }
   function syncCard() { return $('#ecm-sync'); }
   function startSync() {
     var conn = current(); if (!conn) return;
+    syncPage = 0;
     if (location.hash !== '#/settings') location.hash = '#/settings';
     callFn({ action: 'sync', connection_id: conn.id }).then(function (res) {
       if (res.already_running) toast('A sync of this account is already running.');
