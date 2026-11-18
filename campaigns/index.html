@@ -21,7 +21,7 @@
 
   <!-- Site tokens (palette Signal, spacing, type), then the tool's own styles -->
   <link rel="stylesheet" href="../styles.css?v=20261118d" />
-  <link rel="stylesheet" href="./app.css?v=20261117a" />
+  <link rel="stylesheet" href="./app.css?v=20261118a" />
   <!-- Restore the desktop sidebar state before first paint (no flash) -->
   <script>try { if (localStorage.getItem('ads_side') === 'collapsed') document.documentElement.classList.add('ads-side-collapsed'); } catch (e) { /* ignore */ }</script>
 </head>
@@ -41,7 +41,11 @@
         <!-- Desktop only (>=1024px): collapse / expand the sidebar column -->
         <button type="button" id="ads-side-toggle" class="ads-iconbtn ads-topbar__side" aria-expanded="true" aria-controls="ads-sidebar" aria-label="Collapse menu">&#9776;</button>
         <span class="ads-topbar__brand" data-i18n="app.name">Ads Management</span>
-        <span class="ads-badge" id="ads-badge">Mock data</span>
+        <!-- Mode (owner, 18 Nov 2026): a small icon; hover, keyboard focus or tap shows what it means -->
+        <span class="ads-tipwrap ads-modewrap" id="ads-modewrap">
+          <button type="button" id="ads-badge" class="ads-modeicon" aria-describedby="ads-badge-tip" aria-expanded="false" aria-label="Mock data"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="12" y1="7.5" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg></button>
+          <span class="ads-tip ads-tip--start" id="ads-badge-tip" role="tooltip"></span>
+        </span>
         <div class="ads-topbar__ctx">
           <label class="visually-hidden" for="ads-biz" data-i18n="top.business">Company</label>
           <select id="ads-biz" class="ads-input ads-input--bar"></select>
@@ -88,13 +92,13 @@
 
   <!-- supabase-js (UMD), same version as the main site; only used to read the session -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
-  <script src="./i18n.js?v=20261117a"></script>
+  <script src="./i18n.js?v=20261118a"></script>
   <!-- Reads stock files (Excel / CSV); loads SheetJS from its CDN only when a file is used -->
   <script src="./stock-import.js?v=20261106d"></script>
   <script src="./knowledge-import.js?v=20261115a"></script>
   <script src="./api.js?v=20261117a"></script>
   <script src="./logos.js?v=20261115a"></script>
-  <script src="./app.js?v=20261117b"></script>
+  <script src="./app.js?v=20261118a"></script>
   <!-- The website's Messages + Feedback window (files too); reaches Supabase through the client app.js hands over -->
   <script src="../career.js?v=20261111d"></script>
 </body>

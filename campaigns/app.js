@@ -531,7 +531,7 @@
     var ul = $('#ads-nav-list');
     ul.innerHTML = '';
     NAV.forEach(function (n) {
-      var badge = n[0] === 'messaging' ? [h('span', { class: 'ads-badge ads-navbadge', id: 'ads-nav-msg-badge', 'aria-hidden': 'true', hidden: true }),
+      var badge = n[0] === 'messaging' ? [h('span', { class: 'ads-count ads-navbadge', id: 'ads-nav-msg-badge', 'aria-hidden': 'true', hidden: true }),
         h('span', { class: 'visually-hidden', id: 'ads-nav-msg-sr' })] : null;
       ul.appendChild(h('li', {}, h('a', { href: '#/' + n[0], class: 'ads-nav__link', 'data-route': n[0] },
         [t(n[1]), n[2] ? h('span', { class: 'ads-nav__soon' }, t('common.soon')) : null].concat(badge || []))));
@@ -4694,7 +4694,7 @@
       return btns;
     }
     function chipLabel(k) {   // logo + name + unread badge (the number is read out by screen readers as "N unread")
-      var x = { b: h('span', { class: 'ads-badge', 'aria-hidden': 'true', hidden: true }), sr: h('span', { class: 'visually-hidden' }) };
+      var x = { b: h('span', { class: 'ads-count', 'aria-hidden': 'true', hidden: true }), sr: h('span', { class: 'visually-hidden' }) };
       chanBadges[k] = x;
       return [k === 'all' ? null : logoMark(MSG_LOGO[k]), h('span', {}, k === 'all' ? t('common.all') : t('msg.ch.' + k)), x.b, x.sr];
     }
@@ -5100,12 +5100,27 @@
     b.setAttribute('aria-expanded', String(open));
     b.setAttribute('aria-label', t(open ? 'top.sideCollapse' : 'top.sideExpand'));
   }
+  function bootModeTip() {
+    var wrap = $('#ads-modewrap'), btn = $('#ads-badge');
+    if (!wrap || !btn || btn.dataset.tipBound) return;
+    btn.dataset.tipBound = '1';
+    var set = function (on) { wrap.classList.toggle('is-open', on); wrap.classList.remove('is-hushed'); btn.setAttribute('aria-expanded', String(on)); };
+    btn.addEventListener('click', function (e) { e.stopPropagation(); set(!wrap.classList.contains('is-open')); });
+    // Esc hides the text without moving the mouse or the focus (also while hover or focus would show it)
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && (document.activeElement === btn || wrap.matches(':hover'))) { set(false); wrap.classList.add('is-hushed'); }
+    });
+    btn.addEventListener('blur', function () { set(false); });
+    wrap.addEventListener('mouseleave', function () { wrap.classList.remove('is-hushed'); });
+    document.addEventListener('click', function () { set(false); });
+  }
   function buildTopbar() {
+    bootModeTip();
     syncSideToggle();
     var biz = $('#ads-biz'), acc = $('#ads-account'), live = liveMode();
     // Viewers and Approvers see their role next to the mode badge (the database refuses what they may not do).
     var rp = $('#ads-role');
-    if (!rp) { rp = h('span', { id: 'ads-role', class: 'ads-badge ads-badge--role' }); $('#ads-badge').insertAdjacentElement('afterend', rp); }
+    if (!rp) { rp = h('span', { id: 'ads-role', class: 'ads-badge ads-badge--role' }); $('#ads-modewrap').insertAdjacentElement('afterend', rp); }
     rp.hidden = !access || access.role === 'admin';
     rp.textContent = access && access.role !== 'admin' ? t('role.badge.' + access.role) : '';
     biz.innerHTML = '';
@@ -5115,10 +5130,14 @@
     biz.value = ctx.business || '';
     fillAccounts();
     $('#ads-user-email').textContent = user ? user.email : '';
+    $('#ads-user-btn').title = user ? user.email : ''; // the e-mail itself shows only on wide screens
     var bd = $('#ads-badge');
     $('#ads-newuser').hidden = live; // demo of the first visit: sample mode only
-    bd.textContent = t(live ? 'top.badge.live' : 'top.badge.mock');
-    bd.classList.toggle('ads-badge--live', live);
+    // The mode is a small icon (owner, 18 Nov 2026: the text badge pushed the header onto two rows); its meaning
+    // shows on hover, keyboard focus and tap.
+    bd.setAttribute('aria-label', t(live ? 'top.badge.live' : 'top.badge.mock'));
+    $('#ads-badge-tip').textContent = t(live ? 'top.badge.liveTip' : 'top.badge.mockTip');
+    bd.classList.toggle('ads-modeicon--live', live);
     $('#ads-mode').textContent = t(live ? 'menu.modeMock' : 'menu.modeLive');
     // One mode since 14 Nov 2026 (owner D-63 a): the sample switch and "Reset demo data" exist only on
     // Claude's local test page.

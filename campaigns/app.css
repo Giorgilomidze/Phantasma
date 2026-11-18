@@ -114,9 +114,25 @@
 .ads-pagehead__tools { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .ads-topbar .ads-topbar__menu { display: inline-grid; }
 
-@media (min-width: 640px) { .ads-user__email { display: inline; } }
+@media (min-width: 1600px) { .ads-user__email { display: inline; } } /* narrower: the e-mail shows on hover (title) */
 .ads-topbar .ads-topbar__side { display: none; }
 .ads-badge { white-space: nowrap; flex: 0 0 auto; }
+/* Header on one row (owner via C5, 18 Nov 2026: on a 14" laptop the buttons collided on two rows): the mode is an
+   orange icon with a tooltip, the brand is smaller, the account button shows the e-mail only on wide screens. */
+.ads-modewrap { flex: 0 0 auto; }
+.ads-modeicon { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--accent-deep); cursor: help; }
+.ads-modeicon:hover, .ads-modewrap.is-open .ads-modeicon { background: var(--surface); }
+.ads-modeicon:focus-visible { outline: 3px solid var(--ink); outline-offset: 1px; }
+.ads-modewrap .ads-tip { top: calc(100% + var(--space-1)); }
+.ads-tipwrap.ads-modewrap.is-hushed .ads-tip { opacity: 0; visibility: hidden; }
+/* Phones and tablets: the text spans the header under its first row (next to the icon it ran off a narrow screen) */
+@media (max-width: 1023px) {
+  .ads-topbar { position: relative; }
+  .ads-tipwrap.ads-modewrap { position: static; }
+  .ads-modewrap .ads-tip { top: calc(var(--space-2) + var(--ads-ctl) + var(--space-1)); left: var(--space-4); right: var(--space-4); width: auto; }
+}
+.ads-topbar__brand { font-size: var(--type-body-lg); white-space: nowrap; }
 @media (min-width: 1024px) {
   /* Sidebar and top bar are siblings: sidebar column on the left spans both rows,
      top bar + main share the content column, so the sidebar can never cover the top bar.
@@ -124,7 +140,9 @@
   .ads-shell { grid-template-columns: var(--ads-side-w, 200px) minmax(0, 1fr); grid-template-rows: auto 1fr; transition: grid-template-columns .2s ease; }
   html.ads-side-collapsed .ads-shell { --ads-side-w: 0px; }
   .ads-topbar { grid-column: 2; grid-row: 1; min-width: 0; padding: var(--space-2) var(--space-5); }
-  .ads-topbar__ctx { flex: 0 1 auto; order: 0; flex-wrap: wrap; }
+  /* The two pickers give way first (18 Nov 2026): the box takes the free space, and the pickers shrink to their
+     min-width before anything moves to a second row (Georgian labels are wider). */
+  .ads-topbar__ctx { flex: 1 1 0; order: 0; flex-wrap: nowrap; min-width: calc(280px + var(--space-2)); }
   .ads-topbar__ctx .ads-input { flex: 0 1 220px; width: 220px; min-width: 140px; }
   .ads-topbar .ads-topbar__menu { display: none; }
   .ads-topbar .ads-topbar__side { display: inline-grid; }
@@ -139,7 +157,12 @@
 }
 @media (min-width: 1024px) and (max-width: 1366px) {
   .ads-topbar { padding: var(--space-2) var(--space-4); }
-  .ads-topbar__ctx .ads-input { flex-basis: 180px; width: 180px; }
+  .ads-topbar__ctx { min-width: calc(240px + var(--space-2)); }
+  .ads-topbar__ctx .ads-input { flex-basis: 150px; width: 150px; min-width: 120px; }
+}
+@media (min-width: 1024px) {   /* one header row on 14" laptops (18 Nov 2026) */
+  .ads-topbar { column-gap: var(--space-2); }
+  .ads-topbar .ads-btn--small { padding: 0 var(--space-2); }
 }
 
 /* -------------------------------------------------------------------------
@@ -759,17 +782,17 @@ img.ads-img--element { object-fit: contain; background: repeating-conic-gradient
 .ads-tip { position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: 20; width: min(360px, 80vw); padding: var(--space-3);
   border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: var(--type-caption); line-height: 1.5;
   box-shadow: var(--shadow-lightbox); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .15s ease; }
-.ads-tipwrap:hover .ads-tip, .ads-tipwrap > :focus-visible + .ads-tip { opacity: 1; visibility: visible; }
+.ads-tipwrap:hover .ads-tip, .ads-tipwrap > :focus-visible + .ads-tip, .ads-tipwrap.is-open .ads-tip { opacity: 1; visibility: visible; }
 .ads-tip--start { right: auto; left: 0; }
 .ads-tip__title { display: block; margin-bottom: var(--space-1); font-size: var(--type-body-sm); }
 .ads-tip strong { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .ads-tip { transition: none; } }
 .ads-msg__filters { margin: 0 0 var(--space-4); }
 .ads-gearbar ~ .ads-chpanel, .ads-pagehead + .ads-chpanel { margin: 0 0 var(--space-3); }
-.ads-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+.ads-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
   background: var(--accent); color: var(--ink); font-size: 12px; font-weight: 700; line-height: 1; }
-.ads-badge[hidden] { display: none; }
-.ads-filter[aria-pressed="true"] .ads-badge { box-shadow: 0 0 0 2px var(--bg); }
+.ads-count[hidden] { display: none; }
+.ads-filter[aria-pressed="true"] .ads-count { box-shadow: 0 0 0 2px var(--bg); }
 .ads-navbadge { margin-left: auto; }
 .ads-nav__link[aria-current="page"] .ads-navbadge { box-shadow: 0 0 0 2px var(--bg); }
 .ads-chstripe { display: flex; flex-wrap: wrap; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface-raised); }

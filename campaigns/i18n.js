@@ -79,7 +79,7 @@
     'tool.pausedNote': 'It is created paused. Nothing is spent until you switch it on yourself.', 'tool.approve': 'Approve', 'tool.reject': 'Reject', 'tool.edit': 'Edit',
     'tool.state.approved': 'Done.', 'tool.state.rejected': 'Rejected. Nothing was done.', 'tool.state.edited': 'Opened for editing.', 'tool.done': 'Done.',
     /* Live backend (Supabase Edge Functions) */
-    'top.badge.mock': 'Mock data', 'top.badge.live': 'Live backend (dry-run)',
+    'top.badge.mock': 'Mock data', 'top.badge.live': 'Live backend (dry-run)', 'top.badge.liveTip': 'Live data, dry run for ads: campaigns are checked but not sent to Meta yet. Replies in Messaging do go out.', 'top.badge.mockTip': 'Sample data: nothing is saved or sent.',
     'top.feedback': 'Send feedback', 'top.adminMsgs': 'Admin: messages',
     'menu.modeLive': 'Use live backend (dry-run)', 'menu.modeMock': 'Use mock data',
     'mode.toLive.title': 'Switch to the live backend?', 'mode.toLive.text': 'Businesses and spending limits will come from the database, and "Create as paused" will call the server. While the server is in dry-run mode, nothing is sent to Meta. Campaign lists, posts and numbers stay sample data. The page will reload.',
@@ -624,7 +624,7 @@
     'tool.pausedNote': 'იქმნება შეჩერებული. თანხა არ დაიხარჯება, სანამ თავად არ ჩართავთ.', 'tool.approve': 'დამტკიცება', 'tool.reject': 'უარყოფა', 'tool.edit': 'რედაქტირება',
     'tool.state.approved': 'შესრულდა.', 'tool.state.rejected': 'უარყოფილია. არაფერი გაკეთებულა.', 'tool.state.edited': 'გაიხსნა რედაქტირებისთვის.', 'tool.done': 'შესრულდა.',
     /* Live backend. MACHINE-TRANSLATED, not proofread. Server messages stay in English. */
-    'top.badge.mock': 'სატესტო მონაცემები', 'top.badge.live': 'რეალური ბექენდი (ტესტური გაშვება)',
+    'top.badge.mock': 'სატესტო მონაცემები', 'top.badge.live': 'რეალური ბექენდი (ტესტური გაშვება)', 'top.badge.liveTip': 'რეალური მონაცემები, რეკლამის ტესტური გაშვება: კამპანიები მოწმდება, მაგრამ Meta-ში ჯერ არ იგზავნება. შეტყობინებებში პასუხები კი იგზავნება.', 'top.badge.mockTip': 'სატესტო მონაცემები: არაფერი ინახება და არაფერი იგზავნება.',
     'top.feedback': 'გამოხმაურება', 'top.adminMsgs': 'ადმინი: შეტყობინებები',
     'menu.modeLive': 'რეალური ბექენდის გამოყენება (ტესტური გაშვება)', 'menu.modeMock': 'სატესტო მონაცემების გამოყენება',
     'mode.toLive.title': 'გადავიდეთ რეალურ ბექენდზე?', 'mode.toLive.text': 'ბიზნესები და ხარჯვის ლიმიტები ბაზიდან წამოვა, ხოლო „შექმნა შეჩერებულად“ სერვერს გამოიძახებს. სანამ სერვერი ტესტური გაშვების რეჟიმშია, Meta-ში არაფერი იგზავნება. კამპანიების სია, პოსტები და ციფრები სატესტო რჩება. გვერდი თავიდან ჩაიტვირთება.',
