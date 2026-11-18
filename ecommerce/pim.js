@@ -7,8 +7,9 @@
    bucket ecom-library at <workspace id>/<file>; AI pictures through the Edge Function ecom-generate-image.
    Uses window.EcomApp (app.js: helpers, tables, route registry). One IIFE, no build step; every text from the
    database is written with textContent.
-   1. Helpers  2. Manufacturers / brands / sellers  3. Image library, upload, AI, picker  4. Products
-   5. Product editor  6. A+ content  7. Routes
+   1. Helpers  2. Manufacturers / brands / sellers  3. Image library, upload, AI, picker  4. Products (list with
+   quick edit, search with filters, Sync with Amazon, products from the Amazon listings or from Excel; 18 Nov 2026,
+   SQL 0048)  5. Product editor  6. A+ content  7. Routes
    ========================================================================= */
 (function () {
   'use strict';
@@ -23,6 +24,8 @@
   function sb() { return A.client(); }
   function fail(e) {
     var m = (e && (e.message || e.error_description || e.error)) || String(e);
+    if (e && (e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|Could not find the .* column/i.test(m)))
+      return new Error('This page needs supabase/0048-ecom-pim-sync.sql: run it in Supabase (SQL Editor).');
     if (e && (e.code === '42P01' || e.code === 'PGRST205' || /does not exist|schema cache|Bucket not found/i.test(m))) return new Error(MISSING);
     if (e && e.code === '23505') return new Error('This name or SKU exists already in this workspace.');
     if (e && e.code === '23503') return new Error('Still in use: ' + (/brands/.test(m) ? 'this manufacturer has brands.' : 'other records point to it.'));
@@ -40,6 +43,22 @@
   function uuid() { return window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2); }
   function kb(b) { return b == null ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB'; }
   function go(hash) { if (location.hash === hash) A.go(); else location.hash = hash; }
+  function norm(v) { return String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' '); }
+  function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+  // Every row of a query (the database gives at most 1000 per request); make() builds the query again per page
+  function pageAll(make) {
+    var out = [];
+    return (function step(from) {
+      return q(make().range(from, from + 999)).then(function (rows) { out = out.concat(rows || []); return rows && rows.length === 1000 ? step(from + 1000) : out; });
+    })(0);
+  }
+  // fn(item, i) for every item, n at a time; fn handles its own errors
+  function pool(items, n, fn) {
+    var next = 0, run = [];
+    function worker() { if (next >= items.length) return Promise.resolve(); var i = next++; return Promise.resolve(fn(items[i], i)).then(worker); }
+    for (var k = 0; k < Math.min(n, items.length); k++) run.push(worker());
+    return Promise.all(run);
+  }
 
   // A modal window (native <dialog>: Esc and the ✕ close it; focus stays inside)
   function dialog(title, body, actions, wide) {
@@ -101,6 +120,12 @@
       return urlCache;
     });
   }
+  // Amazon pictures are links (0048), not files: shown straight from Amazon, smaller through Amazon's size suffix
+  var AMZ_IMG = /^https:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9._%+-]+$/;
+  var SOURCE = { upload: 'uploaded', gemini: 'Gemini', openai: 'ChatGPT', amazon: 'Amazon' };
+  function amzSized(url, px) { return px ? String(url).replace(/(\.[A-Za-z]+)$/, '._SL' + px + '_$1') : url; }
+  function imgSrc(i, px) { return !i ? '' : i.url ? amzSized(i.url, px) : (urlCache[i.path] || ''); }
+  function signRows(rows) { return signed(rows.filter(function (i) { return i && i.path; }).map(function (i) { return i.path; })); }
 
   /* 2. Manufacturers / brands / sellers ----------------------------------- */
   var F_NAME = { k: 'name', t: 'Name', req: true, max: 200 };
@@ -190,7 +215,7 @@
   /* 3. Image library, upload, AI pictures, picker ------------------------- */
   function loadImages(opts) {
     var w = A.ws();
-    var qy = sb().from('ecom_images').select('id,path,title,tags,source,prompt,mime,bytes,width,height,created_at,archived_at')
+    var qy = sb().from('ecom_images').select('id,path,url,title,tags,source,prompt,mime,bytes,width,height,created_at,archived_at')
       .eq('workspace_id', w.id).order('id', { ascending: false }).limit(1000);
     if (!(opts && opts.archived)) qy = qy.is('archived_at', null);
     return q(qy);
@@ -242,19 +267,19 @@
 
   function tile(img, opts) {
     var pic = h('img', { alt: img.title || 'picture', loading: 'lazy', class: 'pim-tile__img' });
-    if (urlCache[img.path]) pic.src = urlCache[img.path];
+    if (imgSrc(img, 320)) pic.src = imgSrc(img, 320);
     var t = h(opts && opts.onPick ? 'button' : 'button', { type: 'button', class: 'pim-tile' + (opts && opts.on ? ' is-on' : '') + (img.archived_at ? ' is-archived' : ''),
       'aria-pressed': opts && opts.onPick ? String(!!opts.on) : null, title: img.title || '',
       onclick: function () { if (opts && opts.onPick) opts.onPick(img, t); else if (opts && opts.onOpen) opts.onOpen(img); } }, [
       pic, h('span', { class: 'pim-tile__name', text: img.title || ('#' + img.id) }),
-      h('span', { class: 'pim-tile__meta', text: '#' + img.id + ' · ' + kb(img.bytes) + (img.source !== 'upload' ? ' · ' + (img.source === 'openai' ? 'ChatGPT' : 'Gemini') : '') + (img.archived_at ? ' · archived' : '') })]);
+      h('span', { class: 'pim-tile__meta', text: '#' + img.id + ' · ' + (img.url ? 'link' : kb(img.bytes)) + (img.source !== 'upload' ? ' · ' + (SOURCE[img.source] || img.source) : '') + (img.archived_at ? ' · archived' : '') })]);
     return t;
   }
   // A grid of pictures with search, source filter and 20 per page
   function imageGrid(all, opts) {
     var st = { q: '', src: '' }, shown = [];
     var search = h('input', { class: 'ecm-input', type: 'search', placeholder: 'Search name or tag', 'aria-label': 'Search pictures' });
-    var src = h('select', { class: 'ecm-input', 'aria-label': 'Source' }, [['', 'All pictures'], ['upload', 'Uploads'], ['gemini', 'Gemini'], ['openai', 'ChatGPT']]
+    var src = h('select', { class: 'ecm-input', 'aria-label': 'Source' }, [['', 'All pictures'], ['upload', 'Uploads'], ['gemini', 'Gemini'], ['openai', 'ChatGPT'], ['amazon', 'Amazon']]
       .concat(opts.archived ? [['archived', 'Archived']] : []).map(function (o) { return h('option', { value: o[0], text: o[1] }); }));
     var count = h('span', { class: 'ecm-tools__count', 'aria-live': 'polite' });
     var grid = h('div', { class: 'pim-grid' });
@@ -274,7 +299,7 @@
       var page = shown.slice(pager.page() * A.PAGE_ROWS, (pager.page() + 1) * A.PAGE_ROWS);
       grid.innerHTML = '';
       if (!page.length) { grid.appendChild(h('p', { class: 'ecm-note', text: all.length ? 'No picture matches.' : 'No pictures yet. Upload some or make them with AI.' })); return; }
-      signed(page.map(function (i) { return i.path; })).then(function () {
+      signRows(page).then(function () {
         grid.innerHTML = '';
         page.forEach(function (i) { grid.appendChild(tile(i, { on: opts.isOn ? opts.isOn(i) : false, onPick: opts.onPick, onOpen: opts.onOpen })); });
       });
@@ -312,7 +337,7 @@
   function imageDetails(img, done) {
     var title = control({ k: 'title', max: 200 }, img.title), tags = control({ k: 'tags', max: 400 }, (img.tags || []).join(', '));
     var pic = h('img', { class: 'pim-detail__img', alt: img.title || 'picture' });
-    signed([img.path]).then(function () { pic.src = urlCache[img.path] || ''; });
+    signRows([img]).then(function () { pic.src = imgSrc(img, 1000); });
     var used = h('p', { class: 'pim-hint', text: 'Checking where it is used…' });
     q(sb().from('ecom_products').select('id,title,sku').eq('workspace_id', A.ws().id).contains('image_ids', [img.id])).then(function (rows) {
       used.textContent = rows.length ? 'Used by ' + rows.length + ' product' + (rows.length === 1 ? '' : 's') + ': ' + rows.slice(0, 5).map(function (r) { return '#' + r.id + ' ' + (r.title || r.sku || ''); }).join(', ') : 'Not used by a product.';
@@ -320,14 +345,15 @@
     var err = h('p', { class: 'ecm-error', role: 'alert' });
     var body = h('div', { class: 'pim-detail' }, [pic, h('div', { class: 'pim-form' }, [
       fieldRow({ t: 'Name' }, title), fieldRow({ t: 'Tags (comma separated)' }, tags),
-      h('p', { class: 'pim-hint pim-field--wide', text: '#' + img.id + ' · ' + (img.width ? img.width + ' × ' + img.height + ' px · ' : '') + kb(img.bytes) + ' · ' +
-        (img.source === 'upload' ? 'uploaded' : 'made with ' + (img.source === 'openai' ? 'ChatGPT' : 'Gemini')) + ' · ' + A.fmtTime(img.created_at) }),
+      h('p', { class: 'pim-hint pim-field--wide', text: '#' + img.id + ' · ' + (img.width ? img.width + ' × ' + img.height + ' px · ' : '') +
+        (img.url ? 'from Amazon (a link: it uses no storage)' : kb(img.bytes) + ' · ' + (img.source === 'upload' ? 'uploaded' : 'made with ' + (SOURCE[img.source] || img.source))) +
+        ' · ' + A.fmtTime(img.created_at) }),
       img.prompt ? h('p', { class: 'pim-hint pim-field--wide', text: 'Prompt: ' + img.prompt }) : null, used, err])]);
     var save = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: 'Save' });
     var arch = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: img.archived_at ? 'Restore' : 'Archive' });
     var del = h('button', { type: 'button', class: 'ecm-btn ecm-btn--danger ecm-btn--small', text: 'Delete' });
     var open = h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small', href: '#', target: '_blank', rel: 'noopener', text: 'Open full size' });
-    signed([img.path]).then(function () { open.href = urlCache[img.path] || '#'; });
+    signRows([img]).then(function () { open.href = img.url || urlCache[img.path] || '#'; });
     var d = dialog('Picture', body, [del, arch, open, save], true);
     save.addEventListener('click', function () {
       var t = tags.value.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean).slice(0, 20);
@@ -341,7 +367,7 @@
     del.addEventListener('click', function () {
       if (!window.confirm('Delete this picture for good? Products that use it lose it.')) return;
       q(sb().from('ecom_images').delete().eq('id', img.id)).then(function () {
-        sb().storage.from(BUCKET).remove([img.path]);
+        if (img.path) sb().storage.from(BUCKET).remove([img.path]);
         d.close(); A.toast('Deleted.'); done();
       }).catch(function (e) { err.textContent = e.message; });
     });
@@ -363,7 +389,7 @@
       fieldRow({ t: 'Made by' }, provider), fieldRow({ t: 'Quality' }, quality), fieldRow({ t: 'Shape' }, aspect), fieldRow({ t: 'Name (optional)' }, title),
       h('div', { class: 'pim-field pim-field--wide' }, [h('span', { class: 'pim-label', text: 'Reference pictures (up to 3)' }), h('div', { class: 'ecm-row' }, [
         h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Choose…', onclick: function () {
-          pickImages({ max: 3, selected: refs, title: 'Reference pictures' }, function (ids) { refs = ids; refLine.textContent = ids.length ? ids.map(function (x) { return '#' + x; }).join(', ') : 'none'; });
+          pickImages({ max: 3, selected: refs, title: 'Reference pictures (your own files; Amazon links cannot be sent to the AI)', filesOnly: true }, function (ids) { refs = ids; refLine.textContent = ids.length ? ids.map(function (x) { return '#' + x; }).join(', ') : 'none'; });
         } }), refLine])]), info, err]);
     var make = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: 'Make the picture' });
     var d = dialog('Make a picture with AI', body, [make], true);
@@ -391,6 +417,7 @@
     var grid = null;
     function load() {
       loadImages().then(function (all) {
+        if (opts.filesOnly) all = all.filter(function (i) { return !i.url; });
         if (!grid) {
           box.innerHTML = '';
           grid = imageGrid(all, { tools: fileButton('Upload', function (files) { uploadFiles(files, line, function (ids) {
@@ -411,10 +438,22 @@
     ok.addEventListener('click', function () { d.close(); cb(sel.slice()); });
   }
 
-  /* 4. Products ------------------------------------------------------------ */
-  var P_COLS = [C_ID, { k: 'parent_id', t: 'Parent', num: true }, { k: 'sku', t: 'SKU', mono: true }, { k: 'asin', t: 'ASIN', mono: true },
-    { k: 'gtin', t: 'GTIN / EAN', mono: true }, { k: 'pzn', t: 'PZN', mono: true }, { k: 'title', t: 'Title', wide: true }, { k: '_brand', t: 'Brand' },
-    { k: 'logistics', t: 'Logistics' }, { k: '_pics', t: 'Pictures', num: true }, { k: '_aplus', t: 'A+ versions', num: true }, { k: 'status', t: 'Status' }, C_UPDATED];
+  /* 4. Products ------------------------------------------------------------
+     Owner, 18 Nov 2026: "edit … directly from PIM, no need to open the product … update SKU, ASIN, GTIN / EAN, brand,
+     manufacturer … fulfillment logistics selectable"; "search bar a bit longer … several different filters …
+     multiselect: Manufacturer, Brand, Logistics, SKU, ASIN, Product name"; "Sync with Amazon … fill in the information
+     about the product"; "upload products from Excel"; "Shopify … coming soon"; "create all products from the merchant
+     listings". 4a list + quick edit · 4b search with filters · 4c Sync with Amazon · 4d products from the Amazon
+     listings · 4e Excel upload, template and download */
+  var BULLETS = 5;   // bullets per product on the page (the database allows 10)
+  var LOGI = [['', '—'], ['FBA', 'FBA'], ['FBM', 'FBM']];
+  var LIST_SEL = 'id,parent_id,brand_id,manufacturer_id,sku,asin,gtin,pzn,title,logistics,image_ids,status,updated_at,amazon_marketplace,amazon_synced_at';
+  var L_COLS = [{ k: 'id', t: 'ID', num: true }, { k: 'parent_id', t: 'Parent', num: true },
+    { k: 'sku', t: 'SKU', mono: true, ed: 'sku' }, { k: 'asin', t: 'ASIN', mono: true, ed: 'asin' }, { k: 'gtin', t: 'GTIN / EAN', mono: true, ed: 'gtin' },
+    { k: 'pzn', t: 'PZN', mono: true }, { k: 'title', t: 'Product name', wide: true },
+    { k: '_maker', t: 'Manufacturer', ed: 'maker' }, { k: '_brand', t: 'Brand', ed: 'brand' }, { k: 'logistics', t: 'Logistics', ed: 'logistics' },
+    { k: '_pics', t: 'Pictures', num: true }, { k: '_aplus', t: 'A+', num: true }, { k: 'status', t: 'Status' }, { k: 'updated_at', t: 'Updated', f: A.isoMinute }];
+  var busy = false;   // one import or bulk fill at a time
 
   function route(main) {
     var parts = location.hash.replace(/^#\/?/, '').split('/');   // pim-products / <id> / aplus / <version id>
@@ -423,23 +462,895 @@
     renderProducts(main);
   }
 
-  function renderProducts(main) {
-    A.header(main, 'Products');
-    var w = wsOr(main); if (!w) return;
-    var box = h('div', null, h('p', { class: 'ecm-note', text: 'Loading…' }));
-    main.append(h('div', { class: 'ecm-tools' }, [h('a', { class: 'ecm-btn ecm-btn--primary ecm-btn--small', href: '#/pim-products/new', text: '+ New product' })]), box);
-    Promise.all([
-      q(sb().from('ecom_products').select('id,parent_id,brand_id,sku,asin,gtin,pzn,title,logistics,image_ids,status,updated_at').eq('workspace_id', w.id).order('id', { ascending: false })),
-      q(sb().from('ecom_brands').select('id,name').eq('workspace_id', w.id)),
-      q(sb().from('ecom_aplus').select('product_id').eq('workspace_id', w.id))
+  // 4a. The page's data: products (light columns), brands, manufacturers, A+ counts --------------------------
+  function pimData(w) {
+    return Promise.all([
+      pageAll(function () { return sb().from('ecom_products').select(LIST_SEL).eq('workspace_id', w.id).order('id', { ascending: false }); }),
+      q(sb().from('ecom_brands').select('id,name,alt_name,manufacturer_id').eq('workspace_id', w.id).order('name')),
+      q(sb().from('ecom_manufacturers').select('id,name,alt_name').eq('workspace_id', w.id).order('name')),
+      pageAll(function () { return sb().from('ecom_aplus').select('product_id').eq('workspace_id', w.id).order('id'); })
     ]).then(function (res) {
-      var brands = {}, ap = {};
-      res[1].forEach(function (b) { brands[b.id] = b.name; });
-      res[2].forEach(function (a) { ap[a.product_id] = (ap[a.product_id] || 0) + 1; });
-      res[0].forEach(function (r) { r._brand = brands[r.brand_id] || ''; r._pics = (r.image_ids || []).length; r._aplus = ap[r.id] || 0; });
-      box.innerHTML = '';
-      box.appendChild(A.dataTable('pim-products', { title: 'Products', cols: P_COLS, onRow: function (r) { go('#/pim-products/' + r.id); } }, res[0], { label: w.name }).el);
-    }).catch(function (e) { errorBox(box, e); });
+      var ctx = { w: w, rows: res[0], brands: res[1], makers: res[2], ap: {}, made: { makers: [], brands: [] } };
+      res[3].forEach(function (a) { ctx.ap[a.product_id] = (ctx.ap[a.product_id] || 0) + 1; });
+      ctx.rows.forEach(function (r) { derive(ctx, r); });
+      return ctx;
+    });
+  }
+  function byId(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+  function nameOf(list, id) { var x = id ? byId(list, id) : null; return x ? x.name : ''; }
+  // A manufacturer or brand by name: name or alternative name, any capitals and spaces
+  function findByName(list, name) {
+    var n = norm(name);
+    if (!n) return null;
+    for (var i = 0; i < list.length; i++) if (norm(list[i].name) === n || (list[i].alt_name && norm(list[i].alt_name) === n)) return list[i];
+    return null;
+  }
+  function derive(ctx, r) {
+    r._brand = nameOf(ctx.brands, r.brand_id); r._maker = nameOf(ctx.makers, r.manufacturer_id);
+    r._pics = (r.image_ids || []).length; r._aplus = ctx.ap[r.id] || 0;
+    r._all = norm([r.id, r.sku, r.asin, r.gtin, r.pzn, r.title, r._maker, r._brand, r.logistics, r.status].join(' '));
+    return r;
+  }
+  function replaceRow(ctx, row) {
+    for (var i = 0; i < ctx.rows.length; i++) if (ctx.rows[i].id === row.id) { ctx.rows[i] = derive(ctx, row); return ctx.rows[i]; }
+    ctx.rows.unshift(derive(ctx, row));
+    return row;
+  }
+  // The existing manufacturer / brand of that name, or a new one (a new brand gets the named manufacturer, or one of
+  // its own name when none is named: a brand cannot exist without a manufacturer)
+  function ensureMaker(ctx, name) {
+    var hit = findByName(ctx.makers, name);
+    if (hit) return Promise.resolve(hit);
+    return q(sb().from('ecom_manufacturers').insert({ workspace_id: ctx.w.id, name: String(name).trim().slice(0, 200) }).select('id,name,alt_name').single())
+      .then(function (m) { ctx.makers.push(m); ctx.made.makers.push(m.name); return m; });
+  }
+  function ensureBrand(ctx, name, makerName) {
+    var hit = findByName(ctx.brands, name);
+    if (hit) return Promise.resolve(hit);
+    return ensureMaker(ctx, makerName || name).then(function (m) {
+      return q(sb().from('ecom_brands').insert({ workspace_id: ctx.w.id, manufacturer_id: m.id, name: String(name).trim().slice(0, 200) })
+        .select('id,name,alt_name,manufacturer_id').single()).then(function (b) { ctx.brands.push(b); ctx.made.brands.push(b.name); return b; });
+    });
+  }
+  // A new product row with every column named (a bulk insert needs the same columns in every row)
+  function blankRow(ctx) {
+    return { workspace_id: ctx.w.id, sku: null, asin: null, gtin: null, pzn: null, title: null, content: null, details: null, logistics: null,
+             width_mm: null, length_mm: null, depth_mm: null, weight_g: null, bullets: [], brand_id: null, manufacturer_id: null, status: 'active' };
+  }
+
+  function renderProducts(main) {
+    A.header(main, 'Products', 'Edit changes SKU, ASIN, EAN, brand, manufacturer and logistics right in the row; Open shows the whole product with its A+ content. ' +
+      'Sync with Amazon fills a product from Amazon\'s catalog; you see what changes before it is saved.');
+    var w = wsOr(main); if (!w) return;
+    var conn = amzConn(), ctx = null;
+    var line = h('p', { class: 'pim-progress', 'aria-live': 'polite' });
+    var box = h('div', null, h('p', { class: 'ecm-note', text: 'Loading…' }));
+    var excelIn = h('input', { type: 'file', hidden: true, accept: '.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv' });
+    excelIn.addEventListener('change', function () { var f = excelIn.files[0]; excelIn.value = ''; if (f && ctx) excelImport(ctx, f, line, reload); });
+    var noAmz = 'Connect an Amazon account first (Settings).';
+    var mpBox = null;
+    if (conn) {
+      var mpSel = h('select', { class: 'ecm-input pim-mp', id: 'pim-mp' }, conn.marketplaces.map(function (m) { return h('option', { value: m.id, text: mpLabel(m.id) }); }));
+      mpSel.value = amzMp();
+      mpSel.addEventListener('change', function () { A.store('ecm_pim_mp', mpSel.value); });
+      mpBox = h('label', { class: 'pim-mpwrap', for: 'pim-mp', title: 'Sync with Amazon and the Amazon imports read the catalog of this marketplace (its language)' },
+        [h('span', { text: 'Amazon' }), mpSel]);
+    }
+    main.append(h('div', { class: 'ecm-tools pim-bar' }, [
+      h('a', { class: 'ecm-btn ecm-btn--primary ecm-btn--small', href: '#/pim-products/new', text: '+ New product' }),
+      h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Create from Amazon listings', disabled: !conn,
+        title: conn ? 'One product per SKU of the Amazon account ' + conn.label + ' (its All Listings report)' : noAmz,
+        onclick: function () { if (ctx) listingsDialog(ctx, line, reload); } }),
+      h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Upload Excel', title: 'Excel (.xlsx) or CSV: new SKUs are added, known SKUs updated',
+        onclick: function () { if (busy) A.toast('An import is still running.', 'act'); else excelIn.click(); } }), excelIn,
+      h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Excel template', title: 'The column names Upload Excel reads, with one example row',
+        onclick: function () { excelTemplate().catch(function (e) { A.toast(e.message, 'act'); }); } }),
+      h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', disabled: true, title: 'Coming soon' },
+        ['Sync with Shopify', h('span', { class: 'pim-soon', text: 'Coming soon' })]),
+      mpBox || h('span', { class: 'pim-hint', text: 'Sync with Amazon: ' + noAmz })]), line, box);
+    function reload() {
+      return pimData(w).then(function (c) { ctx = c; box.innerHTML = ''; box.appendChild(productList(ctx).el); }).catch(function (e) { errorBox(box, e); });
+    }
+    reload();
+  }
+
+  // The list: search with filters, sorting, 20 rows per page, quick edit in the row, Open, Sync with Amazon
+  function productList(ctx) {
+    var st = { chips: [], sort: null, dir: 1, edit: null, shown: [] };
+    var thead = h('thead'), tbody = h('tbody');
+    var table = h('table', { class: 'ecm-table pim-list' }, [h('caption', { class: 'visually-hidden', text: 'Products of ' + ctx.w.name }), thead, tbody]);
+    var count = h('span', { class: 'ecm-tools__count', 'aria-live': 'polite' });
+    var pager = A.pagerBar(draw);
+    var fx = filterBox(ctx, function (chips) { st.chips = chips; apply(); });
+    var csv = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Download for Excel (CSV)', title: 'The products shown, with every field; Upload Excel reads this file back' });
+    csv.addEventListener('click', function () { exportCsv(ctx, st.shown, csv); });
+    function cls(c) { return [c.num ? 'is-num' : '', c.wide ? 'is-wide' : '', c.mono ? 'ecm-mono' : ''].join(' ').trim(); }
+    function cellText(c, r) { var v = r[c.k]; if (c.f) v = c.f(v); return v == null || v === '' ? '' : c.num ? A.fmtInt(v) : String(v); }
+    function head() {
+      thead.innerHTML = '';
+      var tr = h('tr');
+      L_COLS.forEach(function (c) {
+        var on = st.sort === c.k;
+        tr.appendChild(h('th', { scope: 'col', class: c.num ? 'is-num' : null, 'aria-sort': on ? (st.dir > 0 ? 'ascending' : 'descending') : 'none' },
+          h('button', { type: 'button', class: 'ecm-sort', onclick: function () {
+            if (st.sort !== c.k) { st.sort = c.k; st.dir = 1; } else if (st.dir > 0) st.dir = -1; else { st.sort = null; st.dir = 1; }
+            apply();
+          } }, [c.t, h('span', { class: 'ecm-sort__arrow', 'aria-hidden': 'true', text: on ? (st.dir > 0 ? '▲' : '▼') : '↕' })])));
+      });
+      tr.appendChild(h('th', { scope: 'col', class: 'pim-act' }, h('span', { class: 'visually-hidden', text: 'Actions' })));
+      thead.appendChild(tr);
+    }
+    function apply(keep) {
+      st.shown = ctx.rows.filter(function (r) { return matches(r, st.chips); });
+      if (st.sort) {
+        var c = L_COLS.filter(function (x) { return x.k === st.sort; })[0];
+        st.shown.sort(function (a, b) {
+          var x = a[c.k], y = b[c.k];
+          if (x == null || x === '') return 1; if (y == null || y === '') return -1;   // empty values last
+          return (c.num ? Number(x) - Number(y) : String(x).localeCompare(String(y), 'en', { numeric: true })) * st.dir;
+        });
+      }
+      head();
+      pager.set(st.shown.length, keep ? pager.page() : 0);
+      draw();
+      count.textContent = 'Showing ' + A.fmtInt(st.shown.length) + ' of ' + A.fmtInt(ctx.rows.length) +
+        (st.shown.length > A.PAGE_ROWS ? ' · ' + A.PAGE_ROWS + ' per page; the download has all' : '');
+    }
+    function draw() {
+      tbody.innerHTML = '';
+      var start = pager.page() * A.PAGE_ROWS, page = st.shown.slice(start, start + A.PAGE_ROWS);
+      if (!page.length) {
+        tbody.appendChild(h('tr', null, h('td', { colspan: String(L_COLS.length + 1), class: 'pim-empty', text: ctx.rows.length ? 'No product matches these filters.'
+          : 'No products yet: add one, upload an Excel file or create them from your Amazon listings.' })));
+        return;
+      }
+      page.forEach(function (r) { tbody.appendChild(st.edit === r.id ? editRow(r) : viewRow(r)); });
+    }
+    function leaveEdit(id) {
+      st.edit = null; draw();
+      var b = tbody.querySelector('[data-edit="' + id + '"]'); if (b) b.focus();
+    }
+    function viewRow(r) {
+      var tr = h('tr');
+      L_COLS.forEach(function (c) { tr.appendChild(h('td', { class: cls(c), text: cellText(c, r) })); });
+      tr.appendChild(h('td', { class: 'pim-act' }, h('span', { class: 'pim-act__in' }, [
+        h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Edit', 'data-edit': String(r.id), 'aria-label': 'Edit product ' + r.id + ' in this row',
+          onclick: function () { st.edit = r.id; draw(); var el = tbody.querySelector('tr.is-editing input'); if (el) el.focus(); } }),
+        h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small', href: '#/pim-products/' + r.id, text: 'Open', 'aria-label': 'Open product ' + r.id }),
+        syncButton(r, null).el])));
+      return tr;
+    }
+    // "Sync with Amazon" of one row: from the saved ASIN / EAN, or from what is typed in the quick edit
+    function syncButton(r, typed) {
+      var b = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', 'aria-label': 'Sync product ' + r.id + ' with Amazon' });
+      function label() { b.replaceChildren('Sync', h('span', { class: 'pim-long', text: ' with Amazon' })); }   // "Sync" only on phones
+      label();
+      function has() { var t = typed ? typed() : r; return !!(t.asin || t.gtin); }
+      function state() {
+        b.disabled = !amzConn() || !has();
+        b.title = !amzConn() ? 'Connect an Amazon account first (Settings).' : !has() ? 'Add an ASIN (or an EAN) first.'
+          : 'Fill this product from Amazon ' + mpLabel(amzMp()) + (r.amazon_synced_at ? ' · last time ' + A.ago(r.amazon_synced_at) : '');
+      }
+      state();
+      b.addEventListener('click', function () {
+        var t = typed ? typed() : null;
+        if (t && t.error) { A.toast(t.error, 'act'); return; }
+        if (t) delete t.error;
+        b.disabled = true; b.textContent = 'Asking Amazon…';
+        syncOne(ctx, r, t, function (row) {
+          replaceRow(ctx, row); st.edit = null; apply(true);
+          A.toast('Product #' + row.id + ' filled from Amazon ' + A.mpCode(row.amazon_marketplace) + ' and saved.');
+        }).catch(function (e) { A.toast(e.message, 'act'); })
+          .then(function () { if (b.isConnected) { label(); state(); } });
+      });
+      return { el: b, state: state };
+    }
+    // Quick edit: SKU, ASIN, GTIN / EAN, manufacturer, brand, logistics in the row (Enter saves, Esc cancels)
+    function editRow(r) {
+      var tr = h('tr', { class: 'is-editing' });
+      function inp(v, max, label, extra) {
+        var el = h('input', Object.assign({ class: 'ecm-input', type: 'text', maxlength: String(max), autocomplete: 'off', 'aria-label': label + ' of product ' + r.id }, extra || {}));
+        el.value = v == null ? '' : String(v);
+        return el;
+      }
+      function sel(opts, v, label) {
+        var el = h('select', { class: 'ecm-input', 'aria-label': label + ' of product ' + r.id }, opts.map(function (o) { return h('option', { value: o[0], text: o[1] }); }));
+        el.value = v == null ? '' : String(v);
+        return el;
+      }
+      var c = {
+        sku: inp(r.sku, 100, 'SKU'), asin: inp(r.asin, 10, 'ASIN', { class: 'ecm-input ecm-mono' }), gtin: inp(r.gtin, 14, 'GTIN / EAN', { inputmode: 'numeric', class: 'ecm-input ecm-mono' }),
+        maker: sel([['', '— none —']].concat(ctx.makers.map(function (m) { return [String(m.id), m.name]; })), r.manufacturer_id, 'Manufacturer'),
+        brand: sel([['', '— none —']].concat(ctx.brands.map(function (b) { return [String(b.id), b.name]; })), r.brand_id, 'Brand'),
+        logistics: sel(LOGI, r.logistics || '', 'Logistics')
+      };
+      // a brand brings its manufacturer; without a brand the manufacturer is chosen on its own (0048)
+      function brandLink() {
+        var b = c.brand.value ? byId(ctx.brands, parseInt(c.brand.value, 10)) : null;
+        if (b) c.maker.value = String(b.manufacturer_id);
+        c.maker.disabled = !!b;
+        c.maker.title = b ? 'Comes with the brand ' + b.name : '';
+      }
+      c.brand.addEventListener('change', brandLink); brandLink();
+      function typed() {
+        var v = { sku: c.sku.value.trim() || null, asin: c.asin.value.trim().toUpperCase().replace(/\s+/g, '') || null, gtin: c.gtin.value.replace(/\s+/g, '') || null,
+                  brand_id: c.brand.value ? parseInt(c.brand.value, 10) : null, manufacturer_id: c.maker.value ? parseInt(c.maker.value, 10) : null,
+                  logistics: c.logistics.value || null };
+        if (v.asin && !/^[A-Z0-9]{10}$/.test(v.asin)) v.error = 'ASIN: 10 letters or digits.';
+        else if (v.gtin && !/^[0-9]{8,14}$/.test(v.gtin)) v.error = 'GTIN / EAN: 8 to 14 digits.';
+        return v;
+      }
+      var save = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: 'Save' });
+      var cancel = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Cancel' });
+      var sy = syncButton(r, typed);
+      c.asin.addEventListener('input', sy.state); c.gtin.addEventListener('input', sy.state);
+      function doSave() {
+        var v = typed();
+        if (v.error) { A.toast(v.error, 'act'); return; }
+        delete v.error;
+        save.disabled = true;
+        q(sb().from('ecom_products').update(v).eq('id', r.id).select(LIST_SEL).single()).then(function (row) {
+          replaceRow(ctx, row); A.toast('Saved product #' + row.id + '.'); st.edit = null; apply(true);
+          var b = tbody.querySelector('[data-edit="' + row.id + '"]'); if (b) b.focus();
+        }).catch(function (e) { save.disabled = false; A.toast(e.message, 'act'); });
+      }
+      save.addEventListener('click', doSave);
+      cancel.addEventListener('click', function () { leaveEdit(r.id); });
+      tr.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); doSave(); }
+        else if (e.key === 'Escape') { e.preventDefault(); leaveEdit(r.id); }
+      });
+      L_COLS.forEach(function (col) { tr.appendChild(h('td', { class: (cls(col) + (col.ed ? ' is-edit' : '')).trim() }, col.ed ? c[col.ed] : cellText(col, r))); });
+      tr.appendChild(h('td', { class: 'pim-act' }, h('span', { class: 'pim-act__in' }, [save, cancel, sy.el])));
+      return tr;
+    }
+    apply();
+    return { el: h('div', null, [h('div', { class: 'ecm-tools pim-tools' }, [fx.el, csv, count]), h('div', { class: 'ecm-tablewrap' }, table), pager.el]) };
+  }
+
+  // 4b. Search with filters: one long field; typing (or a click into it) offers manufacturers, brands, logistics,
+  // SKUs, ASINs and product names; each choice becomes a chip, several at once. Chips of one kind = any of them,
+  // of different kinds = all of them; "Search everywhere" looks in every column. ----------------------------------
+  var KINDS = { maker: 'Manufacturer', brand: 'Brand', logistics: 'Logistics', sku: 'SKU', asin: 'ASIN', name: 'Product name', text: 'Contains' };
+  var FX_HINT = 'Search or filter: manufacturer, brand, logistics, SKU, ASIN, product name';
+  function matches(r, chips) {
+    var by = {};
+    chips.forEach(function (c) { (by[c.kind] = by[c.kind] || []).push(c); });
+    return Object.keys(by).every(function (kind) {
+      var list = by[kind];
+      if (kind === 'text') return list.every(function (c) { return r._all.indexOf(norm(c.value)) >= 0; });
+      return list.some(function (c) {
+        if (kind === 'maker') return r.manufacturer_id === c.value;
+        if (kind === 'brand') return r.brand_id === c.value;
+        if (kind === 'logistics') return (r.logistics || '') === c.value;
+        if (kind === 'sku') return r.sku === c.value;
+        if (kind === 'asin') return r.asin === c.value;
+        return r.title === c.value;   // name
+      });
+    });
+  }
+  function suggest(ctx, text) {
+    var t = norm(text), out = [];
+    function hit(s) { return !t || norm(s).indexOf(t) >= 0; }
+    function take(kind, list, max) { list.slice(0, max).forEach(function (x) { out.push({ kind: kind, value: x.value, label: x.label }); }); }
+    function uniq(key) {
+      var seen = {}, list = [];
+      ctx.rows.forEach(function (r) { var v = r[key]; if (v && !seen[v] && hit(v)) { seen[v] = 1; list.push({ value: v, label: v.length > 80 ? v.slice(0, 79) + '…' : v }); } });
+      return list;
+    }
+    if (t) out.push({ kind: 'text', value: String(text).trim(), label: 'Search everywhere for "' + String(text).trim() + '"' });
+    take('maker', ctx.makers.filter(function (m) { return hit(m.name) || (m.alt_name && hit(m.alt_name)); }).map(function (m) { return { value: m.id, label: m.name }; }), t ? 5 : 8);
+    take('brand', ctx.brands.filter(function (b) { return hit(b.name) || (b.alt_name && hit(b.alt_name)); }).map(function (b) { return { value: b.id, label: b.name }; }), t ? 5 : 8);
+    take('logistics', [{ value: 'FBA', label: 'FBA' }, { value: 'FBM', label: 'FBM' }, { value: '', label: 'none' }].filter(function (x) { return hit(x.label); }), 3);
+    if (t) { take('sku', uniq('sku'), 5); take('asin', uniq('asin'), 5); take('name', uniq('title'), 5); }
+    return out;
+  }
+  function filterBox(ctx, onChange) {
+    var chips = [], opts = [], active = -1, listId = 'pim-fx-' + (++seq);
+    var input = h('input', { class: 'pim-fx__input', type: 'text', role: 'combobox', 'aria-expanded': 'false', 'aria-controls': listId, 'aria-autocomplete': 'list',
+      autocomplete: 'off', placeholder: FX_HINT, 'aria-label': 'Search or filter products' });
+    var chipBox = h('span', { class: 'pim-fx__chips' });
+    var list = h('ul', { class: 'pim-fx__list', id: listId, role: 'listbox', 'aria-label': 'Filters', hidden: true });
+    var clear = h('button', { type: 'button', class: 'pim-fx__clear', 'aria-label': 'Remove all filters', text: '✕', hidden: true });
+    var box = h('div', { class: 'pim-fx' }, [chipBox, input, clear, list]);
+    function keyOf(c) { return c.kind + ':' + c.value; }
+    function changed() { paintChips(); onChange(chips.slice()); }
+    function paintChips() {
+      chipBox.innerHTML = '';
+      chips.forEach(function (c, i) {
+        chipBox.appendChild(h('span', { class: 'pim-fx__chip' }, [h('span', { text: KINDS[c.kind] + ': ' + c.label }),
+          h('button', { type: 'button', text: '×', 'aria-label': 'Remove filter ' + KINDS[c.kind] + ' ' + c.label,
+            onclick: function () { chips.splice(i, 1); changed(); input.focus(); } })]));
+      });
+      clear.hidden = !chips.length;
+      input.placeholder = chips.length ? 'Add another filter…' : FX_HINT;
+    }
+    function add(o) {
+      var c = { kind: o.kind, value: o.value, label: o.kind === 'text' ? o.value : o.label };
+      if (!chips.some(function (x) { return keyOf(x) === keyOf(c); })) chips.push(c);
+      input.value = ''; close(); changed();
+    }
+    function open() {
+      opts = suggest(ctx, input.value); active = -1; list.innerHTML = '';
+      var last = null;
+      opts.forEach(function (o, i) {
+        if (o.kind !== last && o.kind !== 'text') list.appendChild(h('li', { class: 'pim-fx__group', role: 'presentation', text: KINDS[o.kind] }));
+        last = o.kind;
+        list.appendChild(h('li', { id: listId + '-' + i, role: 'option', class: 'pim-fx__opt', 'aria-selected': 'false', text: o.label,
+          onmousedown: function (e) { e.preventDefault(); add(o); } }));
+      });
+      list.hidden = !opts.length;
+      input.setAttribute('aria-expanded', String(!!opts.length));
+      input.removeAttribute('aria-activedescendant');
+    }
+    function close() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); active = -1; }
+    function move(d) {
+      if (list.hidden || !opts.length) return;
+      active = (active + d + opts.length) % opts.length;
+      Array.prototype.forEach.call(list.querySelectorAll('[role=option]'), function (el, i) {
+        el.setAttribute('aria-selected', String(i === active)); el.classList.toggle('is-active', i === active);
+        if (i === active) el.scrollIntoView({ block: 'nearest' });
+      });
+      input.setAttribute('aria-activedescendant', listId + '-' + active);
+    }
+    input.addEventListener('input', open);
+    input.addEventListener('focus', open);
+    input.addEventListener('blur', function () { setTimeout(close, 150); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) open(); move(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (active >= 0) add(opts[active]); else if (input.value.trim()) add({ kind: 'text', value: input.value.trim() }); }
+      else if (e.key === 'Escape' && !list.hidden) { e.preventDefault(); close(); }
+      else if (e.key === 'Backspace' && !input.value && chips.length) { chips.pop(); changed(); }
+    });
+    clear.addEventListener('click', function () { chips = []; changed(); input.focus(); });
+    box.addEventListener('mousedown', function (e) { if (e.target === box || e.target === chipBox) { e.preventDefault(); input.focus(); } });
+    return { el: box };
+  }
+
+  // 4c. Sync with Amazon: Amazon's catalog content (server function ecom-amazon, action catalog_lookup; read-only) is
+  // shown beside the product; the ticked rows are saved. The marketplace (= language) is chosen on the page. ------
+  function amzConn() { var c = A.conn(); return c && (c.marketplaces || []).length ? c : null; }
+  function amzMp() {
+    var c = amzConn(); if (!c) return null;
+    var ids = c.marketplaces.map(function (m) { return m.id; }), saved = A.load('ecm_pim_mp');
+    return ids.indexOf(saved) >= 0 ? saved : ids.indexOf('A1PA6795UKMFR9') >= 0 ? 'A1PA6795UKMFR9' : ids[0];
+  }
+  function mpLabel(id) { var host = A.amzHost ? A.amzHost(id) : ''; return A.mpCode(id) + (host ? ' · ' + host : ''); }
+  function codeType(v) { return /^[0-9]{12}$/.test(v) ? 'UPC' : /^[0-9]{14}$/.test(v) ? 'GTIN' : 'EAN'; }
+  function lookup(ids, type) {
+    var c = amzConn();
+    if (!c) return Promise.reject(new Error('Connect an Amazon account first (Settings).'));
+    return A.invoke('ecom-amazon', { action: 'catalog_lookup', connection_id: c.id, marketplace_id: amzMp(), ids: ids, id_type: type || 'ASIN' });
+  }
+  function dimsText(a) { return a.some(function (x) { return x != null; }) ? a.map(function (x) { return x == null ? '?' : A.fmtNum(x, 1); }).join(' × ') + ' mm' : ''; }
+  // The rows of the comparison. on = ticked at first: empty fields and changed texts; brand, manufacturer, EAN, size,
+  // weight and pictures only when the product has none yet (they are often kept on purpose)
+  function amazonPlan(ctx, p, it, extra) {
+    var rows = [];
+    function add(key, label, now, next, on, view) { rows.push({ key: key, label: label, now: now, next: next, on: on, view: view }); }
+    var bl = (it.bullets || []).slice(0, BULLETS), pics = p.image_ids || [];
+    if (it.asin && it.asin !== p.asin) add('asin', 'ASIN', p.asin, it.asin, true);
+    if (it.name && it.name !== p.title) add('title', 'Product name', p.title, it.name, true);
+    if (it.description && it.description !== p.content) add('content', 'Content (description)', p.content, it.description, true);
+    if (bl.length && JSON.stringify(bl) !== JSON.stringify(p.bullets || [])) add('bullets', 'Bullets', p.bullets || [], bl, true);
+    if (it.gtin && it.gtin !== p.gtin) add('gtin', 'GTIN / EAN', p.gtin, it.gtin, !p.gtin);
+    if (it.brand) {
+      var b = findByName(ctx.brands, it.brand);
+      if (!b || b.id !== p.brand_id) add('brand', 'Brand', nameOf(ctx.brands, p.brand_id), b ? b.name : it.brand + ' (new' +
+        (findByName(ctx.makers, it.manufacturer || it.brand) ? ')' : ', with the new manufacturer ' + (it.manufacturer || it.brand) + ')'), !p.brand_id);
+    }
+    if (it.manufacturer) {
+      var m = findByName(ctx.makers, it.manufacturer);
+      if (!m || m.id !== p.manufacturer_id) add('maker', 'Manufacturer', nameOf(ctx.makers, p.manufacturer_id), m ? m.name : it.manufacturer + ' (new)', !p.manufacturer_id && !p.brand_id);
+    }
+    var dNow = [p.width_mm, p.length_mm, p.depth_mm], dNew = [it.width_mm, it.length_mm, it.depth_mm];
+    if (dimsText(dNew) && dimsText(dNew) !== dimsText(dNow)) add('size', 'Size (width × length × depth)', dimsText(dNow),
+      dimsText(dNew) + (it.size_from === 'package' ? ' — package size (Amazon has no product size)' : ''), !dimsText(dNow));
+    if (it.weight_g != null && Number(it.weight_g) !== Number(p.weight_g)) add('weight', 'Weight', p.weight_g == null ? '' : A.fmtNum(p.weight_g, 1) + ' g',
+      A.fmtNum(it.weight_g, 1) + ' g' + (it.weight_from === 'package' ? ' — with the package' : ''), p.weight_g == null);
+    if ((it.images || []).length) add('images', 'Pictures (up to 5)', pics.length ? pics.length + (pics.length === 1 ? ' picture' : ' pictures') : '', null, !pics.length, function () {
+      return h('div', { class: 'pim-amz__pics' }, it.images.slice(0, 5).map(function (i) { return h('img', { src: amzSized(i.url, 120), alt: i.slot + ' picture on Amazon', loading: 'lazy' }); })
+        .concat(it.images.length > 5 ? [h('span', { class: 'pim-hint', text: '+' + (it.images.length - 5) + ' more on Amazon; the first 5 are kept' })] : []));
+    });
+    if (extra.parent && extra.parent.id !== p.parent_id) add('parent', 'Parent product', p.parent_id ? '#' + p.parent_id : '',
+      '#' + extra.parent.id + ' ' + (extra.parent.title || extra.parent.sku || '') + ' (ASIN ' + it.parent_asin + ')', !p.parent_id);
+    if (extra.logistics && extra.logistics !== p.logistics) add('logistics', 'Logistics (from your Amazon listing)', p.logistics, extra.logistics, !p.logistics);
+    return rows;
+  }
+  // Parent (a PIM product with Amazon's parent ASIN) and logistics (FBA / FBM of the SKU's Amazon listing)
+  function amazonExtra(ctx, p, it) {
+    var out = {};
+    if (it.parent_asin) out.parent = ctx.rows.filter(function (r) { return r.asin === it.parent_asin && r.id !== p.id; })[0] || null;
+    var c = amzConn();
+    if (!p.sku || !c) return Promise.resolve(out);
+    return q(sb().from('ecom_amz_listings').select('marketplace_id,fulfillment_channel').eq('connection_id', c.id).eq('seller_sku', p.sku).limit(20)).then(function (ls) {
+      var mp = amzMp(), l = ls.filter(function (x) { return x.marketplace_id === mp; })[0] || ls[0];
+      if (l && l.fulfillment_channel) out.logistics = /^AMAZON/i.test(l.fulfillment_channel) ? 'FBA' : 'FBM';
+      return out;
+    }).catch(function () { return out; });
+  }
+  function amazonDialog(ctx, p, it, extra, okText, onApply) {
+    var plan = amazonPlan(ctx, p, it, extra), boxes = {};
+    var head = h('p', { class: 'pim-hint', text: 'Amazon ' + mpLabel(amzMp()) + ' · ASIN ' + it.asin + (it.category ? ' · ' + it.category : '') +
+      (it.matches > 1 ? ' · ' + it.matches + ' Amazon products carry this code; the first is shown' : '') });
+    if (!plan.length) {
+      dialog('Sync with Amazon', [head, h('p', { class: 'ecm-note', text: 'This product already has everything Amazon shows for it.' })], []);
+      return;
+    }
+    function view(v) {
+      if (v == null || v === '' || (Array.isArray(v) && !v.length)) return h('span', { class: 'pim-hint', text: 'empty' });
+      if (Array.isArray(v)) return h('ol', { class: 'pim-amz__list' }, v.map(function (x) { return h('li', { text: String(x) }); }));
+      return h('span', { class: 'pim-amz__text', text: String(v) });
+    }
+    var rowsEl = h('div', { class: 'pim-amz' }, plan.map(function (r) {
+      var id = 'pim-amz-' + r.key + '-' + (++seq), cb = boxes[r.key] = h('input', { type: 'checkbox', id: id });
+      cb.checked = r.on;
+      return h('div', { class: 'pim-amz__row' }, [h('div', { class: 'pim-amz__pick' }, [cb, h('label', { for: id, text: r.label })]),
+        h('div', null, [h('span', { class: 'pim-amz__tag', text: 'Now' }), view(r.now)]),
+        h('div', null, [h('span', { class: 'pim-amz__tag', text: 'Amazon' }), r.view ? r.view() : view(r.next)])]);
+    }));
+    // a brand brings its manufacturer: with the brand ticked, the manufacturer row is not needed
+    if (boxes.brand && boxes.maker) {
+      var link = function () { boxes.maker.disabled = boxes.brand.checked; if (boxes.brand.checked) boxes.maker.checked = false; };
+      boxes.brand.addEventListener('change', link); link();
+    }
+    var err = h('p', { class: 'ecm-error', role: 'alert' });
+    var all = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Tick all' });
+    var ok = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: okText });
+    var d = dialog('Sync with Amazon — product' + (p.id ? ' #' + p.id : ''), [head, h('p', { class: 'pim-hint', text: 'Ticked rows are taken from Amazon; the others stay as they are.' }), rowsEl, err], [all, ok], true);
+    all.addEventListener('click', function () { Object.keys(boxes).forEach(function (k) { if (k !== 'maker' || !boxes.brand) boxes[k].checked = true; }); if (boxes.brand && boxes.maker) { boxes.maker.checked = false; boxes.maker.disabled = true; } });
+    ok.addEventListener('click', function () {
+      var chosen = {};
+      Object.keys(boxes).forEach(function (k) { if (boxes[k].checked && !boxes[k].disabled) chosen[k] = true; });
+      if (!Object.keys(chosen).length) { err.textContent = 'Tick at least one row.'; return; }
+      ok.disabled = true; err.textContent = ''; ok.textContent = 'Saving…';
+      Promise.resolve(onApply(chosen)).then(function () { d.close(); }, function (e) { err.textContent = e.message; ok.disabled = false; ok.textContent = okText; });
+    });
+  }
+  // Amazon's pictures as library rows (links; 0048): the ones already there are reused; ids in Amazon's order
+  function ensureAmazonImages(ctx, asin, imgs, again) {
+    var list = (imgs || []).filter(function (i) { return i && AMZ_IMG.test(i.url || ''); }).slice(0, 5);
+    if (!list.length) return Promise.resolve([]);
+    var urls = list.map(function (i) { return i.url; });
+    return q(sb().from('ecom_images').select('id,url').eq('workspace_id', ctx.w.id).in('url', urls)).then(function (have) {
+      var by = {};
+      have.forEach(function (r) { by[r.url] = r.id; });
+      var add = list.filter(function (i) { return !by[i.url]; }).map(function (i) {
+        var ext = String(i.url.split('.').pop()).toLowerCase();
+        return { workspace_id: ctx.w.id, url: i.url, source: 'amazon', title: (asin + ' ' + (i.slot || '')).trim(), tags: ['amazon', String(asin).toLowerCase()],
+                 width: i.width || null, height: i.height || null, mime: ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : null };
+      });
+      if (!add.length) return urls.map(function (u) { return by[u]; });
+      return q(sb().from('ecom_images').insert(add).select('id,url')).then(function (made) {
+        made.forEach(function (r) { by[r.url] = r.id; });
+        return urls.map(function (u) { return by[u]; }).filter(Boolean);
+      });
+    }).catch(function (e) {
+      if (!again && /exists already/.test(e.message)) return ensureAmazonImages(ctx, asin, imgs, true);   // added at the same moment by another product
+      throw e;
+    });
+  }
+  // The values to save for the ticked rows (new manufacturer, brand and picture rows are made here)
+  function amazonPatch(ctx, p, it, chosen, extra) {
+    var v = {};
+    if (chosen.asin) v.asin = it.asin;
+    if (chosen.title) v.title = it.name.slice(0, 500);
+    if (chosen.content) v.content = it.description.slice(0, 10000);
+    if (chosen.bullets) v.bullets = it.bullets.slice(0, BULLETS).map(function (b) { return b.slice(0, 1000); });
+    if (chosen.gtin) v.gtin = it.gtin;
+    if (chosen.size) { v.width_mm = it.width_mm; v.length_mm = it.length_mm; v.depth_mm = it.depth_mm; }
+    if (chosen.weight) v.weight_g = it.weight_g;
+    if (chosen.parent && extra.parent) v.parent_id = extra.parent.id;
+    if (chosen.logistics && extra.logistics) v.logistics = extra.logistics;
+    v.amazon_marketplace = amzMp(); v.amazon_synced_at = new Date().toISOString();
+    var chain = Promise.resolve();
+    if (chosen.brand) chain = chain.then(function () { return ensureBrand(ctx, it.brand, it.manufacturer).then(function (b) { v.brand_id = b.id; v.manufacturer_id = b.manufacturer_id; }); });
+    else if (chosen.maker) chain = chain.then(function () { return ensureMaker(ctx, it.manufacturer).then(function (m) { v.manufacturer_id = m.id; }); });
+    if (chosen.images) chain = chain.then(function () { return ensureAmazonImages(ctx, it.asin, it.images).then(function (ids) { if (ids.length) v.image_ids = ids; }); });
+    return chain.then(function () { return v; });
+  }
+  // One product from the list: ask Amazon, show the comparison, save the ticked rows (with the quick edit's values)
+  function syncOne(ctx, p, typed, onSaved) {
+    var base = Object.assign({}, p, typed || {}), code = base.asin || base.gtin;
+    return lookup([code], base.asin ? 'ASIN' : codeType(base.gtin)).then(function (res) {
+      var it = res.items && res.items[0];
+      if (!it || !it.found) { A.toast('Amazon ' + mpLabel(amzMp()) + ' has no product with ' + (base.asin ? 'ASIN ' : 'EAN ') + code + '.', 'act'); return; }
+      return amazonExtra(ctx, base, it).then(function (extra) {
+        amazonDialog(ctx, base, it, extra, 'Save to the product', function (chosen) {
+          return amazonPatch(ctx, base, it, chosen, extra).then(function (v) {
+            return q(sb().from('ecom_products').update(Object.assign({}, typed || {}, v)).eq('id', p.id).select(LIST_SEL).single());
+          }).then(onSaved);
+        });
+      });
+    });
+  }
+  // After an import: Amazon's catalog for every new product with an ASIN (else its EAN), 20 per call, empty fields
+  // only; manufacturers and brands Amazon names are made once, one after the other
+  function fillMany(ctx, prods, line) {
+    var withAsin = prods.filter(function (p) { return p.asin; }), withCode = prods.filter(function (p) { return !p.asin && p.gtin; }), batches = [];
+    for (var i = 0; i < withAsin.length; i += 20) batches.push({ type: 'ASIN', list: withAsin.slice(i, i + 20) });
+    ['EAN', 'UPC', 'GTIN'].forEach(function (t) {
+      var l = withCode.filter(function (p) { return codeType(p.gtin) === t; });
+      for (var j = 0; j < l.length; j += 20) batches.push({ type: t, list: l.slice(j, j + 20) });
+    });
+    var st = { total: withAsin.length + withCode.length, done: 0, filled: 0, missing: 0, failed: 0, error: '' };
+    function show() { line.textContent = 'Filling from Amazon ' + mpLabel(amzMp()) + '… ' + A.fmtInt(st.done) + ' of ' + A.fmtInt(st.total) + ' products'; }
+    show();
+    return batches.reduce(function (chain, bt, bi) {
+      return chain.then(function () { return bi ? wait(600) : null; }).then(function () {   // Amazon allows about 2 catalog calls a second
+        return lookup(bt.list.map(function (p) { return bt.type === 'ASIN' ? p.asin : p.gtin; }), bt.type).then(function (res) {
+          var found = {};
+          (res.items || []).forEach(function (it) { if (it.found) found[it.id] = it; });
+          var work = bt.list.map(function (p) { return { p: p, it: found[bt.type === 'ASIN' ? p.asin : p.gtin] }; }).filter(function (x) { return x.it; });
+          st.missing += bt.list.length - work.length; st.done += bt.list.length - work.length;
+          return work.reduce(function (c2, x) {
+            return c2.then(function () {
+              x.extra = { parent: x.it.parent_asin ? ctx.rows.filter(function (r) { return r.asin === x.it.parent_asin && r.id !== x.p.id; })[0] || null : null };
+              x.chosen = {};
+              amazonPlan(ctx, x.p, x.it, x.extra).forEach(function (r) { if (r.now == null || r.now === '' || (Array.isArray(r.now) && !r.now.length)) x.chosen[r.key] = true; });
+              if (x.chosen.brand) { delete x.chosen.maker; return ensureBrand(ctx, x.it.brand, x.it.manufacturer); }
+              if (x.chosen.maker) return ensureMaker(ctx, x.it.manufacturer);
+            }).catch(function () { x.chosen = {}; });
+          }, Promise.resolve()).then(function () {
+            return pool(work, 4, function (x) {
+              return (Object.keys(x.chosen).length ? amazonPatch(ctx, x.p, x.it, x.chosen, x.extra).then(function (v) {
+                return q(sb().from('ecom_products').update(v).eq('id', x.p.id).select(LIST_SEL).single());
+              }).then(function (row) { replaceRow(ctx, row); st.filled++; }) : Promise.resolve())
+                .catch(function () { st.failed++; }).then(function () { st.done++; show(); });
+            });
+          });
+        }, function (e) { st.failed += bt.list.length; st.done += bt.list.length; st.error = e.message; show(); });
+      });
+    }, Promise.resolve()).then(function () { return st; });
+  }
+
+  // 4d. Products from the Amazon listings (the All Listings report of the account chosen at the top; test mode keeps
+  // up to 100 SKUs per marketplace): one product per SKU with SKU, ASIN, name, EAN and logistics -----------------
+  function plural(n, one, many) { return A.fmtInt(n) + ' ' + (n === 1 ? one : many); }
+  function madeText(ctx) {
+    var m = ctx.made.makers.length, b = ctx.made.brands.length;
+    return m || b ? ' New: ' + [m ? plural(m, 'manufacturer', 'manufacturers') : '', b ? plural(b, 'brand', 'brands') : ''].filter(Boolean).join(', ') + '.' : '';
+  }
+  function fromListings(ls, mp) {
+    var order = [mp, amzMp(), 'A1PA6795UKMFR9', 'A1F83G8C2ARO7P'].filter(Boolean), by = {};
+    function rank(m) { var i = order.indexOf(m); return i < 0 ? 99 : i; }
+    ls.filter(function (l) { return !mp || l.marketplace_id === mp; }).sort(function (a, b) { return rank(a.marketplace_id) - rank(b.marketplace_id); }).forEach(function (l) {
+      var sku = String(l.seller_sku || '').trim();
+      if (!sku || sku.length > 100) return;
+      var p = by[sku] || (by[sku] = { sku: sku });
+      if (!p.asin && /^[A-Z0-9]{10}$/.test(l.asin || '')) p.asin = l.asin;
+      if (!p.title && l.item_name) p.title = String(l.item_name).trim().slice(0, 500);
+      var code = String(l.product_id || '').trim();
+      if (!p.gtin && (l.product_id_type === '4' || l.product_id_type === '3') && /^[0-9]{8,14}$/.test(code)) p.gtin = code;
+      if (!p.logistics && l.fulfillment_channel) p.logistics = /^AMAZON/i.test(l.fulfillment_channel) ? 'FBA' : 'FBM';
+    });
+    return Object.keys(by).map(function (k) { return by[k]; });
+  }
+  function listingsDialog(ctx, line, done) {
+    var c = amzConn();
+    if (!c) return;
+    if (busy) { A.toast('An import is still running.', 'act'); return; }
+    var body = h('div', { class: 'pim-import' }, h('p', { class: 'ecm-note', text: 'Reading the listings of ' + c.label + '…' }));
+    var go2 = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: 'Create products', disabled: true });
+    var d = dialog('Create products from your Amazon listings', body, [go2], true);
+    pageAll(function () {
+      return sb().from('ecom_amz_listings').select('marketplace_id,seller_sku,asin,item_name,fulfillment_channel,product_id,product_id_type')
+        .eq('connection_id', c.id).eq('is_active', true).order('seller_sku');
+    }).then(function (ls) {
+      body.innerHTML = '';
+      if (!ls.length) { body.appendChild(h('p', { class: 'ecm-note', text: 'No listings stored for ' + c.label + ' yet: run Sync in Settings first (it reads Amazon\'s All Listings report).' })); return; }
+      var have = {}, perMp = {}, all = {};
+      ctx.rows.forEach(function (p) { if (p.sku) have[p.sku] = 1; });
+      ls.forEach(function (l) { (perMp[l.marketplace_id] = perMp[l.marketplace_id] || {})[l.seller_sku] = 1; all[l.seller_sku] = 1; });
+      var mpSel = h('select', { class: 'ecm-input', id: 'pim-ls-mp' }, [h('option', { value: '', text: 'All marketplaces (' + A.fmtInt(Object.keys(all).length) + ' SKUs)' })].concat(
+        Object.keys(perMp).sort(function (a, b) { return A.mpCode(a).localeCompare(A.mpCode(b)); }).map(function (m) {
+          return h('option', { value: m, text: mpLabel(m) + ' (' + A.fmtInt(Object.keys(perMp[m]).length) + ' SKUs)' }); })));
+      var fill = h('input', { type: 'checkbox', id: 'pim-ls-fill' });
+      fill.checked = true;
+      var info = h('p', { class: 'pim-hint' });
+      var items = [];
+      function plan() {
+        var list = fromListings(ls, mpSel.value);
+        items = list.filter(function (p) { return !have[p.sku]; });
+        info.textContent = A.fmtInt(list.length) + ' SKUs: ' + A.fmtInt(items.length) + ' new' + (list.length > items.length ? ', ' + A.fmtInt(list.length - items.length) + ' already in PIM (left as they are)' : '') +
+          '. Each new product gets SKU, ASIN, product name, EAN and logistics (FBA / FBM) from the listing' + (mpSel.value ? '' : '; the name in the language of ' + A.mpCode(amzMp()) + ' when the SKU is there') + '.';
+        go2.disabled = !items.length;
+        go2.textContent = items.length ? 'Create ' + A.fmtInt(items.length) + ' products' : 'Nothing new';
+      }
+      mpSel.addEventListener('change', plan);
+      body.append(h('div', { class: 'pim-form' }, [fieldRow({ t: 'Listings of' }, mpSel)]), info,
+        h('p', { class: 'pim-check' }, [fill, h('label', { for: 'pim-ls-fill', text: ' Then fill them from Amazon ' + mpLabel(amzMp()) + ': brand, manufacturer, bullets, description, size, weight and 5 pictures (empty fields only; about a minute per 300 products)' })]),
+        h('p', { class: 'pim-hint', text: 'Test mode: the listings hold up to 100 SKUs per marketplace; all of them once test mode ends.' }));
+      plan();
+      go2.addEventListener('click', function () {
+        if (busy) return;
+        busy = true; d.close(); ctx.made = { makers: [], brands: [] };
+        var rows = items.map(function (p) { return Object.assign(blankRow(ctx), p); }), made = [], parts = [];
+        for (var i = 0; i < rows.length; i += 100) parts.push(rows.slice(i, i + 100));
+        parts.reduce(function (chain, part) {
+          return chain.then(function () {
+            line.textContent = 'Creating products… ' + A.fmtInt(made.length) + ' of ' + A.fmtInt(rows.length);
+            return q(sb().from('ecom_products').insert(part).select(LIST_SEL)).then(function (r) { made = made.concat(r); r.forEach(function (x) { replaceRow(ctx, x); }); });
+          });
+        }, Promise.resolve()).then(function () {
+          return fill.checked && made.length ? fillMany(ctx, made, line) : null;
+        }).then(function (st) {
+          var msg = 'Created ' + A.fmtInt(made.length) + ' products from the Amazon listings.' + (st ? ' Filled from Amazon ' + A.mpCode(amzMp()) + ': ' + A.fmtInt(st.filled) +
+            (st.missing ? ' · not found there: ' + A.fmtInt(st.missing) : '') + (st.failed ? ' · failed: ' + A.fmtInt(st.failed) + (st.error ? ' (' + st.error + ')' : '') : '') + '.' : '') +
+            madeText(ctx);
+          busy = false; line.textContent = msg; A.toast(msg); done();
+        }).catch(function (e) { busy = false; line.textContent = 'Stopped after ' + A.fmtInt(made.length) + ' products: ' + e.message; A.toast(e.message, 'act'); done(); });
+      });
+    }).catch(function (e) { errorBox(body, e); });
+  }
+
+  // 4e. Excel: upload (new SKUs are created, known IDs / SKUs updated; empty cells keep what is there), template,
+  // download. Excel files are read with SheetJS (the Ads tool's pinned copy, loaded on first use only); CSV without.
+  var XLSX_SRC = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  var XLSX_SRI = 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT';
+  var xlsxP = null;
+  function loadXlsx() {
+    if (window.XLSX && window.XLSX.read) return Promise.resolve(window.XLSX);
+    if (xlsxP) return xlsxP;
+    xlsxP = new Promise(function (ok, bad) {
+      var s = document.createElement('script');
+      s.src = XLSX_SRC; s.integrity = XLSX_SRI; s.crossOrigin = 'anonymous';
+      s.onload = function () { if (window.XLSX && window.XLSX.read) ok(window.XLSX); else failed(); };
+      s.onerror = failed;
+      function failed() { xlsxP = null; s.remove(); bad(new Error('The Excel reader could not be loaded. Check the connection, or save the file as CSV.')); }
+      document.head.appendChild(s);
+    });
+    return xlsxP;
+  }
+  var X_HEAD = ['ID', 'Parent SKU', 'SKU', 'ASIN', 'GTIN / EAN', 'PZN', 'Product name', 'Content', 'Details', 'Manufacturer', 'Brand', 'Logistics',
+    'Width (mm)', 'Length (mm)', 'Depth (mm)', 'Weight (g)', 'Bullet 1', 'Bullet 2', 'Bullet 3', 'Bullet 4', 'Bullet 5', 'Status'];
+  // Column names (any capitals; words in brackets, * : _ - ignored), English, German and Amazon's report names
+  function hk(v) { return String(v == null ? '' : v).toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[*:_-]/g, ' ').replace(/\s*\/\s*/g, '/').replace(/\s+/g, ' ').trim(); }
+  var X_ALIAS = {
+    id: ['id', 'product id', 'pim id'], parent: ['parent sku', 'parent', 'parent id'],
+    sku: ['sku', 'seller sku', 'merchant sku', 'item sku', 'artikelnummer', 'article number'], asin: ['asin', 'asin1'],
+    gtin: ['gtin/ean', 'gtin', 'ean', 'ean/gtin', 'gtin ean', 'ean code', 'barcode', 'upc'], pzn: ['pzn'],
+    title: ['product name', 'name', 'title', 'item name', 'product title', 'produktname', 'artikelname', 'bezeichnung'],
+    content: ['content', 'description', 'product description', 'beschreibung'], details: ['details'],
+    maker: ['manufacturer', 'hersteller', 'maker'], brand: ['brand', 'marke'],
+    logistics: ['logistics', 'fulfillment', 'fulfilment', 'fulfillment channel', 'fba/fbm', 'versand'],
+    width_mm: ['width', 'width mm', 'breite'], length_mm: ['length', 'length mm', 'länge', 'laenge'],
+    depth_mm: ['depth', 'depth mm', 'height', 'height mm', 'höhe', 'hoehe', 'tiefe'], weight_g: ['weight', 'weight g', 'weight in grams', 'gewicht'],
+    status: ['status']
+  };
+  for (var bi = 1; bi <= BULLETS; bi++) X_ALIAS['b' + bi] = ['bullet ' + bi, 'bullet point ' + bi, 'bullet' + bi, 'bulletpoint ' + bi];
+  var ROLE_OF = {};
+  Object.keys(X_ALIAS).forEach(function (role) { X_ALIAS[role].forEach(function (a) { ROLE_OF[hk(a)] = role; }); });
+  var X_LABEL = { width_mm: 'Width', length_mm: 'Length', depth_mm: 'Depth', weight_g: 'Weight' };
+
+  function parseCsv(text) {
+    text = String(text).replace(/^﻿/, '');
+    var first = text.split(/\r?\n/, 1)[0] || '', count = function (ch) { return first.split(ch).length; };
+    var delim = count(';') > count(',') && count(';') >= count('\t') ? ';' : count('\t') > count(',') ? '\t' : ',';
+    var rows = [], row = [], cell = '', quoted = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (quoted) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false; } else cell += ch; }
+      else if (ch === '"') quoted = true;
+      else if (ch === delim) { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+  function readSheet(file) {
+    var name = String(file.name || '');
+    if (file.size > 10485760) return Promise.reject(new Error('The file is larger than 10 MB.'));
+    if (/\.csv$/i.test(name) || /csv/.test(file.type || '')) return file.text().then(function (t) { return { rows: parseCsv(t), sheet: 'CSV' }; });
+    if (!/\.(xlsx|xlsm|xls|ods)$/i.test(name)) return Promise.reject(new Error('Choose an Excel file (.xlsx) or a CSV file.'));
+    return Promise.all([loadXlsx(), file.arrayBuffer()]).then(function (res) {
+      var X = res[0], wb = X.read(new Uint8Array(res[1]), { type: 'array' });
+      for (var i = 0; i < wb.SheetNames.length; i++) {   // the first sheet with data
+        var rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[i]], { header: 1, raw: true, defval: '', blankrows: false });
+        if (rows.length) return { rows: rows, sheet: wb.SheetNames[i] };
+      }
+      return { rows: [], sheet: wb.SheetNames[0] || '' };
+    });
+  }
+  // The header row: the first of the first 10 rows that names at least 2 known columns
+  function mapHeader(rows) {
+    for (var i = 0; i < Math.min(10, rows.length); i++) {
+      var map = {}, used = [], other = [];
+      (rows[i] || []).forEach(function (cell, ci) {
+        var t = String(cell == null ? '' : cell).trim(), role = ROLE_OF[hk(t)];
+        if (!t) return;
+        if (role && map[role] == null) { map[role] = ci; used.push(t); } else other.push(t);
+      });
+      if (Object.keys(map).length >= 2) return { row: i, map: map, used: used, other: other };
+    }
+    return null;
+  }
+  function cellStr(v) { return v == null ? '' : String(v).trim(); }
+  function numIn(v) {
+    if (v === '' || v == null) return null;
+    if (typeof v === 'number') return v;
+    var n = Number(String(v).replace(/\s/g, '').replace(',', '.'));
+    return isFinite(n) ? n : NaN;
+  }
+  function codeIn(v, pad) {
+    if (v === '' || v == null) return null;
+    var s = typeof v === 'number' ? String(Math.round(v)) : String(v).replace(/[\s-]/g, '');
+    if (pad && /^[0-9]+$/.test(s) && s.length < pad) s = ('00000000000000' + s).slice(-pad);   // Excel drops leading zeros of numbers
+    return s;
+  }
+  function readRecords(rows, hd) {
+    var out = [], seen = {};
+    for (var i = hd.row + 1; i < rows.length; i++) {
+      var row = rows[i] || [];
+      if (row.every(function (x) { return x === '' || x == null; })) continue;
+      var get = function (role) { var ci = hd.map[role]; return ci == null ? '' : row[ci]; };
+      var e = [], r = { line: i + 1 };
+      var id = numIn(get('id'));
+      r.id = id != null && !isNaN(id) && id > 0 && Math.round(id) === id ? id : null;
+      r.sku = cellStr(get('sku')) || null;
+      if (r.sku && r.sku.length > 100) e.push('SKU longer than 100 characters');
+      r.asin = cellStr(get('asin')).toUpperCase().replace(/\s+/g, '') || null;
+      if (r.asin && !/^[A-Z0-9]{10}$/.test(r.asin)) e.push('ASIN must be 10 letters or digits');
+      var g = get('gtin');
+      if (/e\+/i.test(String(g))) e.push('GTIN / EAN ' + g + ' was shortened by Excel: format that column as text');
+      else { r.gtin = codeIn(g); if (r.gtin && !/^[0-9]{8,14}$/.test(r.gtin)) e.push('GTIN / EAN must be 8 to 14 digits'); }
+      var pz = get('pzn');
+      r.pzn = codeIn(pz, typeof pz === 'number' ? 8 : 0);
+      if (r.pzn && !/^[0-9]{7,8}$/.test(r.pzn)) e.push('PZN must be 7 or 8 digits');
+      [['title', 500], ['content', 10000], ['details', 10000], ['maker', 200], ['brand', 200]].forEach(function (x) {
+        r[x[0]] = cellStr(get(x[0])) || null;
+        if (r[x[0]] && r[x[0]].length > x[1]) e.push((x[0] === 'title' ? 'Product name' : x[0] === 'maker' ? 'Manufacturer' : x[0].charAt(0).toUpperCase() + x[0].slice(1)) + ' longer than ' + x[1] + ' characters');
+      });
+      var lg = cellStr(get('logistics')).toUpperCase();
+      r.logistics = !lg ? null : /^(FBA|AMAZON)/.test(lg) ? 'FBA' : /^(FBM|DEFAULT|MERCHANT|MFN)/.test(lg) ? 'FBM' : (e.push('Logistics must be FBA or FBM'), null);
+      ['width_mm', 'length_mm', 'depth_mm', 'weight_g'].forEach(function (k) {
+        var n = numIn(get(k));
+        if (n != null && (isNaN(n) || n < 0)) { e.push(X_LABEL[k] + ' must be a number'); n = null; }
+        r[k] = n == null ? null : Math.round(n * 10) / 10;
+      });
+      var sv = norm(get('status'));
+      r.status = !sv ? null : /^(active|aktiv)$/.test(sv) ? 'active' : /^(inactive|inaktiv)$/.test(sv) ? 'inactive' : (e.push('Status must be active or inactive'), null);
+      var bl = [];
+      for (var b = 1; b <= BULLETS; b++) { var t = cellStr(get('b' + b)); if (t) bl.push(t.slice(0, 1000)); }
+      r.bullets = bl.length ? bl : null;
+      r.parent = cellStr(get('parent')) || null;
+      if (!r.id && !r.sku && !r.asin && !r.title) e.push('no ID, SKU, ASIN or product name');
+      if (r.sku) { if (seen[r.sku]) e.push('SKU ' + r.sku + ' is also in row ' + seen[r.sku]); else seen[r.sku] = r.line; }
+      r.errors = e;
+      out.push(r);
+    }
+    return out;
+  }
+  // Which row updates which product (by ID, else SKU, else a unique ASIN); which manufacturers and brands are new
+  function importPlan(ctx, recs) {
+    var bySku = {}, byAsin = {}, plan = { create: [], update: [], skip: [], makers: {}, brands: {} };
+    ctx.rows.forEach(function (p) { if (p.sku) bySku[p.sku] = p; if (p.asin) (byAsin[p.asin] = byAsin[p.asin] || []).push(p); });
+    recs.forEach(function (r) {
+      if (r.errors.length) { plan.skip.push(r); return; }
+      r.target = (r.id && byId(ctx.rows, r.id)) || (r.sku && bySku[r.sku]) || (!r.sku && r.asin && byAsin[r.asin] && byAsin[r.asin].length === 1 ? byAsin[r.asin][0] : null);
+      if (r.brand && !findByName(ctx.brands, r.brand)) {
+        plan.brands[norm(r.brand)] = { name: r.brand, maker: r.maker || r.brand };
+        if (!findByName(ctx.makers, r.maker || r.brand)) plan.makers[norm(r.maker || r.brand)] = r.maker || r.brand;
+      } else if (r.maker && !findByName(ctx.makers, r.maker)) plan.makers[norm(r.maker)] = r.maker;
+      (r.target ? plan.update : plan.create).push(r);
+    });
+    return plan;
+  }
+  // The filled cells of one row as product values (a brand brings its manufacturer)
+  function recValues(ctx, r) {
+    var v = {};
+    ['sku', 'asin', 'gtin', 'pzn', 'title', 'content', 'details', 'logistics', 'width_mm', 'length_mm', 'depth_mm', 'weight_g', 'status'].forEach(function (k) { if (r[k] != null) v[k] = r[k]; });
+    if (r.bullets) v.bullets = r.bullets;
+    var b = r.brand ? findByName(ctx.brands, r.brand) : null, m = r.maker ? findByName(ctx.makers, r.maker) : null;
+    if (b) { v.brand_id = b.id; v.manufacturer_id = b.manufacturer_id; } else if (m) v.manufacturer_id = m.id;
+    return v;
+  }
+  function runImport(ctx, plan, line) {
+    var res = { created: 0, updated: 0, failed: [] }, chain = Promise.resolve();
+    Object.keys(plan.makers).forEach(function (k) { chain = chain.then(function () { return ensureMaker(ctx, plan.makers[k]); }); });
+    Object.keys(plan.brands).forEach(function (k) { var b = plan.brands[k]; chain = chain.then(function () { return ensureBrand(ctx, b.name, b.maker); }); });
+    // new products, 100 per request; if one row is refused, that part again one by one to find it
+    chain = chain.then(function () {
+      var parts = [];
+      for (var i = 0; i < plan.create.length; i += 100) parts.push(plan.create.slice(i, i + 100));
+      return parts.reduce(function (c, recs) {
+        return c.then(function () {
+          line.textContent = 'Creating products… ' + A.fmtInt(res.created) + ' of ' + A.fmtInt(plan.create.length);
+          var rows = recs.map(function (r) { return Object.assign(blankRow(ctx), recValues(ctx, r)); });
+          return q(sb().from('ecom_products').insert(rows).select(LIST_SEL)).then(function (made) {
+            var bySku = {};
+            made.forEach(function (m) { replaceRow(ctx, m); if (m.sku) bySku[m.sku] = m; });
+            recs.forEach(function (r, i) { r.target = (r.sku && bySku[r.sku]) || made[i]; });
+            res.created += made.length;
+          }, function () {
+            return pool(recs, 4, function (r, i) {
+              return q(sb().from('ecom_products').insert(rows[i]).select(LIST_SEL).single()).then(function (m) { replaceRow(ctx, m); r.target = m; res.created++; },
+                function (e) { res.failed.push('Row ' + r.line + ': ' + e.message); });
+            });
+          });
+        });
+      }, Promise.resolve());
+    });
+    // known products: only the filled cells
+    chain = chain.then(function () {
+      var n = 0;
+      return pool(plan.update, 4, function (r) {
+        var v = recValues(ctx, r);
+        return (Object.keys(v).length ? q(sb().from('ecom_products').update(v).eq('id', r.target.id).select(LIST_SEL).single()).then(function (row) { replaceRow(ctx, row); res.updated++; },
+          function (e) { res.failed.push('Row ' + r.line + ': ' + e.message); }) : Promise.resolve())
+          .then(function () { n++; line.textContent = 'Updating products… ' + A.fmtInt(n) + ' of ' + A.fmtInt(plan.update.length); });
+      });
+    });
+    // parents last (by SKU, or by ID), when every product exists
+    chain = chain.then(function () {
+      return pool(plan.create.concat(plan.update).filter(function (r) { return r.parent && r.target; }), 4, function (r) {
+        var par = (/^[0-9]+$/.test(r.parent) ? byId(ctx.rows, parseInt(r.parent, 10)) : null) || ctx.rows.filter(function (p) { return p.sku === r.parent; })[0];
+        if (!par || par.id === r.target.id) { res.failed.push('Row ' + r.line + ': parent ' + r.parent + ' not found'); return; }
+        return q(sb().from('ecom_products').update({ parent_id: par.id }).eq('id', r.target.id).select(LIST_SEL).single()).then(function (row) { replaceRow(ctx, row); },
+          function (e) { res.failed.push('Row ' + r.line + ': ' + e.message); });
+      });
+    });
+    return chain.then(function () { return res; });
+  }
+  function excelImport(ctx, file, line, done) {
+    if (busy) { A.toast('An import is still running.', 'act'); return; }
+    line.textContent = 'Reading ' + file.name + '…';
+    readSheet(file).then(function (sh) {
+      line.textContent = '';
+      var hd = mapHeader(sh.rows);
+      if (!hd) throw new Error('No column names found in ' + file.name + ': the first row should name the columns (SKU, ASIN, Product name …). The Excel template shows them.');
+      var recs = readRecords(sh.rows, hd), plan = importPlan(ctx, recs);
+      var makers = Object.keys(plan.makers).map(function (k) { return plan.makers[k]; }), brands = Object.keys(plan.brands).map(function (k) { return plan.brands[k].name; });
+      var few = function (list) { return list.slice(0, 6).join(', ') + (list.length > 6 ? ' …' : ''); };
+      var n = plan.create.length + plan.update.length;
+      var go2 = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: n ? 'Import ' + A.fmtInt(n) + ' products' : 'Nothing to import', disabled: !n });
+      var d = dialog('Upload Excel — check before saving', h('div', { class: 'pim-import' }, [
+        h('p', { class: 'pim-hint', text: file.name + (sh.sheet && sh.sheet !== 'CSV' ? ' · sheet "' + sh.sheet + '"' : '') + ' · ' + A.fmtInt(recs.length) + ' rows · column names in row ' + (hd.row + 1) }),
+        h('ul', null, [
+          h('li', { text: 'New products: ' + A.fmtInt(plan.create.length) }),
+          h('li', { text: 'Products updated (same ID or SKU): ' + A.fmtInt(plan.update.length) + ' — empty cells keep what is there; filled bullet cells replace the product\'s bullets' }),
+          makers.length ? h('li', { text: 'New manufacturers: ' + makers.length + ' (' + few(makers) + ')' }) : null,
+          brands.length ? h('li', { text: 'New brands: ' + brands.length + ' (' + few(brands) + ')' }) : null,
+          plan.skip.length ? h('li', { class: 'is-bad', text: 'Rows left out: ' + A.fmtInt(plan.skip.length) }) : null]),
+        plan.skip.length ? h('ul', { class: 'pim-import__bad' }, plan.skip.slice(0, 20).map(function (r) { return h('li', { text: 'Row ' + r.line + ': ' + r.errors.join('; ') }); })
+          .concat(plan.skip.length > 20 ? [h('li', { text: '… and ' + (plan.skip.length - 20) + ' more' })] : [])) : null,
+        h('p', { class: 'pim-hint', text: 'Columns read: ' + hd.used.join(', ') + (hd.other.length ? ' · not read: ' + hd.other.slice(0, 12).join(', ') : '') })]), [go2], true);
+      go2.addEventListener('click', function () {
+        if (busy) return;
+        busy = true; d.close(); ctx.made = { makers: [], brands: [] };
+        runImport(ctx, plan, line).then(function (res) {
+          var msg = 'Excel upload: ' + A.fmtInt(res.created) + ' created, ' + A.fmtInt(res.updated) + ' updated' +
+            (res.failed.length ? ', ' + res.failed.length + ' refused (' + res.failed.slice(0, 3).join('; ') + (res.failed.length > 3 ? ' …' : '') + ')' : '') + '.' + madeText(ctx);
+          busy = false; line.textContent = msg; A.toast(msg, res.failed.length ? 'act' : null); done();
+        }).catch(function (e) { busy = false; line.textContent = 'The upload stopped: ' + e.message; A.toast(e.message, 'act'); done(); });
+      });
+    }).catch(function (e) { line.textContent = ''; A.toast(e.message, 'act'); });
+  }
+  function excelTemplate() {
+    return loadXlsx().then(function (X) {
+      var ex = ['', '', 'SKU-1001', 'B0EXAMPLE1', '4012345678901', '', 'Example product name', 'Description; several lines are fine', '', 'Example Manufacturer GmbH',
+        'Example Brand', 'FBA', 68, 133, 68, 340, 'First bullet', 'Second bullet', '', '', '', 'active'];
+      var ws = X.utils.aoa_to_sheet([X_HEAD, ex]);
+      ws['!cols'] = X_HEAD.map(function (t) { return { wch: Math.max(10, t.length + 2) }; });
+      var wb = X.utils.book_new();
+      X.utils.book_append_sheet(wb, ws, 'Products');
+      X.writeFile(wb, 'pim-products-template.xlsx', { compression: true });
+    });
+  }
+  // Download: the products shown (filters and order kept) with every field, in the columns Upload Excel reads
+  function exportCsv(ctx, shown, btn) {
+    btn.disabled = true;
+    pageAll(function () { return sb().from('ecom_products').select('*').eq('workspace_id', ctx.w.id).order('id', { ascending: false }); }).then(function (all) {
+      var by = {};
+      all.forEach(function (p) { by[p.id] = p; });
+      A.csvDownload('pim-products-' + new Date().toISOString().slice(0, 10) + '.csv', X_HEAD, shown.map(function (r) { return by[r.id]; }).filter(Boolean).map(function (p) {
+        var par = p.parent_id ? byId(ctx.rows, p.parent_id) : null, b = p.bullets || [];
+        return [p.id, par ? par.sku || '' : '', p.sku, p.asin, p.gtin, p.pzn, p.title, p.content, p.details, nameOf(ctx.makers, p.manufacturer_id), nameOf(ctx.brands, p.brand_id),
+          p.logistics, p.width_mm, p.length_mm, p.depth_mm, p.weight_g, b[0], b[1], b[2], b[3], b[4], p.status];
+      }));
+    }).catch(function (e) { A.toast(e.message, 'act'); }).then(function () { btn.disabled = false; });
   }
 
   /* 5. Product editor ------------------------------------------------------ */
@@ -448,7 +1359,7 @@
     asin: { k: 'asin', t: 'ASIN', max: 10, upper: true, re: /^[A-Z0-9]{10}$/, reMsg: '10 letters or digits' },
     gtin: { k: 'gtin', t: 'GTIN / EAN', max: 14, re: /^[0-9]{8,14}$/, reMsg: '8 to 14 digits' },
     pzn: { k: 'pzn', t: 'PZN', max: 8, re: /^[0-9]{7,8}$/, reMsg: '7 or 8 digits' },
-    title: { k: 'title', t: 'Title', max: 500, wide: true },
+    title: { k: 'title', t: 'Product name', max: 500, wide: true },
     content: { k: 'content', t: 'Content (description)', area: true, rows: 5, max: 10000, wide: true },
     details: { k: 'details', t: 'Details', area: true, rows: 3, max: 10000, wide: true },
     width_mm: { k: 'width_mm', t: 'Width (mm)', type: 'number', step: '0.1' },
@@ -458,7 +1369,6 @@
     logistics: { k: 'logistics', t: 'Logistics', opts: [['', '—'], ['FBA', 'FBA'], ['FBM', 'FBM']] },
     status: F_STATUS
   };
-  var BULLETS = 5;
 
   function renderProduct(main, id) {
     var w = wsOr(main); if (!w) return;
@@ -468,14 +1378,15 @@
     main.appendChild(box);
     Promise.all([
       id ? q(sb().from('ecom_products').select('*').eq('id', id).maybeSingle()) : Promise.resolve(null),
-      q(sb().from('ecom_brands').select('id,name,manufacturer_id').eq('workspace_id', w.id).order('name')),
-      q(sb().from('ecom_manufacturers').select('id,name').eq('workspace_id', w.id)),
-      q(sb().from('ecom_products').select('id,sku,title').eq('workspace_id', w.id).order('id', { ascending: false }).limit(1000)),
+      q(sb().from('ecom_brands').select('id,name,alt_name,manufacturer_id').eq('workspace_id', w.id).order('name')),
+      q(sb().from('ecom_manufacturers').select('id,name,alt_name').eq('workspace_id', w.id).order('name')),
+      pageAll(function () { return sb().from('ecom_products').select('id,sku,title,asin').eq('workspace_id', w.id).order('id', { ascending: false }); }),
       id ? q(sb().from('ecom_aplus').select('id,version,name,locale,status,modules,updated_at').eq('product_id', id).order('version', { ascending: false })) : Promise.resolve([])
     ]).then(function (res) {
-      var p = res[0], brands = res[1], mans = {}, others = res[3].filter(function (x) { return x.id !== id; }), versions = res[4];
+      var p = res[0], others = res[3].filter(function (x) { return x.id !== id; }), versions = res[4];
       if (id && !p) { box.innerHTML = ''; box.appendChild(h('p', { class: 'ecm-error', text: 'This product does not exist (any more).' })); return; }
-      res[2].forEach(function (m) { mans[m.id] = m.name; });
+      // the same shape as the list's data, for Sync with Amazon (new manufacturers / brands land in these lists)
+      var ectx = { w: w, rows: others, brands: res[1], makers: res[2], ap: {}, made: { makers: [], brands: [] } };
       p = p || { status: 'active', bullets: [], image_ids: [] };
       box.innerHTML = '';
       var ctrls = {}, err = h('p', { class: 'ecm-error', role: 'alert' });
@@ -487,12 +1398,77 @@
       var parent = h('select', { class: 'ecm-input', id: 'pim-parent' }, [h('option', { value: '', text: '— none —' })].concat(others.map(function (o) {
         return h('option', { value: String(o.id), text: '#' + o.id + ' ' + (o.title || o.sku || '') }); })));
       parent.value = p.parent_id ? String(p.parent_id) : '';
-      var brand = h('select', { class: 'ecm-input', id: 'pim-brand' }, [h('option', { value: '', text: '— none —' })].concat(brands.map(function (b) {
-        return h('option', { value: String(b.id), text: b.name + ' · ' + (mans[b.manufacturer_id] || 'manufacturer #' + b.manufacturer_id) }); })));
+      // brand and manufacturer (0048): a brand brings its manufacturer; without a brand the manufacturer is chosen alone
+      var brand = h('select', { class: 'ecm-input', id: 'pim-brand' }), maker = h('select', { class: 'ecm-input', id: 'pim-maker' });
+      function fillOpts() {
+        var bv = brand.value, mv = maker.value;
+        brand.innerHTML = ''; maker.innerHTML = '';
+        brand.appendChild(h('option', { value: '', text: '— none —' })); maker.appendChild(h('option', { value: '', text: '— none —' }));
+        ectx.brands.forEach(function (b) { brand.appendChild(h('option', { value: String(b.id), text: b.name + ' · ' + (nameOf(ectx.makers, b.manufacturer_id) || 'manufacturer #' + b.manufacturer_id) })); });
+        ectx.makers.forEach(function (m) { maker.appendChild(h('option', { value: String(m.id), text: m.name })); });
+        brand.value = bv; maker.value = mv;
+      }
+      function brandLink() {
+        var b = brand.value ? byId(ectx.brands, parseInt(brand.value, 10)) : null;
+        if (b) maker.value = String(b.manufacturer_id);
+        maker.disabled = !!b;
+        maker.title = b ? 'Comes with the brand ' + b.name : '';
+      }
+      fillOpts();
       brand.value = p.brand_id ? String(p.brand_id) : '';
+      maker.value = p.manufacturer_id ? String(p.manufacturer_id) : '';
+      brand.addEventListener('change', brandLink); brandLink();
       var ident = sect('Identification', ['sku', 'asin', 'gtin', 'pzn', 'logistics', 'status']);
-      ident.querySelector('.pim-form').prepend(fieldRow({ t: 'Brand (and its manufacturer)' }, brand));
+      ident.querySelector('.pim-form').prepend(fieldRow({ t: 'Manufacturer', hint: 'With a brand: the brand\'s manufacturer' }, maker));
+      ident.querySelector('.pim-form').prepend(fieldRow({ t: 'Brand' }, brand));
       ident.querySelector('.pim-form').prepend(fieldRow({ t: 'Parent product' }, parent));
+      // Sync with Amazon: fills the form from Amazon's catalog (nothing is saved before Save)
+      var amzHint = h('span', { class: 'pim-hint', text: p.amazon_synced_at ? 'Last filled from Amazon ' + A.mpCode(p.amazon_marketplace) + ' ' + A.ago(p.amazon_synced_at) + '.'
+        : 'Fills this product from Amazon\'s catalog by its ASIN (or EAN); you see the changes first.' });
+      var amzBtn = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Sync with Amazon' }), pendingAmz = null;
+      function amzState() {
+        var has = !!(ctrls.asin.value.trim() || ctrls.gtin.value.trim());
+        amzBtn.disabled = !amzConn() || !has;
+        amzBtn.title = !amzConn() ? 'Connect an Amazon account first (Settings).' : !has ? 'Type an ASIN (or an EAN) first.' : 'Fill from Amazon ' + mpLabel(amzMp());
+      }
+      ctrls.asin.addEventListener('input', amzState); ctrls.gtin.addEventListener('input', amzState); amzState();
+      function formNow() {
+        var v = { id: id, image_ids: pics.slice(), bullets: bullets.map(function (b) { return b.value.trim(); }).filter(Boolean),
+                  brand_id: brand.value ? parseInt(brand.value, 10) : null, manufacturer_id: maker.value ? parseInt(maker.value, 10) : null, parent_id: parent.value ? parseInt(parent.value, 10) : null };
+        Object.keys(ctrls).forEach(function (k) { var x = readValue(PF[k], ctrls[k]); v[k] = typeof x === 'number' && isNaN(x) ? null : x; });
+        if (v.asin && !PF.asin.re.test(v.asin)) v.error = 'ASIN: 10 letters or digits.';
+        else if (v.gtin && !PF.gtin.re.test(v.gtin)) v.error = 'GTIN / EAN: 8 to 14 digits.';
+        return v;
+      }
+      function fillForm(v) {
+        ['asin', 'title', 'content', 'gtin', 'width_mm', 'length_mm', 'depth_mm', 'weight_g', 'logistics'].forEach(function (k) { if (k in v && ctrls[k]) ctrls[k].value = v[k] == null ? '' : String(v[k]); });
+        if (v.bullets) bullets.forEach(function (el, i) { el.value = v.bullets[i] || ''; });
+        if ('brand_id' in v || 'manufacturer_id' in v) {
+          fillOpts();
+          if ('brand_id' in v) brand.value = String(v.brand_id);
+          if (v.manufacturer_id) maker.value = String(v.manufacturer_id);
+          brandLink();
+        }
+        if (v.image_ids) { pics = v.image_ids.slice(0, 5); paintPics(); }
+        if (v.parent_id) parent.value = String(v.parent_id);
+        pendingAmz = { amazon_marketplace: v.amazon_marketplace, amazon_synced_at: v.amazon_synced_at };
+        amzHint.textContent = 'Filled from Amazon ' + A.mpCode(v.amazon_marketplace) + ': check the fields, then press Save.';
+        amzState();
+      }
+      amzBtn.addEventListener('click', function () {
+        var cur = formNow();
+        if (cur.error) { err.textContent = cur.error; return; }
+        var code = cur.asin || cur.gtin;
+        amzBtn.disabled = true; amzBtn.textContent = 'Asking Amazon…'; err.textContent = '';
+        lookup([code], cur.asin ? 'ASIN' : codeType(cur.gtin)).then(function (res) {
+          var it = res.items && res.items[0];
+          if (!it || !it.found) { err.textContent = 'Amazon ' + mpLabel(amzMp()) + ' has no product with ' + (cur.asin ? 'ASIN ' : 'EAN ') + code + '.'; return; }
+          return amazonExtra(ectx, cur, it).then(function (extra) {
+            amazonDialog(ectx, cur, it, extra, 'Fill the form', function (chosen) { return amazonPatch(ectx, cur, it, chosen, extra).then(fillForm); });
+          });
+        }).catch(function (e) { err.textContent = e.message; }).then(function () { amzBtn.textContent = 'Sync with Amazon'; amzState(); });
+      });
+      var amzBar = h('div', { class: 'pim-amzbar' }, [amzBtn, amzHint]);
       // bullets
       var bullets = [];
       var bulletBox = h('fieldset', { class: 'pim-section' }, [h('legend', { text: 'Bullets' }), h('div', { class: 'pim-form' }, (function () {
@@ -509,14 +1485,14 @@
       function paintPics() {
         slots.innerHTML = '';
         if (!pics.length) { slots.appendChild(h('p', { class: 'pim-hint', text: 'No pictures yet.' })); return; }
-        q(sb().from('ecom_images').select('id,path,title').in('id', pics)).then(function (rows) {
+        q(sb().from('ecom_images').select('id,path,url,title').in('id', pics)).then(function (rows) {
           var by = {}; rows.forEach(function (r) { by[r.id] = r; });
-          return signed(rows.map(function (r) { return r.path; })).then(function () {
+          return signRows(rows).then(function () {
             slots.innerHTML = '';
             pics.forEach(function (pid, i) {
               var r = by[pid];
               slots.appendChild(h('div', { class: 'pim-slot' }, [
-                r ? h('img', { src: urlCache[r.path] || '', alt: r.title || 'picture', class: 'pim-slot__img' }) : h('span', { class: 'pim-hint', text: 'missing #' + pid }),
+                r ? h('img', { src: imgSrc(r, 320), alt: r.title || 'picture', class: 'pim-slot__img' }) : h('span', { class: 'pim-hint', text: 'missing #' + pid }),
                 h('span', { class: 'pim-hint', text: (i === 0 ? 'Main · ' : '') + '#' + pid }),
                 h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Remove', onclick: function () { pics.splice(i, 1); paintPics(); } })]));
             });
@@ -529,7 +1505,7 @@
       paintPics();
       var save = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: id ? 'Save' : 'Create product' });
       var del = id ? h('button', { type: 'button', class: 'ecm-btn ecm-btn--danger ecm-btn--small', text: 'Delete product' }) : null;
-      box.append(ident, sect('Content', ['title', 'content', 'details']), bulletBox, sect('Size and weight', ['width_mm', 'length_mm', 'depth_mm', 'weight_g']), picBox,
+      box.append(amzBar, ident, sect('Content', ['title', 'content', 'details']), bulletBox, sect('Size and weight', ['width_mm', 'length_mm', 'depth_mm', 'weight_g']), picBox,
         h('div', { class: 'ecm-row pim-actions' }, [save, del, err].filter(Boolean)),
         id ? h('p', { class: 'pim-hint', text: 'ID ' + id + ' · created ' + A.fmtTime(p.created_at) + ' · updated ' + A.fmtTime(p.updated_at) }) : null);
       save.addEventListener('click', function () {
@@ -538,9 +1514,11 @@
         if (msg) { err.textContent = msg; return; }
         v.parent_id = parent.value ? parseInt(parent.value, 10) : null;
         v.brand_id = brand.value ? parseInt(brand.value, 10) : null;
+        v.manufacturer_id = maker.value ? parseInt(maker.value, 10) : null;   // the database takes the brand's when a brand is set
         v.bullets = bullets.map(function (b) { return b.value.trim(); }).filter(Boolean);
         v.image_ids = pics.slice(0, 5);
         v.status = v.status || 'active';
+        if (pendingAmz) Object.assign(v, pendingAmz);
         save.disabled = true; err.textContent = '';
         var call = id ? sb().from('ecom_products').update(v).eq('id', id).select('id').single()
                       : sb().from('ecom_products').insert(Object.assign({ workspace_id: w.id }, v)).select('id').single();
@@ -663,7 +1641,7 @@
       }
       function paintPreview() {
         var ids = []; mods.forEach(function (m) { (m.blocks || []).forEach(function (b) { if (b.image_id) ids.push(b.image_id); }); });
-        var draw = function (paths) {
+        var draw = function (pics) {
           preview.innerHTML = '';
           preview.appendChild(h('p', { class: 'pim-hint', text: 'Preview (simplified)' }));
           if (!mods.length) preview.appendChild(h('p', { class: 'pim-hint', text: 'Add a module on the left.' }));
@@ -673,7 +1651,7 @@
             if (m.subheadline) el.appendChild(h('p', { class: 'pim-pv__sub', text: m.subheadline }));
             var grid = h('div', { class: 'pim-pv__blocks' });
             (m.blocks || []).forEach(function (b) {
-              var src = b.image_id && paths[b.image_id] ? urlCache[paths[b.image_id]] : null;
+              var src = b.image_id && pics[b.image_id] ? imgSrc(pics[b.image_id], 1000) : null;
               grid.appendChild(h('div', { class: 'pim-pv__block' }, [M.img ? (src ? h('img', { src: src, alt: b.headline || '' }) : h('div', { class: 'pim-pv__ph', text: M.img })) : null,
                 b.headline ? h('strong', { text: b.headline }) : null, b.body ? h('p', { text: b.body }) : null]));
             });
@@ -684,9 +1662,9 @@
           });
         };
         if (!ids.length) { draw({}); return; }
-        q(sb().from('ecom_images').select('id,path').in('id', ids)).then(function (rows) {
-          var paths = {}; rows.forEach(function (r) { paths[r.id] = r.path; });
-          return signed(rows.map(function (r) { return r.path; })).then(function () { draw(paths); });
+        q(sb().from('ecom_images').select('id,path,url').in('id', ids)).then(function (rows) {
+          var by = {}; rows.forEach(function (r) { by[r.id] = r; });
+          return signRows(rows).then(function () { draw(by); });
         }).catch(function () { draw({}); });
       }
       function values() { return { name: name.value.trim() || 'A+ content', locale: locale.value, status: status.value, note: note.value.trim() || null, modules: mods }; }

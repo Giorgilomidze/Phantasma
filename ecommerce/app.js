@@ -970,7 +970,7 @@
           var same = function (a, b) { return JSON.stringify(a || null) === JSON.stringify(b || null); };
           detail.appendChild(h('h3', { class: 'ecm-h3', text: 'PIM product #' + p.id + ' compared' }));
           detail.appendChild(h('ul', { class: 'ecm-compare' }, [
-            h('li', { class: same(p.title, d.title) ? 'is-same' : 'is-diff', text: 'Title: ' + (same(p.title, d.title) ? 'same' : 'differs — PIM: ' + shortVal(p.title)) }),
+            h('li', { class: same(p.title, d.title) ? 'is-same' : 'is-diff', text: 'Product name: ' + (same(p.title, d.title) ? 'same' : 'differs — PIM: ' + shortVal(p.title)) }),
             h('li', { class: same(p.bullets, d.bullets) ? 'is-same' : 'is-diff', text: 'Bullets: ' + (same(p.bullets, d.bullets) ? 'same' : 'differ — PIM has ' + (p.bullets || []).length + ', Amazon ' + (d.bullets || []).length) }),
             h('li', { class: same(p.content, d.description) ? 'is-same' : 'is-diff', text: 'Description: ' + (same(p.content, d.description) ? 'same' : 'differs') })]));
         }
@@ -1672,6 +1672,7 @@
     conn: function () { return current(); }, conns: function () { return conns; }, isAdmin: isAdmin,
     dataTable: dataTable, pagerBar: pagerBar, PAGE_ROWS: PAGE_ROWS, csvDownload: csvDownload,
     fmtInt: fmtInt, fmtNum: fmtNum, fmtTime: fmtTime, fmtDay: fmtDay, mpCode: mpCode, isoMinute: isoMinute,
+    amzHost: function (id) { return AMZ_HOST[id] || ''; },   // pim.js: "DE · amazon.de" for Sync with Amazon
     // pim.js registers its pages here; an open page of that id is drawn again at once
     route: function (id, fn) { ROUTES[id] = fn; if (started && location.hash.replace(/^#\/?/, '').split('/')[0] === id) route(); },
     go: function () { route(); }

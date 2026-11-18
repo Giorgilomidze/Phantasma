@@ -241,6 +241,65 @@
 .pim-pv__block p { font-size: var(--type-caption); margin: var(--space-1) 0 0; white-space: pre-line; }
 .pim-pv__ph { aspect-ratio: 1.6; display: grid; place-items: center; background: var(--surface); color: var(--ink-soft); font-size: var(--type-caption); }
 @media (max-width: 899px) { .pim-aplus, .pim-detail { grid-template-columns: 1fr; } .pim-aplus__preview { position: static; } }
+/* PIM products (18 Nov 2026, owner): quick edit in the row, search with filters, Sync with Amazon, imports */
+.pim-bar { gap: var(--space-2); }
+.pim-soon { margin-left: var(--space-1); padding: 0 var(--space-1); border-radius: 999px; background: var(--surface); color: var(--ink-soft); font-size: var(--type-eyebrow); text-transform: uppercase; letter-spacing: 0.04em; }
+.pim-mpwrap { display: inline-flex; align-items: center; gap: var(--space-2); margin-left: auto; font-size: var(--type-caption); color: var(--ink-soft); }
+.pim-mp { min-height: var(--ecm-ctl-sm); max-width: 200px; padding: 0 var(--space-1); font-size: var(--type-caption); }
+.pim-progress { margin: 0 0 var(--space-2); font-size: var(--type-caption); color: var(--ink-soft); }
+.pim-progress:empty { display: none; }
+.pim-tools { gap: var(--space-2); }
+.pim-fx { position: relative; flex: 1 1 520px; max-width: 760px; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1);
+  min-height: var(--ecm-ctl); box-sizing: border-box; padding: 2px var(--space-2); background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius-sm); cursor: text; }
+.pim-fx:focus-within { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.pim-fx__chips { display: contents; }
+.pim-fx__input { flex: 1 1 220px; min-width: 120px; border: 0; background: transparent; font: inherit; font-size: var(--type-body-sm); color: var(--ink); padding: var(--space-1) 0; outline: none; }
+.pim-fx__input::placeholder { color: var(--ink-soft); }
+@media (pointer: coarse) { .pim-fx__input { font-size: 1rem; } }
+.pim-fx__chip { display: inline-flex; align-items: center; max-width: 280px; padding-left: var(--space-2); border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); font-size: var(--type-caption); }
+.pim-fx__chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pim-fx__chip button, .pim-fx__clear { all: unset; cursor: pointer; padding: 0 var(--space-2); line-height: 22px; color: var(--ink-soft); }
+.pim-fx__chip button:hover, .pim-fx__clear:hover { color: var(--act); }
+.pim-fx__chip button:focus-visible, .pim-fx__clear:focus-visible { outline: 2px solid var(--accent-deep); }
+.pim-fx__clear { margin-left: auto; }
+.pim-fx__list { position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20; margin: 0; padding: var(--space-1) 0; list-style: none; max-height: 340px; overflow: auto;
+  background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius-sm); box-shadow: 0 6px 18px rgba(20, 33, 61, 0.12); }
+.pim-fx__list[hidden] { display: none; }
+.pim-fx__group { padding: var(--space-2) var(--space-3) 2px; font-size: var(--type-eyebrow); text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); }
+.pim-fx__opt { padding: var(--space-1) var(--space-3); font-size: var(--type-body-sm); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pim-fx__opt:hover, .pim-fx__opt.is-active { background: var(--surface); }
+@media (pointer: coarse) { .pim-fx__opt { padding: var(--space-2) var(--space-3); } }
+/* the actions stay visible at the right while the table scrolls sideways */
+.pim-list th.pim-act, .pim-list td.pim-act { position: sticky; right: 0; background: var(--surface-raised); box-shadow: -1px 0 0 var(--rule); }
+.pim-list thead th.pim-act { background: var(--surface); z-index: 1; }
+.pim-list tbody tr:hover td.pim-act, .pim-list tr.is-editing td { background: var(--surface); }
+.pim-act__in { display: inline-flex; gap: var(--space-1); }
+@media (max-width: 599px) { .pim-act__in { flex-direction: column; align-items: stretch; } .pim-act__in .ecm-btn { justify-content: center; } .pim-long { display: none; } .pim-mpwrap { margin-left: 0; } }
+.pim-list td.is-wide { min-width: 220px; max-width: 360px; }
+.pim-list tr.is-editing td { vertical-align: middle; }
+.pim-list td.is-edit .ecm-input { min-height: var(--ecm-ctl-sm); padding: 0 var(--space-1); font-size: var(--type-caption); }
+.pim-list td.is-edit input.ecm-input { width: 8.5rem; }
+.pim-list td.is-edit select.ecm-input { max-width: 11rem; }
+.pim-list td.pim-empty { padding: var(--space-5); text-align: center; color: var(--ink-soft); white-space: normal; }
+/* Sync with Amazon: what Amazon has beside the product */
+.pim-amzbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.pim-amz { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.pim-amz__row { display: grid; grid-template-columns: 190px minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2) var(--space-3); padding: var(--space-2);
+  border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--surface-raised); font-size: var(--type-caption); }
+.pim-amz__pick { display: flex; gap: var(--space-2); align-items: flex-start; font-weight: 600; }
+.pim-amz__pick input { margin: 2px 0 0; }
+.pim-amz__tag { display: block; font-size: var(--type-eyebrow); text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); }
+.pim-amz__text { display: block; white-space: pre-line; max-height: 7.5em; overflow: auto; }
+.pim-amz__list { margin: 0; padding-left: 1.2em; max-height: 7.5em; overflow: auto; }
+.pim-amz__pics { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.pim-amz__pics img { width: 56px; height: 56px; object-fit: contain; background: #fff; border: 1px solid var(--rule); border-radius: 2px; }
+@media (max-width: 699px) { .pim-amz__row { grid-template-columns: minmax(0, 1fr); } }
+.pim-import ul { margin: var(--space-1) 0 var(--space-2); padding-left: 1.2em; font-size: var(--type-body-sm); }
+.pim-import li { margin: 2px 0; }
+.pim-import .is-bad, .pim-import__bad { color: var(--act); }
+.pim-import__bad { font-size: var(--type-caption); max-height: 200px; overflow: auto; }
+.pim-check { display: flex; gap: var(--space-2); align-items: flex-start; font-size: var(--type-body-sm); }
+.pim-check input { margin: 3px 0 0; }
 
 /* 6. Settings parts -------------------------------------------------------- */
 .ecm-accounts { display: grid; gap: var(--space-3); }
