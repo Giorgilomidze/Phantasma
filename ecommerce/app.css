@@ -275,7 +275,8 @@
 .pim-list tbody tr:hover td.pim-act, .pim-list tr.is-editing td { background: var(--surface); }
 .pim-act__in { display: inline-flex; gap: var(--space-1); }
 @media (max-width: 599px) { .pim-act__in { flex-direction: column; align-items: stretch; } .pim-act__in .ecm-btn { justify-content: center; } .pim-long { display: none; } .pim-mpwrap { margin-left: 0; } }
-.pim-list td.is-wide { min-width: 220px; max-width: 360px; }
+.pim-list td.is-wide { min-width: 160px; max-width: 320px; white-space: nowrap; }
+.pim-1line { display: block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* the whole name on hover */
 .pim-list tr.is-editing td { vertical-align: middle; }
 .pim-list td.is-edit .ecm-input { min-height: var(--ecm-ctl-sm); padding: 0 var(--space-1); font-size: var(--type-caption); }
 .pim-list td.is-edit input.ecm-input { width: 8.5rem; }
@@ -300,6 +301,21 @@
 .pim-import__bad { font-size: var(--type-caption); max-height: 200px; overflow: auto; }
 .pim-check { display: flex; gap: var(--space-2); align-items: flex-start; font-size: var(--type-body-sm); }
 .pim-check input { margin: 3px 0 0; }
+/* Image library (19 Nov 2026): the source as one row of buttons; several tags per picture */
+.pim-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: var(--radius-sm); overflow: hidden; }
+.pim-seg__btn { all: unset; box-sizing: border-box; min-height: var(--ecm-ctl); display: inline-flex; align-items: center; padding: 0 var(--space-3); cursor: pointer;
+  font-size: var(--type-caption); color: var(--ink); background: var(--bg); border-right: 1px solid var(--rule); }
+.pim-seg__btn:last-child { border-right: 0; }
+.pim-seg__btn:hover { background: var(--surface); }
+.pim-seg__btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.pim-seg__btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: -2px; }
+.pim-tagpick { display: grid; gap: var(--space-2); }
+.pim-tags { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.pim-tagbtn { all: unset; cursor: pointer; padding: 2px var(--space-2); border: 1px dashed var(--rule); border-radius: 999px; font-size: var(--type-caption); color: var(--ink-soft); }
+.pim-tagbtn:hover { border-color: var(--ink-soft); color: var(--ink); }
+.pim-tagbtn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+@media (pointer: coarse) { .pim-tagbtn { padding: var(--space-2) var(--space-3); } }
+.pim-module--empty { border-style: dashed; background: var(--bg); }
 
 /* 6. Settings parts -------------------------------------------------------- */
 .ecm-accounts { display: grid; gap: var(--space-3); }

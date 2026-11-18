@@ -129,18 +129,20 @@
 
   /* 2. Manufacturers / brands / sellers ----------------------------------- */
   var F_NAME = { k: 'name', t: 'Name', req: true, max: 200 };
-  var F_ALT = { k: 'alt_name', t: 'Alternative name', max: 200 };
   var F_STATUS = { k: 'status', t: 'Status', opts: [['active', 'Active'], ['inactive', 'Inactive']] };
   var C_ID = { k: 'id', t: 'ID', num: true }, C_CREATED = { k: 'created_at', t: 'Created', f: A.isoMinute }, C_UPDATED = { k: 'updated_at', t: 'Updated', f: A.isoMinute };
   var ENT = {
+    // Manufacturers (owner, 19 Nov 2026): a short name, shown in every list, dropdown and filter, and the full (legal)
+    // name, kept in the column alt_name
     'pim-manufacturers': { table: 'ecom_manufacturers', title: 'Manufacturers', one: 'manufacturer',
-      fields: [F_NAME, F_ALT, F_STATUS],
-      cols: [C_ID, { k: 'name', t: 'Name', wide: true }, { k: 'alt_name', t: 'Alternative name' }, { k: '_brands', t: 'Brands', num: true },
+      fields: [{ k: 'name', t: 'Short name', req: true, max: 60, hint: 'Shown in lists, dropdowns and filters' },
+               { k: 'alt_name', t: 'Full name', max: 200, hint: 'The legal name, e.g. Orthomol pharmazeutische Vertriebs GmbH' }, F_STATUS],
+      cols: [C_ID, { k: 'name', t: 'Short name' }, { k: 'alt_name', t: 'Full name', wide: true }, { k: '_brands', t: 'Brands', num: true },
              { k: 'status', t: 'Status' }, C_CREATED, C_UPDATED] },
+    // Brands: no alternative name (owner, 19 Nov 2026)
     'pim-brands': { table: 'ecom_brands', title: 'Brands', one: 'brand',
-      fields: [{ k: 'manufacturer_id', t: 'Manufacturer', req: true, ref: true }, F_NAME, F_ALT, F_STATUS],
-      cols: [C_ID, { k: '_manufacturer', t: 'Manufacturer' }, { k: 'name', t: 'Name', wide: true }, { k: 'alt_name', t: 'Alternative name' },
-             { k: 'status', t: 'Status' }, C_CREATED, C_UPDATED] },
+      fields: [{ k: 'manufacturer_id', t: 'Manufacturer', req: true, ref: true }, F_NAME, F_STATUS],
+      cols: [C_ID, { k: '_manufacturer', t: 'Manufacturer' }, { k: 'name', t: 'Name', wide: true }, { k: 'status', t: 'Status' }, C_CREATED, C_UPDATED] },
     'pim-sellers': { table: 'ecom_sellers', title: 'Sellers', one: 'seller',
       fields: [F_NAME, { k: 'seller_type', t: 'Type', opts: [['seller', 'Seller'], ['vendor', 'Vendor']] }, F_STATUS,
                { k: 'amazon_seller_id', t: 'Amazon seller ID', max: 20, upper: true, re: /^[A-Z0-9]{8,20}$/, reMsg: '8 to 20 letters or digits',
@@ -275,21 +277,77 @@
       h('span', { class: 'pim-tile__meta', text: '#' + img.id + ' · ' + (img.url ? 'link' : kb(img.bytes)) + (img.source !== 'upload' ? ' · ' + (SOURCE[img.source] || img.source) : '') + (img.archived_at ? ' · archived' : '') })]);
     return t;
   }
-  // A grid of pictures with search, source filter and 20 per page
+  // Pictures and the products that use them (owner, 19 Nov 2026): the search finds pictures by their products'
+  // manufacturer, brand, name, ASIN and SKU, and by tags; Amazon pictures carry their ASIN as a tag
+  var IKINDS = { maker: 'Manufacturer', brand: 'Brand', name: 'Product name', asin: 'ASIN', sku: 'SKU', tag: 'Tag', text: 'Contains' };
+  var IFX_HINT = 'Search or filter: manufacturer, brand, product name, ASIN, SKU, tag';
+  function imageIndex(pctx, all) {
+    var x = { makers: pctx ? pctx.makers : [], brands: pctx ? pctx.brands : [], rows: pctx ? pctx.rows : [], byImage: {}, tags: [] }, seen = {};
+    x.rows.forEach(function (p) { (p.image_ids || []).forEach(function (id) { (x.byImage[id] = x.byImage[id] || []).push(p); }); });
+    all.forEach(function (i) {
+      (i.tags || []).forEach(function (t) { if (!seen[t]) { seen[t] = 1; x.tags.push(t); } });
+      i._all = norm([i.id, i.title, (i.tags || []).join(' '), SOURCE[i.source] || i.source].concat((x.byImage[i.id] || []).map(function (p) {
+        var m = p.manufacturer_id ? byId(x.makers, p.manufacturer_id) : null;
+        return [p.id, p.sku, p.asin, p.title, nameOf(x.brands, p.brand_id), m ? m.name + ' ' + (m.alt_name || '') : ''].join(' ');
+      })).join(' '));
+    });
+    x.tags.sort();
+    return x;
+  }
+  function matchesImage(i, chips, x) {
+    var by = {}, prods = x.byImage[i.id] || [];
+    chips.forEach(function (c) { (by[c.kind] = by[c.kind] || []).push(c); });
+    return Object.keys(by).every(function (kind) {
+      var list = by[kind];
+      if (kind === 'text') return list.every(function (c) { return (i._all || '').indexOf(norm(c.value)) >= 0; });
+      if (kind === 'tag') return list.some(function (c) { return (i.tags || []).indexOf(c.value) >= 0; });
+      return list.some(function (c) {
+        if (kind === 'asin' && (i.tags || []).indexOf(String(c.value).toLowerCase()) >= 0) return true;
+        return prods.some(function (p) {
+          return kind === 'maker' ? p.manufacturer_id === c.value : kind === 'brand' ? p.brand_id === c.value : kind === 'name' ? p.title === c.value
+            : kind === 'asin' ? p.asin === c.value : p.sku === c.value;
+        });
+      });
+    });
+  }
+  function suggestImages(x, text) {
+    var t = norm(text), out = [], used = x.rows.filter(function (p) { return (p.image_ids || []).length; });
+    function hit(s) { return !t || norm(s).indexOf(t) >= 0; }
+    function take(kind, list, max) { list.slice(0, max).forEach(function (o) { out.push({ kind: kind, value: o.value, label: o.label }); }); }
+    function uniq(key) {
+      var seen = {}, list = [];
+      used.forEach(function (p) { var v = p[key]; if (v && !seen[v] && hit(v)) { seen[v] = 1; list.push({ value: v, label: v.length > 80 ? v.slice(0, 79) + '…' : v }); } });
+      return list;
+    }
+    if (t) out.push({ kind: 'text', value: String(text).trim(), label: 'Search everywhere for "' + String(text).trim() + '"' });
+    take('maker', x.makers.filter(function (m) { return hit(m.name) || (m.alt_name && hit(m.alt_name)); }).map(function (m) { return { value: m.id, label: m.name }; }), t ? 5 : 6);
+    take('brand', x.brands.filter(function (b) { return hit(b.name); }).map(function (b) { return { value: b.id, label: b.name }; }), t ? 5 : 6);
+    if (t) { take('name', uniq('title'), 5); take('asin', uniq('asin'), 5); take('sku', uniq('sku'), 5); }
+    take('tag', x.tags.filter(hit).map(function (g) { return { value: g, label: g }; }), t ? 6 : 10);
+    return out;
+  }
+  // A grid of pictures: search with filters, the source as one row of buttons (owner, 19 Nov 2026), 20 per page
   function imageGrid(all, opts) {
-    var st = { q: '', src: '' }, shown = [];
-    var search = h('input', { class: 'ecm-input', type: 'search', placeholder: 'Search name or tag', 'aria-label': 'Search pictures' });
-    var src = h('select', { class: 'ecm-input', 'aria-label': 'Source' }, [['', 'All pictures'], ['upload', 'Uploads'], ['gemini', 'Gemini'], ['openai', 'ChatGPT'], ['amazon', 'Amazon']]
-      .concat(opts.archived ? [['archived', 'Archived']] : []).map(function (o) { return h('option', { value: o[0], text: o[1] }); }));
+    var st = { chips: [], src: '' }, shown = [], x = imageIndex(opts.pctx, all);
+    var fx = filterBox({ kinds: IKINDS, hint: IFX_HINT, label: 'Search or filter pictures', suggest: function (t) { return suggestImages(x, t); },
+                         onChange: function (chips) { st.chips = chips; apply(); } });
+    var SRC = [['', 'All'], ['upload', 'Uploads'], ['gemini', 'Gemini'], ['openai', 'ChatGPT'], ['amazon', 'Amazon']].concat(opts.archived ? [['archived', 'Archived']] : []);
+    var seg = h('div', { class: 'pim-seg', role: 'group', 'aria-label': 'Pictures from' });
+    SRC.forEach(function (o) {
+      seg.appendChild(h('button', { type: 'button', class: 'pim-seg__btn', 'data-src': o[0], 'aria-pressed': String(o[0] === st.src), text: o[1], onclick: function () {
+        st.src = o[0];
+        Array.prototype.forEach.call(seg.children, function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-src') === st.src)); });
+        apply();
+      } }));
+    });
     var count = h('span', { class: 'ecm-tools__count', 'aria-live': 'polite' });
     var grid = h('div', { class: 'pim-grid' });
     var pager = A.pagerBar(draw);
     function apply() {
-      var qq = st.q.toLowerCase();
       shown = all.filter(function (i) {
         if (st.src === 'archived') { if (!i.archived_at) return false; } else if (i.archived_at && opts.archived) return false;
         if (st.src && st.src !== 'archived' && i.source !== st.src) return false;
-        return !qq || (i.title || '').toLowerCase().indexOf(qq) >= 0 || (i.tags || []).some(function (t) { return t.indexOf(qq) >= 0; });
+        return matchesImage(i, st.chips, x);
       });
       pager.set(shown.length, 0);
       count.textContent = A.fmtInt(shown.length) + (shown.length === 1 ? ' picture' : ' pictures');
@@ -304,11 +362,9 @@
         page.forEach(function (i) { grid.appendChild(tile(i, { on: opts.isOn ? opts.isOn(i) : false, onPick: opts.onPick, onOpen: opts.onOpen })); });
       });
     }
-    search.addEventListener('input', function () { st.q = this.value.trim(); apply(); });
-    src.addEventListener('change', function () { st.src = this.value; apply(); });
     apply();
-    return { el: h('div', null, [h('div', { class: 'ecm-tools' }, [search, src].concat(opts.tools || []).concat([count])), grid, pager.el]), refresh: apply,
-             set: function (list) { all = list; apply(); } };
+    return { el: h('div', null, [h('div', { class: 'ecm-tools pim-tools' }, [fx.el, seg].concat(opts.tools || []).concat([count])), grid, pager.el]), refresh: apply,
+             set: function (list) { all = list; x = imageIndex(opts.pctx, all); apply(); }, tags: function () { return x.tags.slice(); } };
   }
 
   function renderImages(main) {
@@ -322,20 +378,45 @@
     // drag and drop anywhere on the page
     main.addEventListener('dragover', function (e) { e.preventDefault(); });
     main.addEventListener('drop', function (e) { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files, line, reload); });
-    var grid = null;
+    var grid = null, pctxP = pimData(w).catch(function () { return null; });   // the products, for the search (the library works without them)
     function reload() {
-      loadImages({ archived: true }).then(function (all) {
-        var used = all.reduce(function (a, i) { return a + (i.bytes || 0); }, 0);
+      Promise.all([loadImages({ archived: true }), pctxP]).then(function (res) {
+        var all = res[0], used = all.reduce(function (a, i) { return a + (i.bytes || 0); }, 0);
         usage.textContent = 'Used ' + kb(used) + ' of 500 MB · PNG, JPEG or WebP up to 10 MB, 50 per upload; you can also drop files here';
-        if (!grid) { box.innerHTML = ''; grid = imageGrid(all, { archived: true, onOpen: function (i) { imageDetails(i, reload); } }); box.appendChild(grid.el); }
-        else grid.set(all);
+        if (!grid) {
+          box.innerHTML = '';
+          grid = imageGrid(all, { archived: true, pctx: res[1], onOpen: function (i) { imageDetails(i, reload, grid.tags()); } });
+          box.appendChild(grid.el);
+        } else grid.set(all);
       }).catch(function (e) { errorBox(box, e); });
     }
     reload();
   }
 
-  function imageDetails(img, done) {
-    var title = control({ k: 'title', max: 200 }, img.title), tags = control({ k: 'tags', max: 400 }, (img.tags || []).join(', '));
+  // Tags of one picture (owner, 19 Nov 2026: several tags): the tags already in the library to click on, or a new one
+  function tagPicker(current, known) {
+    var sel = (current || []).slice(), chosen = h('div', { class: 'pim-tags', 'aria-live': 'polite' }), more = h('div', { class: 'pim-tags' });
+    var input = h('input', { class: 'ecm-input', type: 'text', maxlength: '40', placeholder: 'New tag, then Enter', 'aria-label': 'New tag', autocomplete: 'off' });
+    function add(t) { t = norm(t).slice(0, 40); if (t && sel.indexOf(t) < 0 && sel.length < 20) sel.push(t); paint(); }
+    function paint() {
+      chosen.innerHTML = ''; more.innerHTML = '';
+      if (!sel.length) chosen.appendChild(h('span', { class: 'pim-hint', text: 'No tags yet.' }));
+      sel.forEach(function (t, i) {
+        chosen.appendChild(h('span', { class: 'pim-fx__chip' }, [h('span', { text: t }),
+          h('button', { type: 'button', text: '×', 'aria-label': 'Remove tag ' + t, onclick: function () { sel.splice(i, 1); paint(); } })]));
+      });
+      known.filter(function (t) { return sel.indexOf(t) < 0; }).slice(0, 40).forEach(function (t) {
+        more.appendChild(h('button', { type: 'button', class: 'pim-tagbtn', text: '+ ' + t, 'aria-label': 'Add tag ' + t, onclick: function () { add(t); } }));
+      });
+    }
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(input.value); input.value = ''; } });
+    paint();
+    return { el: h('div', { class: 'pim-tagpick' }, [chosen, input, known.length ? h('span', { class: 'pim-label', text: 'Tags in the library — click to add:' }) : null, more]),
+             value: function () { if (input.value.trim()) { add(input.value); input.value = ''; } return sel.slice(); } };
+  }
+
+  function imageDetails(img, done, known) {
+    var title = control({ k: 'title', max: 200 }, img.title), tags = tagPicker(img.tags, known || []);
     var pic = h('img', { class: 'pim-detail__img', alt: img.title || 'picture' });
     signRows([img]).then(function () { pic.src = imgSrc(img, 1000); });
     var used = h('p', { class: 'pim-hint', text: 'Checking where it is used…' });
@@ -344,7 +425,7 @@
     }).catch(function () { used.textContent = ''; });
     var err = h('p', { class: 'ecm-error', role: 'alert' });
     var body = h('div', { class: 'pim-detail' }, [pic, h('div', { class: 'pim-form' }, [
-      fieldRow({ t: 'Name' }, title), fieldRow({ t: 'Tags (comma separated)' }, tags),
+      fieldRow({ t: 'Name', wide: true }, title), h('div', { class: 'pim-field pim-field--wide' }, [h('span', { class: 'pim-label', text: 'Tags' }), tags.el]),
       h('p', { class: 'pim-hint pim-field--wide', text: '#' + img.id + ' · ' + (img.width ? img.width + ' × ' + img.height + ' px · ' : '') +
         (img.url ? 'from Amazon (a link: it uses no storage)' : kb(img.bytes) + ' · ' + (img.source === 'upload' ? 'uploaded' : 'made with ' + (SOURCE[img.source] || img.source))) +
         ' · ' + A.fmtTime(img.created_at) }),
@@ -356,8 +437,7 @@
     signRows([img]).then(function () { open.href = img.url || urlCache[img.path] || '#'; });
     var d = dialog('Picture', body, [del, arch, open, save], true);
     save.addEventListener('click', function () {
-      var t = tags.value.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean).slice(0, 20);
-      q(sb().from('ecom_images').update({ title: title.value.trim() || null, tags: t }).eq('id', img.id)).then(function () { d.close(); A.toast('Saved.'); done(); })
+      q(sb().from('ecom_images').update({ title: title.value.trim() || null, tags: tags.value() }).eq('id', img.id)).then(function () { d.close(); A.toast('Saved.'); done(); })
         .catch(function (e) { err.textContent = e.message; });
     });
     arch.addEventListener('click', function () {
@@ -415,12 +495,14 @@
     function paint() { head.textContent = sel.length + ' of ' + opts.max + ' chosen' + (sel.length ? ': ' + sel.map(function (x) { return '#' + x; }).join(', ') : '') + ' — click a picture to add or remove it.'; }
     var box = h('div', null, h('p', { class: 'ecm-note', text: 'Loading…' }));
     var grid = null;
+    var pctxP = pimData(A.ws()).catch(function () { return null; });
     function load() {
-      loadImages().then(function (all) {
+      Promise.all([loadImages(), pctxP]).then(function (res) {
+        var all = res[0];
         if (opts.filesOnly) all = all.filter(function (i) { return !i.url; });
         if (!grid) {
           box.innerHTML = '';
-          grid = imageGrid(all, { tools: fileButton('Upload', function (files) { uploadFiles(files, line, function (ids) {
+          grid = imageGrid(all, { pctx: res[1], tools: fileButton('Upload', function (files) { uploadFiles(files, line, function (ids) {
               ids.forEach(function (x) { if (sel.length < opts.max) sel.push(x); }); paint(); load(); }); }),
             isOn: function (i) { return sel.indexOf(i.id) >= 0; },
             onPick: function (i, el) {
@@ -496,18 +578,41 @@
     ctx.rows.unshift(derive(ctx, row));
     return row;
   }
-  // The existing manufacturer / brand of that name, or a new one (a new brand gets the named manufacturer, or one of
-  // its own name when none is named: a brand cannot exist without a manufacturer)
-  function ensureMaker(ctx, name) {
-    var hit = findByName(ctx.makers, name);
+  // A manufacturer's short name from its full (legal) name (owner, 19 Nov 2026: short names everywhere): the brand's
+  // name when the full name starts with it (Orthomol pharmazeutische Vertriebs GmbH + brand Orthomol → Orthomol), else
+  // the name without legal form, country and trade words (Apomedica Pharmazeutische Produkte GmbH, Deutschland →
+  // Apomedica). It can be changed under Manufacturers.
+  var LEGAL_W = 'gmbh gesmbh ag kgaa kg ohg se ug ek ltd limited plc inc llc corp corporation co sa sas sarl spa srl bv nv a/s ab oy'.split(' ');
+  var TRADE_W = ('pharmazeutische pharmazeutischer pharmazeutika pharma pharmaceutical pharmaceuticals produkte products product vertrieb vertriebs ' +
+    'vertriebsgesellschaft handelsgesellschaft deutschland germany europe international holding group gruppe company').split(' ');
+  function shortMaker(full, brand) {
+    var f = String(full || '').replace(/\s+/g, ' ').trim();
+    if (brand && norm(f).indexOf(norm(brand)) === 0) return String(brand).trim();
+    var words = f.split(',')[0].split(' ').filter(function (t) {
+      var k = t.toLowerCase().replace(/[.()]/g, '');
+      return k && LEGAL_W.indexOf(k) < 0 && TRADE_W.indexOf(k) < 0;
+    });
+    while (words.length && /^[&+\-–]$/.test(words[words.length - 1])) words.pop();
+    var s = words.join(' ').trim() || f;
+    return s.length > 40 ? s.split(' ')[0] : s;
+  }
+  // The manufacturer of that name: its short or full name, any capitals, or the short name the full name gives
+  function findMaker(list, name, brand, full) {
+    return findByName(list, name) || (full ? findByName(list, full) : null) || findByName(list, shortMaker(name, brand));
+  }
+  // The existing manufacturer / brand of that name, or a new one: a long legal name becomes the full name and gets a
+  // short name; a new brand gets the named manufacturer, or one of its own name (a brand cannot exist without one)
+  function ensureMaker(ctx, name, brand, full) {
+    var given = String(name || '').replace(/\s+/g, ' ').trim(), hit = findMaker(ctx.makers, given, brand, full);
     if (hit) return Promise.resolve(hit);
-    return q(sb().from('ecom_manufacturers').insert({ workspace_id: ctx.w.id, name: String(name).trim().slice(0, 200) }).select('id,name,alt_name').single())
+    var short = full ? given : shortMaker(given, brand), long = full || (short !== given ? given : '');
+    return q(sb().from('ecom_manufacturers').insert({ workspace_id: ctx.w.id, name: short.slice(0, 200), alt_name: long ? long.slice(0, 200) : null }).select('id,name,alt_name').single())
       .then(function (m) { ctx.makers.push(m); ctx.made.makers.push(m.name); return m; });
   }
-  function ensureBrand(ctx, name, makerName) {
+  function ensureBrand(ctx, name, makerName, makerFull) {
     var hit = findByName(ctx.brands, name);
     if (hit) return Promise.resolve(hit);
-    return ensureMaker(ctx, makerName || name).then(function (m) {
+    return ensureMaker(ctx, makerName || name, name, makerFull).then(function (m) {
       return q(sb().from('ecom_brands').insert({ workspace_id: ctx.w.id, manufacturer_id: m.id, name: String(name).trim().slice(0, 200) })
         .select('id,name,alt_name,manufacturer_id').single()).then(function (b) { ctx.brands.push(b); ctx.made.brands.push(b.name); return b; });
     });
@@ -561,7 +666,8 @@
     var table = h('table', { class: 'ecm-table pim-list' }, [h('caption', { class: 'visually-hidden', text: 'Products of ' + ctx.w.name }), thead, tbody]);
     var count = h('span', { class: 'ecm-tools__count', 'aria-live': 'polite' });
     var pager = A.pagerBar(draw);
-    var fx = filterBox(ctx, function (chips) { st.chips = chips; apply(); });
+    var fx = filterBox({ kinds: KINDS, hint: FX_HINT, label: 'Search or filter products', suggest: function (t) { return suggest(ctx, t); },
+                         onChange: function (chips) { st.chips = chips; apply(); } });
     var csv = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Download for Excel (CSV)', title: 'The products shown, with every field; Upload Excel reads this file back' });
     csv.addEventListener('click', function () { exportCsv(ctx, st.shown, csv); });
     function cls(c) { return [c.num ? 'is-num' : '', c.wide ? 'is-wide' : '', c.mono ? 'ecm-mono' : ''].join(' ').trim(); }
@@ -610,9 +716,14 @@
       st.edit = null; draw();
       var b = tbody.querySelector('[data-edit="' + id + '"]'); if (b) b.focus();
     }
+    // the product name in one line; the whole name on hover (owner, 19 Nov 2026)
+    function cell(c, r) {
+      var t = cellText(c, r);
+      return c.wide ? h('td', { class: cls(c) }, h('span', { class: 'pim-1line', title: t, text: t })) : h('td', { class: cls(c), text: t });
+    }
     function viewRow(r) {
       var tr = h('tr');
-      L_COLS.forEach(function (c) { tr.appendChild(h('td', { class: cls(c), text: cellText(c, r) })); });
+      L_COLS.forEach(function (c) { tr.appendChild(cell(c, r)); });
       tr.appendChild(h('td', { class: 'pim-act' }, h('span', { class: 'pim-act__in' }, [
         h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Edit', 'data-edit': String(r.id), 'aria-label': 'Edit product ' + r.id + ' in this row',
           onclick: function () { st.edit = r.id; draw(); var el = tbody.querySelector('tr.is-editing input'); if (el) el.focus(); } }),
@@ -623,7 +734,8 @@
     // "Sync with Amazon" of one row: from the saved ASIN / EAN, or from what is typed in the quick edit
     function syncButton(r, typed) {
       var b = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', 'aria-label': 'Sync product ' + r.id + ' with Amazon' });
-      function label() { b.replaceChildren('Sync', h('span', { class: 'pim-long', text: ' with Amazon' })); }   // "Sync" only on phones
+      // one text piece (the button's flex gap would otherwise widen the space); "Sync" only on phones
+      function label() { b.replaceChildren(h('span', null, ['Sync', h('span', { class: 'pim-long', text: ' with Amazon' })])); }
       label();
       function has() { var t = typed ? typed() : r; return !!(t.asin || t.gtin); }
       function state() {
@@ -700,7 +812,7 @@
         if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); doSave(); }
         else if (e.key === 'Escape') { e.preventDefault(); leaveEdit(r.id); }
       });
-      L_COLS.forEach(function (col) { tr.appendChild(h('td', { class: (cls(col) + (col.ed ? ' is-edit' : '')).trim() }, col.ed ? c[col.ed] : cellText(col, r))); });
+      L_COLS.forEach(function (col) { tr.appendChild(col.ed ? h('td', { class: (cls(col) + ' is-edit').trim() }, c[col.ed]) : cell(col, r)); });
       tr.appendChild(h('td', { class: 'pim-act' }, h('span', { class: 'pim-act__in' }, [save, cancel, sy.el])));
       return tr;
     }
@@ -745,25 +857,26 @@
     if (t) { take('sku', uniq('sku'), 5); take('asin', uniq('asin'), 5); take('name', uniq('title'), 5); }
     return out;
   }
-  function filterBox(ctx, onChange) {
+  // cfg: kinds (labels), hint (grey text), label, suggest(text) → [{kind, value, label}], onChange(chips)
+  function filterBox(cfg) {
     var chips = [], opts = [], active = -1, listId = 'pim-fx-' + (++seq);
     var input = h('input', { class: 'pim-fx__input', type: 'text', role: 'combobox', 'aria-expanded': 'false', 'aria-controls': listId, 'aria-autocomplete': 'list',
-      autocomplete: 'off', placeholder: FX_HINT, 'aria-label': 'Search or filter products' });
+      autocomplete: 'off', placeholder: cfg.hint, 'aria-label': cfg.label });
     var chipBox = h('span', { class: 'pim-fx__chips' });
     var list = h('ul', { class: 'pim-fx__list', id: listId, role: 'listbox', 'aria-label': 'Filters', hidden: true });
     var clear = h('button', { type: 'button', class: 'pim-fx__clear', 'aria-label': 'Remove all filters', text: '✕', hidden: true });
     var box = h('div', { class: 'pim-fx' }, [chipBox, input, clear, list]);
     function keyOf(c) { return c.kind + ':' + c.value; }
-    function changed() { paintChips(); onChange(chips.slice()); }
+    function changed() { paintChips(); cfg.onChange(chips.slice()); }
     function paintChips() {
       chipBox.innerHTML = '';
       chips.forEach(function (c, i) {
-        chipBox.appendChild(h('span', { class: 'pim-fx__chip' }, [h('span', { text: KINDS[c.kind] + ': ' + c.label }),
-          h('button', { type: 'button', text: '×', 'aria-label': 'Remove filter ' + KINDS[c.kind] + ' ' + c.label,
+        chipBox.appendChild(h('span', { class: 'pim-fx__chip' }, [h('span', { text: cfg.kinds[c.kind] + ': ' + c.label }),
+          h('button', { type: 'button', text: '×', 'aria-label': 'Remove filter ' + cfg.kinds[c.kind] + ' ' + c.label,
             onclick: function () { chips.splice(i, 1); changed(); input.focus(); } })]));
       });
       clear.hidden = !chips.length;
-      input.placeholder = chips.length ? 'Add another filter…' : FX_HINT;
+      input.placeholder = chips.length ? 'Add another filter…' : cfg.hint;
     }
     function add(o) {
       var c = { kind: o.kind, value: o.value, label: o.kind === 'text' ? o.value : o.label };
@@ -771,10 +884,10 @@
       input.value = ''; close(); changed();
     }
     function open() {
-      opts = suggest(ctx, input.value); active = -1; list.innerHTML = '';
+      opts = cfg.suggest(input.value); active = -1; list.innerHTML = '';
       var last = null;
       opts.forEach(function (o, i) {
-        if (o.kind !== last && o.kind !== 'text') list.appendChild(h('li', { class: 'pim-fx__group', role: 'presentation', text: KINDS[o.kind] }));
+        if (o.kind !== last && o.kind !== 'text') list.appendChild(h('li', { class: 'pim-fx__group', role: 'presentation', text: cfg.kinds[o.kind] }));
         last = o.kind;
         list.appendChild(h('li', { id: listId + '-' + i, role: 'option', class: 'pim-fx__opt', 'aria-selected': 'false', text: o.label,
           onmousedown: function (e) { e.preventDefault(); add(o); } }));
@@ -835,14 +948,16 @@
     if (it.description && it.description !== p.content) add('content', 'Content (description)', p.content, it.description, true);
     if (bl.length && JSON.stringify(bl) !== JSON.stringify(p.bullets || [])) add('bullets', 'Bullets', p.bullets || [], bl, true);
     if (it.gtin && it.gtin !== p.gtin) add('gtin', 'GTIN / EAN', p.gtin, it.gtin, !p.gtin);
+    // brand and manufacturer by name; a new manufacturer gets a short name (its full name is kept too)
+    var mkName = it.manufacturer || it.brand, mkShort = mkName ? shortMaker(mkName, it.brand) : '', mkFull = mkShort !== mkName ? '; full name ' + mkName : '';
     if (it.brand) {
-      var b = findByName(ctx.brands, it.brand);
-      if (!b || b.id !== p.brand_id) add('brand', 'Brand', nameOf(ctx.brands, p.brand_id), b ? b.name : it.brand + ' (new' +
-        (findByName(ctx.makers, it.manufacturer || it.brand) ? ')' : ', with the new manufacturer ' + (it.manufacturer || it.brand) + ')'), !p.brand_id);
+      var b = findByName(ctx.brands, it.brand), bm = findMaker(ctx.makers, mkName, it.brand);
+      if (!b || b.id !== p.brand_id) add('brand', 'Brand', nameOf(ctx.brands, p.brand_id), b ? b.name + ' (' + nameOf(ctx.makers, b.manufacturer_id) + ')'
+        : it.brand + ' (new; manufacturer ' + (bm ? bm.name : mkShort + ', new' + mkFull) + ')', !p.brand_id);
     }
     if (it.manufacturer) {
-      var m = findByName(ctx.makers, it.manufacturer);
-      if (!m || m.id !== p.manufacturer_id) add('maker', 'Manufacturer', nameOf(ctx.makers, p.manufacturer_id), m ? m.name : it.manufacturer + ' (new)', !p.manufacturer_id && !p.brand_id);
+      var m = findMaker(ctx.makers, it.manufacturer, it.brand);
+      if (!m || m.id !== p.manufacturer_id) add('maker', 'Manufacturer', nameOf(ctx.makers, p.manufacturer_id), m ? m.name : mkShort + ' (new' + mkFull + ')', !p.manufacturer_id && !p.brand_id);
     }
     var dNow = [p.width_mm, p.length_mm, p.depth_mm], dNew = [it.width_mm, it.length_mm, it.depth_mm];
     if (dimsText(dNew) && dimsText(dNew) !== dimsText(dNow)) add('size', 'Size (width × length × depth)', dimsText(dNow),
@@ -946,7 +1061,7 @@
     v.amazon_marketplace = amzMp(); v.amazon_synced_at = new Date().toISOString();
     var chain = Promise.resolve();
     if (chosen.brand) chain = chain.then(function () { return ensureBrand(ctx, it.brand, it.manufacturer).then(function (b) { v.brand_id = b.id; v.manufacturer_id = b.manufacturer_id; }); });
-    else if (chosen.maker) chain = chain.then(function () { return ensureMaker(ctx, it.manufacturer).then(function (m) { v.manufacturer_id = m.id; }); });
+    else if (chosen.maker) chain = chain.then(function () { return ensureMaker(ctx, it.manufacturer, it.brand).then(function (m) { v.manufacturer_id = m.id; }); });
     if (chosen.images) chain = chain.then(function () { return ensureAmazonImages(ctx, it.asin, it.images).then(function (ids) { if (ids.length) v.image_ids = ids; }); });
     return chain.then(function () { return v; });
   }
@@ -990,7 +1105,7 @@
               x.chosen = {};
               amazonPlan(ctx, x.p, x.it, x.extra).forEach(function (r) { if (r.now == null || r.now === '' || (Array.isArray(r.now) && !r.now.length)) x.chosen[r.key] = true; });
               if (x.chosen.brand) { delete x.chosen.maker; return ensureBrand(ctx, x.it.brand, x.it.manufacturer); }
-              if (x.chosen.maker) return ensureMaker(ctx, x.it.manufacturer);
+              if (x.chosen.maker) return ensureMaker(ctx, x.it.manufacturer, x.it.brand);
             }).catch(function () { x.chosen = {}; });
           }, Promise.resolve()).then(function () {
             return pool(work, 4, function (x) {
@@ -1103,7 +1218,7 @@
     });
     return xlsxP;
   }
-  var X_HEAD = ['ID', 'Parent SKU', 'SKU', 'ASIN', 'GTIN / EAN', 'PZN', 'Product name', 'Content', 'Details', 'Manufacturer', 'Brand', 'Logistics',
+  var X_HEAD = ['ID', 'Parent SKU', 'SKU', 'ASIN', 'GTIN / EAN', 'PZN', 'Product name', 'Content', 'Details', 'Manufacturer', 'Manufacturer full name', 'Brand', 'Logistics',
     'Width (mm)', 'Length (mm)', 'Depth (mm)', 'Weight (g)', 'Bullet 1', 'Bullet 2', 'Bullet 3', 'Bullet 4', 'Bullet 5', 'Status'];
   // Column names (any capitals; words in brackets, * : _ - ignored), English, German and Amazon's report names
   function hk(v) { return String(v == null ? '' : v).toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[*:_-]/g, ' ').replace(/\s*\/\s*/g, '/').replace(/\s+/g, ' ').trim(); }
@@ -1113,7 +1228,8 @@
     gtin: ['gtin/ean', 'gtin', 'ean', 'ean/gtin', 'gtin ean', 'ean code', 'barcode', 'upc'], pzn: ['pzn'],
     title: ['product name', 'name', 'title', 'item name', 'product title', 'produktname', 'artikelname', 'bezeichnung'],
     content: ['content', 'description', 'product description', 'beschreibung'], details: ['details'],
-    maker: ['manufacturer', 'hersteller', 'maker'], brand: ['brand', 'marke'],
+    maker: ['manufacturer', 'manufacturer short name', 'hersteller', 'maker'], brand: ['brand', 'marke'],
+    makerFull: ['manufacturer full name', 'manufacturer legal name', 'full manufacturer name', 'hersteller vollständiger name', 'hersteller firmenname'],
     logistics: ['logistics', 'fulfillment', 'fulfilment', 'fulfillment channel', 'fba/fbm', 'versand'],
     width_mm: ['width', 'width mm', 'breite'], length_mm: ['length', 'length mm', 'länge', 'laenge'],
     depth_mm: ['depth', 'depth mm', 'height', 'height mm', 'höhe', 'hoehe', 'tiefe'], weight_g: ['weight', 'weight g', 'weight in grams', 'gewicht'],
@@ -1199,9 +1315,10 @@
       var pz = get('pzn');
       r.pzn = codeIn(pz, typeof pz === 'number' ? 8 : 0);
       if (r.pzn && !/^[0-9]{7,8}$/.test(r.pzn)) e.push('PZN must be 7 or 8 digits');
-      [['title', 500], ['content', 10000], ['details', 10000], ['maker', 200], ['brand', 200]].forEach(function (x) {
+      var TL = { title: 'Product name', maker: 'Manufacturer', makerFull: 'Manufacturer full name', content: 'Content', details: 'Details', brand: 'Brand' };
+      [['title', 500], ['content', 10000], ['details', 10000], ['maker', 200], ['makerFull', 200], ['brand', 200]].forEach(function (x) {
         r[x[0]] = cellStr(get(x[0])) || null;
-        if (r[x[0]] && r[x[0]].length > x[1]) e.push((x[0] === 'title' ? 'Product name' : x[0] === 'maker' ? 'Manufacturer' : x[0].charAt(0).toUpperCase() + x[0].slice(1)) + ' longer than ' + x[1] + ' characters');
+        if (r[x[0]] && r[x[0]].length > x[1]) e.push(TL[x[0]] + ' longer than ' + x[1] + ' characters');
       });
       var lg = cellStr(get('logistics')).toUpperCase();
       r.logistics = !lg ? null : /^(FBA|AMAZON)/.test(lg) ? 'FBA' : /^(FBM|DEFAULT|MERCHANT|MFN)/.test(lg) ? 'FBM' : (e.push('Logistics must be FBA or FBM'), null);
@@ -1230,10 +1347,11 @@
     recs.forEach(function (r) {
       if (r.errors.length) { plan.skip.push(r); return; }
       r.target = (r.id && byId(ctx.rows, r.id)) || (r.sku && bySku[r.sku]) || (!r.sku && r.asin && byAsin[r.asin] && byAsin[r.asin].length === 1 ? byAsin[r.asin][0] : null);
+      var mk = r.maker || r.makerFull;
       if (r.brand && !findByName(ctx.brands, r.brand)) {
-        plan.brands[norm(r.brand)] = { name: r.brand, maker: r.maker || r.brand };
-        if (!findByName(ctx.makers, r.maker || r.brand)) plan.makers[norm(r.maker || r.brand)] = r.maker || r.brand;
-      } else if (r.maker && !findByName(ctx.makers, r.maker)) plan.makers[norm(r.maker)] = r.maker;
+        plan.brands[norm(r.brand)] = { name: r.brand, maker: mk || r.brand, full: r.makerFull };
+        if (!findMaker(ctx.makers, mk || r.brand, r.brand, r.makerFull)) plan.makers[norm(mk || r.brand)] = { name: mk || r.brand, brand: r.brand, full: r.makerFull };
+      } else if (mk && !findMaker(ctx.makers, mk, r.brand, r.makerFull)) plan.makers[norm(mk)] = { name: mk, brand: r.brand, full: r.makerFull };
       (r.target ? plan.update : plan.create).push(r);
     });
     return plan;
@@ -1243,14 +1361,14 @@
     var v = {};
     ['sku', 'asin', 'gtin', 'pzn', 'title', 'content', 'details', 'logistics', 'width_mm', 'length_mm', 'depth_mm', 'weight_g', 'status'].forEach(function (k) { if (r[k] != null) v[k] = r[k]; });
     if (r.bullets) v.bullets = r.bullets;
-    var b = r.brand ? findByName(ctx.brands, r.brand) : null, m = r.maker ? findByName(ctx.makers, r.maker) : null;
+    var mk = r.maker || r.makerFull, b = r.brand ? findByName(ctx.brands, r.brand) : null, m = mk ? findMaker(ctx.makers, mk, r.brand, r.makerFull) : null;
     if (b) { v.brand_id = b.id; v.manufacturer_id = b.manufacturer_id; } else if (m) v.manufacturer_id = m.id;
     return v;
   }
   function runImport(ctx, plan, line) {
     var res = { created: 0, updated: 0, failed: [] }, chain = Promise.resolve();
-    Object.keys(plan.makers).forEach(function (k) { chain = chain.then(function () { return ensureMaker(ctx, plan.makers[k]); }); });
-    Object.keys(plan.brands).forEach(function (k) { var b = plan.brands[k]; chain = chain.then(function () { return ensureBrand(ctx, b.name, b.maker); }); });
+    Object.keys(plan.makers).forEach(function (k) { var m = plan.makers[k]; chain = chain.then(function () { return ensureMaker(ctx, m.name, m.brand, m.full); }); });
+    Object.keys(plan.brands).forEach(function (k) { var b = plan.brands[k]; chain = chain.then(function () { return ensureBrand(ctx, b.name, b.maker, b.full); }); });
     // new products, 100 per request; if one row is refused, that part again one by one to find it
     chain = chain.then(function () {
       var parts = [];
@@ -1302,7 +1420,8 @@
       var hd = mapHeader(sh.rows);
       if (!hd) throw new Error('No column names found in ' + file.name + ': the first row should name the columns (SKU, ASIN, Product name …). The Excel template shows them.');
       var recs = readRecords(sh.rows, hd), plan = importPlan(ctx, recs);
-      var makers = Object.keys(plan.makers).map(function (k) { return plan.makers[k]; }), brands = Object.keys(plan.brands).map(function (k) { return plan.brands[k].name; });
+      var makers = Object.keys(plan.makers).map(function (k) { var m = plan.makers[k]; return m.full ? m.name : shortMaker(m.name, m.brand); }),
+          brands = Object.keys(plan.brands).map(function (k) { return plan.brands[k].name; });
       var few = function (list) { return list.slice(0, 6).join(', ') + (list.length > 6 ? ' …' : ''); };
       var n = plan.create.length + plan.update.length;
       var go2 = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: n ? 'Import ' + A.fmtInt(n) + ' products' : 'Nothing to import', disabled: !n });
@@ -1330,8 +1449,8 @@
   }
   function excelTemplate() {
     return loadXlsx().then(function (X) {
-      var ex = ['', '', 'SKU-1001', 'B0EXAMPLE1', '4012345678901', '', 'Example product name', 'Description; several lines are fine', '', 'Example Manufacturer GmbH',
-        'Example Brand', 'FBA', 68, 133, 68, 340, 'First bullet', 'Second bullet', '', '', '', 'active'];
+      var ex = ['', '', 'SKU-1001', 'B0EXAMPLE1', '4012345678901', '', 'Example product name', 'Description; several lines are fine', '', 'Example Pharma',
+        'Example Pharma Vertriebs GmbH', 'Example Brand', 'FBA', 68, 133, 68, 340, 'First bullet', 'Second bullet', '', '', '', 'active'];
       var ws = X.utils.aoa_to_sheet([X_HEAD, ex]);
       ws['!cols'] = X_HEAD.map(function (t) { return { wch: Math.max(10, t.length + 2) }; });
       var wb = X.utils.book_new();
@@ -1347,7 +1466,8 @@
       all.forEach(function (p) { by[p.id] = p; });
       A.csvDownload('pim-products-' + new Date().toISOString().slice(0, 10) + '.csv', X_HEAD, shown.map(function (r) { return by[r.id]; }).filter(Boolean).map(function (p) {
         var par = p.parent_id ? byId(ctx.rows, p.parent_id) : null, b = p.bullets || [];
-        return [p.id, par ? par.sku || '' : '', p.sku, p.asin, p.gtin, p.pzn, p.title, p.content, p.details, nameOf(ctx.makers, p.manufacturer_id), nameOf(ctx.brands, p.brand_id),
+        var mk = p.manufacturer_id ? byId(ctx.makers, p.manufacturer_id) : null;
+        return [p.id, par ? par.sku || '' : '', p.sku, p.asin, p.gtin, p.pzn, p.title, p.content, p.details, mk ? mk.name : '', mk ? mk.alt_name || '' : '', nameOf(ctx.brands, p.brand_id),
           p.logistics, p.width_mm, p.length_mm, p.depth_mm, p.weight_g, b[0], b[1], b[2], b[3], b[4], p.status];
       }));
     }).catch(function (e) { A.toast(e.message, 'act'); }).then(function () { btn.disabled = false; });
@@ -1558,6 +1678,34 @@
     return m;
   }
 
+  // A first A+ draft from the product (owner, 19 Nov 2026): header picture with the name, brand and description; the
+  // bullets on 3 or 4 pictures ("Benefit: text" becomes headline + text); technical data when there are 4 values
+  function splitBullet(t) {
+    var s = String(t || ''), m = /^(.{3,60}?)\s*[:–—]\s+(.+)$/.exec(s) || /^(.{3,60}?)\s+-\s+(.+)$/.exec(s);
+    return m ? { h: m[1].slice(0, 160), b: m[2].slice(0, 1000) } : { h: '', b: s.slice(0, 1000) };
+  }
+  function starterModules(p, brandName, makerName) {
+    var mods = [], pics = p.image_ids || [], bl = p.bullets || [];
+    var hd = newModule('header');
+    hd.headline = (p.title || '').slice(0, 150); hd.subheadline = (brandName || '').slice(0, 150);
+    hd.blocks[0].image_id = pics[0] || null; hd.blocks[0].body = (p.content || bl.join('\n')).slice(0, 6000);
+    mods.push(hd);
+    if (bl.length) {
+      var grid = newModule(bl.length >= 4 ? 'four' : 'three');
+      grid.blocks.forEach(function (b, i) { var x = splitBullet(bl[i]); b.image_id = pics[i + 1] || null; b.headline = x.h; b.body = x.b; });
+      mods.push(grid);
+    }
+    var size = [p.width_mm, p.length_mm, p.depth_mm].some(function (x) { return x != null; }) ? [p.width_mm, p.length_mm, p.depth_mm].map(function (x) { return x == null ? '?' : A.fmtNum(x, 1); }).join(' × ') + ' mm' : '';
+    var rows = [['Brand', brandName], ['Manufacturer', makerName], ['EAN', p.gtin], ['PZN', p.pzn], ['ASIN', p.asin], ['Size (W × L × D)', size],
+      ['Weight', p.weight_g != null ? A.fmtNum(p.weight_g, 1) + ' g' : '']].filter(function (r) { return r[1]; });
+    if (rows.length >= 4) {
+      var sp = newModule('specs');
+      sp.headline = 'Technical data'; sp.rows = rows.map(function (r) { return { name: r[0].slice(0, 30), value: String(r[1]).slice(0, 500) }; });
+      mods.push(sp);
+    }
+    return mods;
+  }
+
   function aplusPanel(w, pid, versions) {
     var cols = [{ k: 'version', t: 'Version', num: true }, { k: 'name', t: 'Name', wide: true }, { k: 'locale', t: 'Language' }, { k: 'status', t: 'Status' },
                 { k: '_mods', t: 'Modules', num: true }, { k: 'updated_at', t: 'Updated', f: A.isoMinute }];
@@ -1580,8 +1728,10 @@
     main.appendChild(h('a', { class: 'pim-back', href: '#/pim-products/' + pid, text: '← Product #' + pid }));
     var box = h('div', null, h('p', { class: 'ecm-note', text: 'Loading…' }));
     main.appendChild(box);
-    Promise.all([q(sb().from('ecom_aplus').select('*').eq('id', vid).maybeSingle()), q(sb().from('ecom_products').select('id,title,sku,asin').eq('id', pid).maybeSingle())]).then(function (res) {
-      var v = res[0], p = res[1] || {};
+    Promise.all([q(sb().from('ecom_aplus').select('*').eq('id', vid).maybeSingle()),
+      q(sb().from('ecom_products').select('id,title,sku,asin,content,bullets,image_ids,gtin,pzn,width_mm,length_mm,depth_mm,weight_g,brand_id,manufacturer_id').eq('id', pid).maybeSingle()),
+      q(sb().from('ecom_brands').select('id,name').eq('workspace_id', w.id)), q(sb().from('ecom_manufacturers').select('id,name').eq('workspace_id', w.id))]).then(function (res) {
+      var v = res[0], p = res[1] || {}, brandName = nameOf(res[2] || [], p.brand_id), makerName = nameOf(res[3] || [], p.manufacturer_id);
       if (!v) { box.innerHTML = ''; box.appendChild(h('p', { class: 'ecm-error', text: 'This A+ version does not exist (any more).' })); return; }
       box.innerHTML = '';
       main.insertBefore(h('h1', { class: 'ecm-h1', text: 'A+ content · version ' + v.version }), box);
@@ -1603,6 +1753,13 @@
       }
       function paintEditor() {
         editor.innerHTML = '';
+        // an empty version (owner, 19 Nov 2026: "not shown on preview"): a first draft from the product in one click
+        if (!mods.length) editor.appendChild(h('div', { class: 'pim-module pim-module--empty' }, [
+          h('p', { class: 'pim-hint', text: 'This version is empty: it has no modules yet. Fill it with this product\'s data (name, description, bullets, pictures, technical data) and change what you like, or add modules one by one below.' }),
+          h('div', { class: 'ecm-row' }, h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: 'Fill with the product\'s data', onclick: function () {
+            mods = starterModules(p, brandName, makerName); paintEditor(); paintPreview();
+            A.toast('Filled with the product\'s data. Press "Save version ' + v.version + '" to keep it.');
+          } }))]));
         mods.forEach(function (m, i) {
           var M = MODS[m.type] || MODS.text;
           var kids = [h('div', { class: 'pim-module__head' }, [h('strong', { text: (i + 1) + '. ' + M.name }), h('span', { class: 'pim-hint', text: M.amazon + (M.img ? ' · pictures ' + M.img : '') }),
@@ -1644,7 +1801,7 @@
         var draw = function (pics) {
           preview.innerHTML = '';
           preview.appendChild(h('p', { class: 'pim-hint', text: 'Preview (simplified)' }));
-          if (!mods.length) preview.appendChild(h('p', { class: 'pim-hint', text: 'Add a module on the left.' }));
+          if (!mods.length) preview.appendChild(h('p', { class: 'pim-hint', text: 'This version is empty. Fill it with the product\'s data, or add a module on the left.' }));
           mods.forEach(function (m) {
             var M = MODS[m.type] || MODS.text, el = h('section', { class: 'pim-pv pim-pv--' + m.type + (m.side === 'right' ? ' is-right' : '') });
             if (m.headline) el.appendChild(h('h3', { class: 'pim-pv__h', text: m.headline }));
