@@ -71,14 +71,17 @@
   --font-body: "General Sans", "Inter", -apple-system, BlinkMacSystemFont,
                "Segoe UI", system-ui, sans-serif;
 
-  --type-hero: clamp(2.5rem, 1rem + 3.5vw, 5rem);
-  --type-display: clamp(2.5rem, 1.5rem + 3vw, 4.5rem);
-  --type-h1: clamp(2rem, 1.4rem + 2vw, 3rem);
-  --type-h2: clamp(1.5rem, 1.2rem + 1.2vw, 2.25rem);
+  /* 18 Nov 2026 (owner): laptops at 125% Windows scale are ~1536 CSS px wide and the
+     type looked too big there. The sizes now grow later: phones keep the same minimum,
+     ~1536 px is about 20% smaller than before, full size is reached again at ~1920 px. */
+  --type-hero: clamp(2.5rem, -3.125rem + 6.77vw, 5rem);
+  --type-display: clamp(2.5rem, -1.75rem + 5.2vw, 4.5rem);
+  --type-h1: clamp(2rem, -0.125rem + 2.6vw, 3rem);
+  --type-h2: clamp(1.5rem, 0.375rem + 1.56vw, 2.25rem);
   --type-h3: 1.25rem;
-  --type-h2-tile: clamp(1.5rem, 1.2rem + 0.8vw, 2rem);
-  --type-body-lg: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
-  --type-body: clamp(1rem, 0.92rem + 0.4vw, 1.125rem);
+  --type-h2-tile: clamp(1.5rem, 0.125rem + 1.56vw, 2rem);
+  --type-body-lg: clamp(1.0625rem, 0.3125rem + 0.78vw, 1.25rem);
+  --type-body: clamp(1rem, 0.5rem + 0.52vw, 1.125rem);
   --type-body-sm: 0.9375rem;
   --type-caption: 0.8125rem;
   --type-eyebrow: 0.6875rem;
@@ -340,7 +343,7 @@ kbd {
   font-size: var(--type-body-sm);
 }
 .btn-lg {
-  padding: 18px 28px;
+  padding: var(--space-3) var(--space-5); /* 18 Nov 2026: was 18px 28px, too big on laptops */
 }
 
 .link-quiet {
@@ -623,7 +626,7 @@ kbd {
 .hero__grid {
   position: relative;
   z-index: 1;
-  align-items: end;
+  align-items: start; /* 18 Nov 2026: was end, which left an empty band above the headline */
   row-gap: var(--space-7);
 }
 .hero__lede {
@@ -1066,7 +1069,7 @@ html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25r
 /* Contact band (#contact, after About): heading on top, then two equal-height
    cards, short note | Book a call. Mobile-first: stacked; side by side from 1024px. */
 .impact-cta {
-  padding: var(--space-5) 0 var(--space-7);
+  padding: var(--space-5) 0 var(--space-5);
 }
 .impact-cta__head {
   margin-bottom: var(--space-4);
@@ -1119,8 +1122,8 @@ html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25r
   margin: 0;
 }
 .impact-cta__btn { min-height: 44px; }
-/* Email line sits at the bottom so both cards end level */
-.impact-cta__book .booking__fallback { margin-top: auto; }
+/* Email line right under the button (18 Nov 2026, owner: no empty space in the card) */
+.impact-cta__book .booking__fallback { margin-top: 0; }
 
 .contact-form {
   display: grid;
@@ -1155,7 +1158,7 @@ html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25r
   background: var(--bg);
   border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
 }
 .contact-form__textarea {
   resize: vertical;
@@ -1190,11 +1193,15 @@ html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25r
 /* Secondary action: outlined, so "Book a call" stays the one primary */
 .contact-form__submit {
   justify-self: start;
-  min-height: 44px;
+  min-height: 40px;
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--ink);
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-5);
+}
+/* Touch screens keep 44px fields and button */
+@media (pointer: coarse) {
+  .contact-form__input, .contact-form__submit { min-height: 44px; }
 }
 .contact-form__submit:hover { background: var(--surface); }
 .contact-form__submit:focus-visible {
@@ -1509,7 +1516,7 @@ html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25r
    16. Footer
    ------------------------------------------------------------------------- */
 .site-footer {
-  padding: var(--space-7) 0 var(--space-7);
+  padding: var(--space-5) 0 var(--space-7);
 }
 .site-footer__inner {
   row-gap: var(--space-5);
