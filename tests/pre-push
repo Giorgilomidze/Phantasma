@@ -1,0 +1,20 @@
+#!/bin/sh
+# Pre-push hook (C5 Oversight, 18 Nov 2026): runs the site check before a push that changes
+# the public pages, styles.css, script.js or pictures, and stops the push if it finds problems.
+# Installed by copying this file to .git/hooks/pre-push. Details: tests/site-check.mjs.
+zero=0000000000000000000000000000000000000000
+need=""
+while read local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then range="$local_sha"; else range="$remote_sha..$local_sha"; fi
+  if git diff --name-only $range 2>/dev/null | grep -q -E '^[^/]+\.html$|^styles\.css$|^script\.js$|^images/'; then need=1; fi
+done
+[ -z "$need" ] && exit 0
+echo "Site check before the push (pages, styles, script or pictures changed) ..."
+node --experimental-websocket --no-warnings tests/site-check.mjs
+status=$?
+if [ $status -ne 0 ]; then
+  echo "Push stopped: fix the problems above (full list in tests/last-report.txt)."
+  exit 1
+fi
+exit 0

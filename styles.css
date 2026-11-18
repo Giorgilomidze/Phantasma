@@ -323,7 +323,7 @@ kbd {
   background: var(--accent);
   color: var(--on-accent);
   border: 1px solid var(--accent-deep);
-  padding: 14px 22px;
+  padding: 10px 22px; /* 18 Nov 2026: was 14px 22px (layout standard, ~48 px high) */
 }
 .btn-primary:hover {
   background: var(--accent-deep);
@@ -1052,7 +1052,7 @@ html[lang="ka"] .hero__h { white-space: normal; text-wrap: balance; }
 }
 /* Georgian: "6 აფთიაქი" is one long word at this size and broke out of its
    tile at 1024px (four columns); a slightly smaller scale keeps it inside. */
-html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25rem); }
+html[lang="ka"] .impact-tile__num { font-size: var(--type-h2); }
 .impact-tile__label {
   font-size: var(--type-body);
   color: var(--ink);
@@ -1346,7 +1346,7 @@ html[lang="ka"] .impact-tile__num { font-size: clamp(2rem, 1.2rem + 1.6vw, 3.25r
    15. About + Contact (unified)
    ------------------------------------------------------------------------- */
 .about-contact {
-  padding: var(--space-9) 0 var(--space-10);
+  padding: var(--space-7) 0 var(--space-5); /* 18 Nov 2026: was space-9 / space-10 */
 }
 .about-contact__col {
   grid-column: content-start / span 7;
@@ -2654,7 +2654,7 @@ body.is-locked {
 .blog-hero__h {
   grid-column: content-start / span 8;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: var(--type-h1); /* 18 Nov 2026: layout standard (was clamp(2rem, 4vw, 3rem)) */
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -2662,7 +2662,7 @@ body.is-locked {
   margin: var(--space-2) 0 0;
 }
 .blog-layout {
-  padding-bottom: var(--space-10);
+  padding-bottom: var(--space-5);
   align-items: start;
 }
 .blog-sidebar {
@@ -2707,12 +2707,16 @@ body.is-locked {
   grid-column: span 9 / content-end;
 }
 .blog-article {
-  padding: var(--space-8) 0;
+  padding: var(--space-6) 0; /* 18 Nov 2026: was space-8, 145 px between two articles */
   border-bottom: 1px solid var(--rule);
   scroll-margin-top: calc(var(--header-h, 64px) + var(--space-5));
 }
 .blog-article:first-child {
   padding-top: 0;
+}
+.blog-article:last-child {
+  padding-bottom: 0; /* 18 Nov 2026: no empty band before the footer */
+  border-bottom: 0;
 }
 .blog-article__header {
   margin-bottom: var(--space-6);
@@ -2853,7 +2857,7 @@ body.is-locked {
   font-family: var(--font-display);
   font-weight: 600;
   font-variation-settings: "opsz" 144, "SOFT" 30;
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: var(--type-h1); /* 18 Nov 2026: layout standard (was clamp(2rem, 4vw, 3rem)) */
   line-height: 1.15;
   letter-spacing: -0.02em;
   color: var(--ink);
@@ -2869,7 +2873,7 @@ body.is-locked {
 /* Projects pages only (.project-intro wraps their top): title and lead one step
    (~12%) smaller than on the account / legal pages that share these classes.
    These pages have no eyebrow over the title or the funnel (removed 5 Nov 2026). */
-.project-intro .project-hero__title { font-size: clamp(1.75rem, 3.5vw, 2.625rem); margin-top: 0; }  /* no eyebrow above it here */
+.project-intro .project-hero__title { font-size: min(var(--type-h1), 2.625rem); margin-top: 0; }  /* 18 Nov 2026: layout standard (was clamp(1.75rem, 3.5vw, 2.625rem)) */  /* no eyebrow above it here */
 .project-intro .project-hero__sub { font-size: clamp(0.9375rem, 0.875rem + 0.3vw, 1.125rem); }
 .project-section {
   padding-top: var(--space-3);
@@ -3191,7 +3195,7 @@ html[lang="ka"] .kpi-band { min-width: min(100%, 272px); }
 
 /* Legal pages (terms / privacy, EN + KA): one readable column */
 .legal {
-  padding-bottom: var(--space-7);
+  padding-bottom: var(--space-5);
 }
 .legal__body {
   max-width: 70ch;
@@ -4822,7 +4826,7 @@ button.stat:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; 
    orange outline. The tile is a box; its title link (.service-tile__link)
    stretches over the whole tile with ::after, so the tile still clicks as one,
    and .service-tile__more (career: "Plans and prices") sits above that layer. */
-.services { padding-bottom: var(--space-9); }
+.services { padding-bottom: var(--space-5); }
 .service-grid {
   list-style: none;
   margin: 0;

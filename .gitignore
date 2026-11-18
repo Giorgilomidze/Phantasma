@@ -11,3 +11,5 @@ Miscelanous trash/
 __pycache__/
 supabase access.txt
 exports/
+# site check report (tests/site-check.mjs), rewritten on every run
+tests/last-report.txt

@@ -16,6 +16,7 @@ exclude:
   - .github
   - "images/*.docx"
   - node_modules
+  - tests
   - package.json
   - package-lock.json
   - convert-images.js
