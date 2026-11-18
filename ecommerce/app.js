@@ -30,18 +30,30 @@
     ['fe', 'Far East (Japan, Australia, Singapore)']
   ];
   var REGION_NAME = { eu: 'Europe', na: 'North America', fe: 'Far East' };
-  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', inventory_ledger: 'Stock development (ledger)', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance transactions' };
+  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', inventory_ledger: 'Stock development (ledger)', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance transactions', catalog: 'Product monitor', reviews: 'Review topics' };
   var STATUS = { queued: 'Waiting', running: 'Loading', waiting: 'Amazon is preparing', done: 'Done', no_data: 'No data', error: 'Error', cancelled: 'Stopped', ok: 'Keys work', new: 'New', disabled: 'Off' };
   var OPEN = { queued: 1, running: 1, waiting: 1 };
 
+  // A group ({ children }) opens / closes in the menu; its pages are routed like the others (#/pim-products …).
   var NAV = [
     { id: 'products', label: 'Products' },
     { id: 'inventory', label: 'FBA inventory' },
     { id: 'repeat', label: 'Repeat purchase' },
     { id: 'sales', label: 'Sales' },
     { id: 'finance', label: 'Finance' },
+    { id: 'monitor', label: 'Product monitor' },
+    { id: 'pim', label: 'PIM', children: [   // owner, 18 Nov 2026: product information (pim.js)
+      { id: 'pim-products', label: 'Products' },
+      { id: 'pim-manufacturers', label: 'Manufacturers' },
+      { id: 'pim-brands', label: 'Brands' },
+      { id: 'pim-sellers', label: 'Sellers' },
+      { id: 'pim-images', label: 'Image library' }
+    ] },
     { id: 'settings', label: 'Settings' }
   ];
+  var NAV_FLAT = [];
+  NAV.forEach(function (n) { if (n.children) n.children.forEach(function (c) { NAV_FLAT.push(c); }); else NAV_FLAT.push(n); });
+  var ROUTES = {};   // id → function (main): pages registered by pim.js (window.EcomApp.route) and app.js
 
   // Column helpers for the data views
   // "EU" = the Pan-European FBA stock, stored once for DE FR IT ES NL SE PL BE (owner decision ED-14, 11 Nov 2026)
@@ -153,7 +165,7 @@
 
   var client = null, user = null, ws = null, conns = [], connId = null, started = false;
   var poll = { on: false, timer: null, last: null };
-  var syncPage = 0;   // page of the sync job list (30 per page)
+  var syncPage = 0;   // page of the sync job list (PAGE_ROWS per page)
 
   /* 2. Helpers ------------------------------------------------------------ */
   function $(sel, root) { return (root || document).querySelector(sel); }
@@ -262,24 +274,46 @@
 
   /* 4. Shell -------------------------------------------------------------- */
   function route() {
-    var id = (location.hash.replace(/^#\/?/, '') || '').split('?')[0];
-    if (!NAV.some(function (n) { return n.id === id; })) id = conns.length ? 'products' : 'settings';
+    var id = (location.hash.replace(/^#\/?/, '') || '').split('?')[0].split('/')[0];
+    if (!NAV_FLAT.some(function (n) { return n.id === id; })) id = conns.length ? 'products' : 'settings';
     Array.prototype.forEach.call(document.querySelectorAll('.ecm-nav__link[data-id]'), function (a) {
       if (a.getAttribute('data-id') === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    NAV.forEach(function (g) {   // the group of the open page stays open
+      if (g.children && g.children.some(function (c) { return c.id === id; })) setGroup(g.id, true);
     });
     closeNav();
     var main = $('#ecm-main');
     main.innerHTML = '';
     if (VIEWS[id]) viewData(id, main);
+    else if (ROUTES[id]) ROUTES[id](main);
+    else if (id !== 'settings') { header(main, 'Loading…'); }
     else viewSettings(main);
     if (started) main.focus({ preventScroll: false });
+  }
+  function navLink(n) {
+    return h('a', { class: 'ecm-nav__link', href: '#/' + n.id, 'data-id': n.id }, [
+      h('span', { text: n.label }), n.soon ? h('span', { class: 'ecm-nav__soon', text: 'next step' }) : null
+    ]);
+  }
+  function setGroup(gid, open) {
+    var btn = document.querySelector('.ecm-nav__group[data-group="' + gid + '"]');
+    if (!btn) return;
+    btn.setAttribute('aria-expanded', String(!!open));
+    var sub = document.getElementById('ecm-nav-' + gid);
+    if (sub) sub.hidden = !open;
+    store('ecm_nav_' + gid, open ? '1' : '');
   }
   function buildNav() {
     var ul = $('#ecm-nav'); ul.innerHTML = '';
     NAV.forEach(function (n) {
-      ul.appendChild(h('li', null, h('a', { class: 'ecm-nav__link', href: '#/' + n.id, 'data-id': n.id }, [
-        h('span', { text: n.label }), n.soon ? h('span', { class: 'ecm-nav__soon', text: 'next step' }) : null
-      ])));
+      if (!n.children) { ul.appendChild(h('li', null, navLink(n))); return; }
+      var btn = h('button', { type: 'button', class: 'ecm-nav__link ecm-nav__group', 'data-group': n.id, 'aria-expanded': 'false',
+        'aria-controls': 'ecm-nav-' + n.id }, [h('span', { text: n.label }), h('span', { class: 'ecm-nav__chev', 'aria-hidden': 'true', text: '▸' })]);
+      var sub = h('ul', { class: 'ecm-nav ecm-nav--sub', id: 'ecm-nav-' + n.id, hidden: true }, n.children.map(function (c) { return h('li', null, navLink(c)); }));
+      btn.addEventListener('click', function () { setGroup(n.id, btn.getAttribute('aria-expanded') !== 'true'); });
+      ul.appendChild(h('li', null, [btn, sub]));
+      if (load('ecm_nav_' + n.id)) setGroup(n.id, true);
     });
   }
   function fillAccountSelect() {
@@ -799,13 +833,166 @@
     render();
   }
 
+  // ---- Product monitor (owner, 18 Nov 2026): the live Amazon content of the watched products (Catalog Items + offers),
+  //      "changed X ago" per field, Buy Box and other sellers, the change history, review topics, PIM comparison.
+  //      Data: ecom_amz_catalog (latest version), ecom_amz_catalog_changes (only changed values), ecom_amz_reviews (0047).
+  var AMZ_HOST = { A1PA6795UKMFR9: 'amazon.de', A13V1IB3VIYZZH: 'amazon.fr', APJ6JRA9NG5V4: 'amazon.it', A1RKKUPIHCS9HS: 'amazon.es',
+    A1805IZSGTT6HS: 'amazon.nl', A2NODRKZP88ZB9: 'amazon.se', A1C3SOZRARQ6R3: 'amazon.pl', AMEN7PMS3EDWL: 'amazon.com.be',
+    A1F83G8C2ARO7P: 'amazon.co.uk', A33AVAJ2PDY3EV: 'amazon.com.tr', A17E79C6D8DWNP: 'amazon.sa', ATVPDKIKX0DER: 'amazon.com' };
+  var FIELD_NAME = { title: 'Title', brand: 'Brand', manufacturer: 'Manufacturer', bullets: 'Bullets', description: 'Description',
+    images: 'Pictures', browse: 'Category', buybox_seller: 'Buy Box seller', sellers: 'Sellers' };
+  function shortVal(v) {
+    if (v == null || v === '') return '—';
+    if (Array.isArray(v)) return v.length + (v.length === 1 ? ' item' : ' items') + (v.length ? ': ' + v.map(function (x) { return String(x).slice(0, 40); }).join(' | ').slice(0, 160) : '');
+    return String(v).length > 160 ? String(v).slice(0, 160) + '…' : String(v);
+  }
+  function viewMonitor(main) {
+    header(main, 'Product monitor');
+    var conn = current();
+    if (!conn) return needAccount(main);
+    var box = loadingBox(main);
+    var cat = { table: 'ecom_amz_catalog', order: ['marketplace_id', 'asin'], cols: ['marketplace_id', 'asin', 'data', 'field_changed_at', 'versions', 'first_seen_at', 'checked_at', 'changed_at'].map(function (k) { return { k: k }; }) };
+    var since = new Date(Date.now() - 30 * 86400000).toISOString();
+    Promise.all([
+      loadRows(cat, conn),
+      client.from('ecom_amz_catalog_changes').select('asin,marketplace_id,field,detected_at').eq('connection_id', conn.id).gte('detected_at', since)
+        .order('detected_at', { ascending: false }).limit(5000).then(function (r) { return r.data || []; }),
+      client.from('ecom_amz_reviews').select('asin,marketplace_id,item_name,date_start,date_end,positive,negative,fetched_at').eq('connection_id', conn.id).then(function (r) { return r.data || []; }),
+      client.from('ecom_products').select('id,asin,title,bullets,content').eq('workspace_id', ws.id).not('asin', 'is', null).then(function (r) { return r.data || []; }),
+      client.from('ecom_sellers').select('name,amazon_seller_id').eq('workspace_id', ws.id).not('amazon_seller_id', 'is', null).then(function (r) { return r.data || []; })
+    ]).then(function (res) {
+      box.innerHTML = '';
+      var rows = res[0], changes = res[1], reviews = {}, pim = {}, names = {};
+      res[2].forEach(function (r) { reviews[r.marketplace_id + '|' + r.asin] = r; });
+      res[3].forEach(function (p) { pim[p.asin] = p; });
+      res[4].forEach(function (s) { names[s.amazon_seller_id] = s.name; });
+      if (!rows.length) {
+        box.appendChild(h('div', { class: 'ecm-card ecm-empty' }, [h('p', { text: 'No products watched yet. The product monitor fills with the next sync (needs supabase/0047 and the updated server function).' }),
+          h('a', { class: 'ecm-btn ecm-btn--primary', href: '#/settings', text: 'Go to Settings → Sync now' })]));
+        return;
+      }
+      rows.sort(function (a, b) { return (b.changed_at || '') < (a.changed_at || '') ? -1 : (b.changed_at || '') > (a.changed_at || '') ? 1 : 0; });   // newest change first
+      var own = conn.settings && conn.settings.seller_id;
+      function seller(id) { return !id ? '—' : (own && id === own) ? 'Us' : (names[id] || id); }
+      rows.forEach(function (r) {
+        var d = r.data || {}, f = r.field_changed_at || {};
+        r._title = d.title; r._bullets = (d.bullets || []).length; r._pics = (d.images || []).length;
+        r._bb = d.buybox_ours === true ? 'Us' : seller(d.buybox_seller);
+        r._offers = d.offers; r._sellers = (d.sellers || []).length;
+        var fields = Object.keys(f).sort(function (a, b) { return f[b] < f[a] ? -1 : 1; });
+        r._changed = r.changed_at ? ago(r.changed_at) + ' · ' + fields.slice(0, 3).map(function (k) { return FIELD_NAME[k] || k; }).join(', ') : 'no change yet';
+        r._checked = ago(r.checked_at);
+        var p = pim[r.asin];
+        r._pim = !p ? '—' : (p.title || '') === (d.title || '') && JSON.stringify(p.bullets || []) === JSON.stringify(d.bullets || []) ? 'same' : 'differs';
+        r._rev = reviews[r.marketplace_id + '|' + r.asin] ? 'yes' : '';
+      });
+      var bbSel = h('select', { class: 'ecm-input', 'aria-label': 'Buy Box' }, [['', 'Any Buy Box'], ['us', 'Buy Box: us'], ['other', 'Buy Box: another seller'], ['none', 'No Buy Box']]
+        .map(function (o) { return h('option', { value: o[0], text: o[1] }); }));
+      var bar = filterBar({ mps: uniq(rows.map(function (r) { return r.marketplace_id; })), dateLabel: 'Changed', extra: [bbSel],
+                            presets: [[1, '24 h'], [7, '7 days'], [30, '30 days'], ['', 'All']] }, render);
+      bbSel.addEventListener('change', render);
+      function keep(r) {
+        var d = r.data || {}, b = bbSel.value;
+        if (!bar.mpOk(r.marketplace_id) || !bar.dateOk(r.changed_at ? r.changed_at.slice(0, 10) : null)) return false;
+        if (b === 'us') return d.buybox_ours === true;
+        if (b === 'other') return !!d.buybox_seller && d.buybox_ours !== true;
+        if (b === 'none') return !d.buybox_seller;
+        return true;
+      }
+      var kpiBox = h('div'), detail = h('section', { class: 'ecm-card ecm-monitor__detail', hidden: true, 'aria-label': 'Product details' });
+      var cfg = { title: 'Watched products', cols: [
+        { k: 'marketplace_id', t: 'Market', f: mpCode }, { k: 'asin', t: 'ASIN', mono: true }, { k: '_title', t: 'Title (live on Amazon)', wide: true },
+        { k: '_bullets', t: 'Bullets', num: true }, { k: '_pics', t: 'Pictures', num: true }, { k: '_bb', t: 'Buy Box' }, { k: '_offers', t: 'Offers', num: true },
+        { k: '_changed', t: 'Last change' }, { k: '_checked', t: 'Checked' }, { k: '_pim', t: 'PIM' }, { k: '_rev', t: 'Reviews' }],
+        onRow: function (r) { showDetail(r); } };
+      var tbl = dataTable('monitor', cfg, rows, conn, keep);
+      box.append(bar.el, kpiBox, tbl.el, detail);
+      function render() {
+        var sel = rows.filter(keep), wk = Date.now() - 7 * 86400000;
+        var last = rows.reduce(function (a, r) { return r.checked_at > a ? r.checked_at : a; }, '');
+        kpiBox.replaceChildren(kpiRow([
+          { label: 'Products watched', value: fmtInt(sel.length), hint: 'last check ' + ago(last) },
+          { label: 'Changed in 7 days', value: fmtInt(sel.filter(function (r) { return r.changed_at && Date.parse(r.changed_at) > wk; }).length), hint: 'content or sellers', tone: 'down' },
+          { label: 'Field changes, 30 days', value: fmtInt(changes.filter(function (c) { return bar.mpOk(c.marketplace_id); }).length), hint: 'only the changed values are kept' },
+          { label: 'Buy Box with another seller', value: fmtInt(sel.filter(function (r) { var d = r.data || {}; return d.buybox_seller && d.buybox_ours !== true; }).length), tone: 'down' },
+          { label: 'Several sellers', value: fmtInt(sel.filter(function (r) { return (r.data && r.data.sellers || []).length > 1; }).length), hint: 'more than one offer' },
+          { label: 'Review topics', value: fmtInt(sel.filter(function (r) { return r._rev; }).length), hint: 'products with review data' }
+        ]));
+        tbl.refresh();
+      }
+      render();
+
+      function showDetail(r) {
+        var d = r.data || {}, f = r.field_changed_at || {}, host = AMZ_HOST[r.marketplace_id] || 'amazon.de';
+        detail.hidden = false;
+        detail.replaceChildren(h('div', { class: 'ecm-row' }, [h('h2', { class: 'ecm-h2', text: mpCode(r.marketplace_id) + ' · ' + r.asin }),
+          h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small', href: 'https://www.' + host + '/dp/' + r.asin, target: '_blank', rel: 'noopener', text: 'Open on Amazon' }),
+          h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Close', onclick: function () { detail.hidden = true; } })]));
+        var badge = function (k) { return f[k] ? h('span', { class: 'ecm-badge', text: 'changed ' + ago(f[k]) }) : null; };
+        var line = function (label, k, val) { return h('div', { class: 'ecm-kv' }, [h('span', { class: 'ecm-kv__k', text: label }), h('span', { class: 'ecm-kv__v', text: val == null || val === '' ? '—' : String(val) }), badge(k)]); };
+        detail.appendChild(h('div', { class: 'ecm-kvs' }, [
+          line('Title', 'title', d.title), line('Brand', 'brand', d.brand), line('Manufacturer', 'manufacturer', d.manufacturer), line('Category', 'browse', d.browse),
+          line('Buy Box', 'buybox_seller', d.buybox_ours === true ? 'Us' + (d.buybox_price != null ? ' · ' + fmtNum(d.buybox_price) : '') : seller(d.buybox_seller) + (d.buybox_price != null ? ' · ' + fmtNum(d.buybox_price) : '')),
+          line('Sellers', 'sellers', (d.sellers || []).map(seller).join(', ') + (d.offers != null ? ' · ' + d.offers + ' offers' : '')),
+          line('Sales rank', null, d.sales_rank != null ? '#' + fmtInt(d.sales_rank) + (d.rank_group ? ' in ' + d.rank_group : '') : null),
+          line('First seen / checked', null, fmtTime(r.first_seen_at) + ' / ' + fmtTime(r.checked_at) + ' · version ' + (r.versions || 1))]));
+        detail.appendChild(h('h3', { class: 'ecm-h3', text: 'Bullets' })); if (f.bullets) detail.lastChild.appendChild(badge('bullets'));
+        detail.appendChild(h('ol', { class: 'ecm-bullets' }, (d.bullets || []).map(function (b) { return h('li', { text: b }); })));
+        if (d.description) detail.appendChild(h('details', null, [h('summary', { text: 'Description' }), h('p', { class: 'ecm-note', text: d.description })]));
+        var pics = h('div', { class: 'ecm-thumbs' }, (d.image_links || []).map(function (u, i) {
+          return h('a', { href: u, target: '_blank', rel: 'noopener' }, h('img', { src: u, alt: 'Picture ' + (i + 1), loading: 'lazy' })); }));
+        detail.append(h('h3', { class: 'ecm-h3', text: 'Pictures (' + (d.images || []).length + ')' }), pics);
+        if (f.images) detail.insertBefore(badge('images'), pics);
+        // PIM comparison
+        var p = pim[r.asin];
+        if (p) {
+          var same = function (a, b) { return JSON.stringify(a || null) === JSON.stringify(b || null); };
+          detail.appendChild(h('h3', { class: 'ecm-h3', text: 'PIM product #' + p.id + ' compared' }));
+          detail.appendChild(h('ul', { class: 'ecm-compare' }, [
+            h('li', { class: same(p.title, d.title) ? 'is-same' : 'is-diff', text: 'Title: ' + (same(p.title, d.title) ? 'same' : 'differs — PIM: ' + shortVal(p.title)) }),
+            h('li', { class: same(p.bullets, d.bullets) ? 'is-same' : 'is-diff', text: 'Bullets: ' + (same(p.bullets, d.bullets) ? 'same' : 'differ — PIM has ' + (p.bullets || []).length + ', Amazon ' + (d.bullets || []).length) }),
+            h('li', { class: same(p.content, d.description) ? 'is-same' : 'is-diff', text: 'Description: ' + (same(p.content, d.description) ? 'same' : 'differs') })]));
+        }
+        // change history (only the changed values)
+        var hist = h('div', null, h('p', { class: 'ecm-note', text: 'Loading the changes…' }));
+        detail.append(h('h3', { class: 'ecm-h3', text: 'Changes' }), hist);
+        client.from('ecom_amz_catalog_changes').select('field,old_value,new_value,detected_at').eq('connection_id', conn.id).eq('marketplace_id', r.marketplace_id)
+          .eq('asin', r.asin).order('detected_at', { ascending: false }).limit(200).then(function (res2) {
+            var list = res2.data || [];
+            hist.replaceChildren(list.length ? dataTable('monitor-history', { title: 'Changes', cols: [
+              { k: 'detected_at', t: 'When', f: isoMinute }, { k: 'field', t: 'Field', f: function (v) { return FIELD_NAME[v] || v; } },
+              { k: 'old_value', t: 'Before', f: shortVal, wide: true }, { k: 'new_value', t: 'After', f: shortVal, wide: true }] }, list, conn).el
+              : h('p', { class: 'ecm-note', text: 'No change since this product was first seen (' + fmtTime(r.first_seen_at) + ').' }));
+          });
+        // review topics
+        var rv = reviews[r.marketplace_id + '|' + r.asin];
+        detail.appendChild(h('h3', { class: 'ecm-h3', text: 'Review topics' + (rv && rv.date_start ? ' (' + fmtDay(rv.date_start) + ' – ' + fmtDay(rv.date_end) + ', from Amazon)' : '') }));
+        if (!rv) detail.appendChild(h('p', { class: 'ecm-note', text: 'No review topics for this product yet (the first sync reads 10 random products).' }));
+        else ['positive', 'negative'].forEach(function (kind) {
+          var list = rv[kind] || [];
+          detail.appendChild(h('p', { class: 'ecm-h4', text: (kind === 'positive' ? 'Liked' : 'Disliked') + ' (' + list.length + ')' }));
+          detail.appendChild(h('ul', { class: 'ecm-topics' }, list.map(function (t) {
+            var m = t.asinMetrics || {};
+            return h('li', null, [h('strong', { text: t.topic }), h('span', { class: 'ecm-note', text: ' · ' + (m.numberOfMentions != null ? m.numberOfMentions + ' mentions' : '') +
+              (m.occurrencePercentage != null ? ' · ' + m.occurrencePercentage + ' % of reviews' : '') + (m.starRatingImpact != null ? ' · star impact ' + m.starRatingImpact : '') }),
+              (t.reviewSnippets || []).length ? h('ul', { class: 'ecm-snippets' }, t.reviewSnippets.map(function (s) { return h('li', { text: '“' + s + '”' }); })) : null]);
+          })));
+        });
+        detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }).catch(function (e) {
+      viewFailed(box, /does not exist|schema cache/i.test(e.message) ? new Error('the product monitor tables are not there yet: run supabase/0047-ecom-pim.sql in Supabase (SQL Editor)') : e);
+    });
+  }
+  ROUTES.monitor = viewMonitor;
+
   function cellValue(c, r) {
     var v = c.calc ? c.calc(r) : r[c.k];
     return c.f ? c.f(v) : v;
   }
-  // ---- Tables show 30 rows at a time (owner, 16 Nov 2026: "tables are very long … the longest should be 30 lines").
+  // ---- Tables show 20 rows at a time (owner: 30 on 16 Nov 2026, 20 on 18 Nov).
   //      Search, sorting and the CSV download still cover every row. onGo(page) draws the rows of that page.
-  var PAGE_ROWS = 30;
+  var PAGE_ROWS = 20;
   function pagerBar(onGo) {
     var st = { page: 0, total: 0 };
     var prev = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: '‹ Previous' });
@@ -852,6 +1039,7 @@
         } }, [c.t, h('span', { class: 'ecm-sort__arrow', 'aria-hidden': 'true', text: on ? (st.dir > 0 ? '▲' : '▼') : '↕' })]));
         tr.appendChild(th);
       });
+      if (cfg.onRow) tr.appendChild(h('th', { scope: 'col' }, h('span', { class: 'visually-hidden', text: 'Open' })));
       thead.appendChild(tr);
     }
     function apply() {
@@ -885,6 +1073,9 @@
           var cls = [c.num ? 'is-num' : '', c.wide ? 'is-wide' : '', c.mono ? 'ecm-mono' : ''].join(' ').trim() || null;
           tr.appendChild(h('td', { class: cls, text: c.num ? fmtNum(v) : (v == null ? '' : String(v)) }));
         });
+        // cfg.onRow(row): a small "Open" button at the end of each row (PIM lists, product monitor)
+        if (cfg.onRow) tr.appendChild(h('td', null, h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small',
+          text: cfg.onRowLabel || 'Open', onclick: function () { cfg.onRow(r); } })));
         tbody.appendChild(tr);
       });
     }
@@ -1297,7 +1488,7 @@
     card.appendChild(h('h2', { class: 'ecm-h2', id: 'ecm-sync-h', text: 'Sync' }));
     var conn = current();
     if (!conn) { card.appendChild(h('p', { class: 'ecm-note', text: 'Add an Amazon account first.' })); return; }
-    card.appendChild(h('p', { class: 'ecm-note', text: 'Account: ' + conn.label + '. ' + TEST_NOTE + ' Data sets in the test run: FBA stock and stock development (30 days), business report (30 days), finance transactions (30 days), listings, repeat purchase (last 4 full weeks). Amazon prepares reports in a few minutes; you can leave this page and come back.' }));
+    card.appendChild(h('p', { class: 'ecm-note', text: 'Account: ' + conn.label + '. ' + TEST_NOTE + ' Data sets in the test run: FBA stock and stock development (30 days), business report (30 days), finance transactions (30 days), listings, repeat purchase (last 4 full weeks), product monitor (live content and offers of the 100 best-selling products per marketplace), review topics (10 products). Amazon prepares reports in a few minutes; you can leave this page and come back.' }));
     var jobs = data ? data.jobs : null;
     var open = (jobs || []).filter(function (j) { return OPEN[j.status]; }).length;
     var row = h('div', { class: 'ecm-row', style: 'margin: var(--space-3) 0' });
@@ -1330,7 +1521,7 @@
       h('span', { style: 'width:' + pct + '%' })));
     card.appendChild(h('p', { class: 'ecm-note', 'aria-live': 'polite', text: done + ' of ' + jobs.length + ' finished' + (open ? '…' : '.') }));
     var tbody = h('tbody');
-    // 30 jobs per page; the page is kept while the list refreshes every few seconds during a sync
+    // PAGE_ROWS jobs per page; the page is kept while the list refreshes every few seconds during a sync
     function jobRows(page) {
       syncPage = page;
       tbody.innerHTML = '';
@@ -1426,6 +1617,41 @@
       route();
     }).catch(function (e) { showGate('error', e.message); });
   }
+  /* 9. For pim.js (PIM, image library, A+ content; 18 Nov 2026): this page's helpers and the route registry ------ */
+  function invoke(name, body) {   // any Edge Function of this service; its own error text comes back in {error}
+    return client.functions.invoke(name, { body: body }).then(function (r) {
+      if (!r.error) return r.data;
+      var ctx = r.error.context;
+      if (ctx && typeof ctx.json === 'function') {
+        return ctx.json().catch(function () { return {}; }).then(function (j) {
+          var er = j && j.error;   // {error: "text"} or {ok: false, error: {code, message}}
+          if (j && j.code === 'NOT_FOUND') er = 'The server function ' + name + ' is not deployed yet.';
+          throw new Error((er && er.message) || (typeof er === 'string' && er) || 'The server function ' + name + ' is not reachable.');
+        });
+      }
+      throw new Error('The server function ' + name + ' is not reachable.');
+    });
+  }
+  // "5 min ago", "3 h ago", "2 days ago" (product monitor: "changed X ago")
+  function ago(v) {
+    if (!v) return '—';
+    var s = Math.max(0, (Date.now() - new Date(v).getTime()) / 1000);
+    if (s < 90) return 'just now';
+    if (s < 5400) return Math.round(s / 60) + ' min ago';
+    if (s < 129600) return Math.round(s / 3600) + ' h ago';
+    return Math.round(s / 86400) + ' days ago';
+  }
+  window.EcomApp = {
+    h: h, $: $, toast: toast, store: store, load: load, rpc: rpc, invoke: invoke, header: header, ago: ago,
+    client: function () { return client; }, ws: function () { return ws; }, user: function () { return user; },
+    conn: function () { return current(); }, conns: function () { return conns; }, isAdmin: isAdmin,
+    dataTable: dataTable, pagerBar: pagerBar, PAGE_ROWS: PAGE_ROWS, csvDownload: csvDownload,
+    fmtInt: fmtInt, fmtNum: fmtNum, fmtTime: fmtTime, fmtDay: fmtDay, mpCode: mpCode, isoMinute: isoMinute,
+    // pim.js registers its pages here; an open page of that id is drawn again at once
+    route: function (id, fn) { ROUTES[id] = fn; if (started && location.hash.replace(/^#\/?/, '').split('/')[0] === id) route(); },
+    go: function () { route(); }
+  };
+
   function boot() {
     if (!window.supabase || !window.supabase.createClient) return showGate('error', 'library missing');   // fail closed
     try { client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch (e) { return showGate('error'); }
