@@ -372,7 +372,7 @@ kbd {
   border: 0;
 }
 .rule--footer {
-  margin: 0 0 var(--space-7);
+  margin: 0 0 var(--space-3); /* 18 Nov 2026: was space-7, empty band above the footer */
 }
 
 /* -------------------------------------------------------------------------
@@ -1028,14 +1028,14 @@ html[lang="ka"] .hero__h { white-space: normal; text-wrap: balance; }
   gap: var(--space-6);
 }
 .impact-tile {
-  /* Height follows content (all tiles in a row stretch to the tallest); was 1 / 1. */
-  min-height: 220px;
+  /* Height follows content (all tiles in a row stretch to the tallest). 18 Nov 2026: no min-height,
+     content from the top, smaller numbers (owner: no empty space, no huge KPIs). */
   background: var(--surface);
   border-radius: var(--radius-lg);
-  padding: 32px 24px 28px;
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--space-3);
   border: 1px solid var(--rule);
 }
@@ -1043,7 +1043,7 @@ html[lang="ka"] .hero__h { white-space: normal; text-wrap: balance; }
   font-family: var(--font-display);
   font-weight: 600;
   font-variation-settings: "opsz" 144, "SOFT" 0;
-  font-size: clamp(2.25rem, 1.5rem + 2vw, 3.75rem);
+  font-size: var(--type-h2);
   line-height: 1;
   letter-spacing: -0.03em;
   color: var(--ink);
