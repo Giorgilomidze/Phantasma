@@ -356,9 +356,11 @@
       a.parentNode.insertBefore(h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small ecm-admin-link', href: '../admin.html#messages', text: 'Admin: messages' }), a);
     }, function () { /* not an admin, or offline: no link */ });
   }
+  // Work screens carry no paragraph under the title (layout standard, 18 Nov 2026): the explanation is hover text on
+  // the ⓘ, and screen readers get it as part of the title.
   function header(main, title, lede) {
-    main.appendChild(h('h1', { class: 'ecm-h1', text: title }));
-    if (lede) main.appendChild(h('p', { class: 'ecm-lede', text: lede }));
+    main.appendChild(h('h1', { class: 'ecm-h1' }, [title, lede ? h('span', { class: 'ecm-info', title: lede, 'aria-hidden': 'true', text: 'ⓘ' }) : null,
+      lede ? h('span', { class: 'visually-hidden', text: '. ' + lede }) : null]));
   }
   function needAccount(main) {
     main.appendChild(h('div', { class: 'ecm-card ecm-empty' }, [
@@ -494,7 +496,7 @@
     return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
   }
   function chart(cfg) {
-    var W = 760, H = cfg.height || 230, L = 56, R = 12, T = 10, B = 28;
+    var H = cfg.height || 200, L = 52, R = 10, T = 8, B = 24;
     var labels = cfg.labels, n = labels.length, xf = cfg.xFmt || String, tf = cfg.tipFmt || function (v) { return fmtNum(v, 0); };
     var vals = [];
     cfg.series.forEach(function (s) { s.values.forEach(function (v) { if (v != null && isFinite(v)) vals.push(v); }); });
@@ -504,48 +506,65 @@
     if (hi === lo) { hi = lo + 1; if (cfg.zoom) lo = lo - 1; }
     var step = niceStep(hi - lo, 4);
     lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
-    var band = (W - L - R) / Math.max(1, n);
-    var X = function (i) { return L + band * (i + 0.5); };
     var Y = function (v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
-    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'ecm-chart__svg', role: 'img', 'aria-label': cfg.title });
-    for (var v = lo; v <= hi + step / 2; v += step) {
-      svg.appendChild(sv('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: Math.abs(v) < step / 1e6 ? 'ecm-chart__zero' : 'ecm-chart__grid' }));
-      svg.appendChild(sv('text', { x: L - 8, y: Y(v) + 4, 'text-anchor': 'end', class: 'ecm-chart__tick' }, (cfg.yFmt || fmtShort)(v)));
+    // drawn at the width the chart really has (one unit = one pixel); drawn again when that width changes
+    function draw(W) {
+      var band = (W - L - R) / Math.max(1, n);
+      var X = function (i) { return L + band * (i + 0.5); };
+      var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, class: 'ecm-chart__svg', role: 'img', 'aria-label': cfg.title });
+      for (var v = lo; v <= hi + step / 2; v += step) {
+        svg.appendChild(sv('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: Math.abs(v) < step / 1e6 ? 'ecm-chart__zero' : 'ecm-chart__grid' }));
+        svg.appendChild(sv('text', { x: L - 8, y: Y(v) + 4, 'text-anchor': 'end', class: 'ecm-chart__tick' }, (cfg.yFmt || fmtShort)(v)));
+      }
+      var every = Math.max(1, Math.ceil(n / Math.max(4, Math.floor((W - L - R) / 72))));
+      labels.forEach(function (lab, i) {
+        // every n-th label, and the last one only when it does not crowd the one before
+        var lastFits = i === n - 1 && (n - 1) % every >= Math.ceil(every / 2);
+        if (i % every && !lastFits) return;
+        svg.appendChild(sv('text', { x: X(i), y: H - 8, 'text-anchor': 'middle', class: 'ecm-chart__tick' }, xf(lab)));
+      });
+      var bars = cfg.series.filter(function (s) { return s.kind === 'bar'; });
+      var bw = Math.max(2, Math.min(28, band * 0.8 / Math.max(1, bars.length)));
+      bars.forEach(function (s, k) {
+        s.values.forEach(function (val, i) {
+          if (val == null || !isFinite(val) || !val) return;
+          var x0 = X(i) - (bw * bars.length) / 2 + k * bw, y0 = Y(Math.max(0, val)), y1 = Y(Math.min(0, val));
+          var r = sv('rect', { x: x0.toFixed(1), y: y0.toFixed(1), width: Math.max(1, bw - 1).toFixed(1), height: Math.max(1, y1 - y0).toFixed(1),
+            style: 'fill:' + s.color, class: 'ecm-chart__bar' });
+          r.appendChild(sv('title', null, s.name + ' · ' + xf(labels[i]) + ': ' + tf(val)));
+          svg.appendChild(r);
+        });
+      });
+      cfg.series.filter(function (s) { return s.kind !== 'bar'; }).forEach(function (s) {
+        var d = '', pen = false;
+        s.values.forEach(function (val, i) {
+          if (val == null || !isFinite(val)) { pen = false; return; }
+          d += (pen ? ' L ' : ' M ') + X(i).toFixed(1) + ' ' + Y(val).toFixed(1);
+          pen = true;
+        });
+        if (d) svg.appendChild(sv('path', { d: d.trim(), class: 'ecm-chart__line', style: 'fill:none;stroke:' + s.color + ';stroke-width:' + (s.width || 2.5) }));
+        if (n <= 60) s.values.forEach(function (val, i) {
+          if (val == null || !isFinite(val)) return;
+          var c = sv('circle', { cx: X(i).toFixed(1), cy: Y(val).toFixed(1), r: n > 31 ? 2 : 3, style: 'fill:' + s.color });
+          c.appendChild(sv('title', null, s.name + ' · ' + xf(labels[i]) + ': ' + tf(val)));
+          svg.appendChild(c);
+        });
+      });
+      return svg;
     }
-    var every = Math.max(1, Math.ceil(n / 8));
-    labels.forEach(function (lab, i) {
-      // every n-th label, and the last one only when it does not crowd the one before
-      var lastFits = i === n - 1 && (n - 1) % every >= Math.ceil(every / 2);
-      if (i % every && !lastFits) return;
-      svg.appendChild(sv('text', { x: X(i), y: H - 8, 'text-anchor': 'middle', class: 'ecm-chart__tick' }, xf(lab)));
-    });
-    var bars = cfg.series.filter(function (s) { return s.kind === 'bar'; });
-    var bw = Math.max(2, Math.min(28, band * 0.8 / Math.max(1, bars.length)));
-    bars.forEach(function (s, k) {
-      s.values.forEach(function (val, i) {
-        if (val == null || !isFinite(val) || !val) return;
-        var x0 = X(i) - (bw * bars.length) / 2 + k * bw, y0 = Y(Math.max(0, val)), y1 = Y(Math.min(0, val));
-        var r = sv('rect', { x: x0.toFixed(1), y: y0.toFixed(1), width: Math.max(1, bw - 1).toFixed(1), height: Math.max(1, y1 - y0).toFixed(1),
-          style: 'fill:' + s.color, class: 'ecm-chart__bar' });
-        r.appendChild(sv('title', null, s.name + ' · ' + xf(labels[i]) + ': ' + tf(val)));
-        svg.appendChild(r);
+    var plot = h('div', { class: 'ecm-chart__plot' }), lastW = 0;
+    function paint(w) { lastW = w; plot.replaceChildren(draw(w)); }
+    paint(720);   // until the page has measured the real width
+    function fit() { if (plot.isConnected) { var w = Math.round(plot.clientWidth); if (w > 160 && Math.abs(w - lastW) > 8) paint(w); } }
+    setTimeout(fit, 0);   // right after the chart is on the page (also where the resize watcher does not run)
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(function (en) {
+        if (!plot.isConnected) { ro.disconnect(); return; }
+        var w = Math.round(en[0].contentRect.width);
+        if (w > 160 && Math.abs(w - lastW) > 8) paint(w);
       });
-    });
-    cfg.series.filter(function (s) { return s.kind !== 'bar'; }).forEach(function (s) {
-      var d = '', pen = false;
-      s.values.forEach(function (val, i) {
-        if (val == null || !isFinite(val)) { pen = false; return; }
-        d += (pen ? ' L ' : ' M ') + X(i).toFixed(1) + ' ' + Y(val).toFixed(1);
-        pen = true;
-      });
-      if (d) svg.appendChild(sv('path', { d: d.trim(), class: 'ecm-chart__line', style: 'fill:none;stroke:' + s.color + ';stroke-width:' + (s.width || 2.5) }));
-      if (n <= 60) s.values.forEach(function (val, i) {
-        if (val == null || !isFinite(val)) return;
-        var c = sv('circle', { cx: X(i).toFixed(1), cy: Y(val).toFixed(1), r: n > 31 ? 2 : 3, style: 'fill:' + s.color });
-        c.appendChild(sv('title', null, s.name + ' · ' + xf(labels[i]) + ': ' + tf(val)));
-        svg.appendChild(c);
-      });
-    });
+      ro.observe(plot);
+    }
     var legend = h('ul', { class: 'ecm-legend' }, cfg.series.map(function (s) {
       return h('li', null, [h('span', { class: 'ecm-legend__dot', style: 'background:' + s.color, 'aria-hidden': 'true' }), s.name]);
     }));
@@ -568,7 +587,7 @@
     return h('figure', { class: 'ecm-chart' }, [
       h('figcaption', { class: 'ecm-chart__title', text: cfg.title }),
       cfg.note ? h('p', { class: 'ecm-note', text: cfg.note }) : null,
-      legend, n ? svg : h('p', { class: 'ecm-note', text: 'No data in this range.' }),
+      legend, n ? plot : h('p', { class: 'ecm-note', text: 'No data in this range.' }),
       n ? h('details', { class: 'ecm-chart__data' }, [h('summary', { text: 'Show the numbers' }), h('div', { class: 'ecm-tablewrap' }, tbl), npager.el]) : null
     ]);
   }
@@ -930,7 +949,7 @@
         detail.replaceChildren(h('div', { class: 'ecm-row' }, [h('h2', { class: 'ecm-h2', text: mpCode(r.marketplace_id) + ' · ' + r.asin }),
           h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small', href: 'https://www.' + host + '/dp/' + r.asin, target: '_blank', rel: 'noopener', text: 'Open on Amazon' }),
           h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Close', onclick: function () { detail.hidden = true; } })]));
-        var badge = function (k) { return f[k] ? h('span', { class: 'ecm-badge', text: 'changed ' + ago(f[k]) }) : null; };
+        var badge = function (k) { return f[k] ? h('span', { class: 'ecm-chg', text: 'changed ' + ago(f[k]) }) : null; };
         var line = function (label, k, val) { return h('div', { class: 'ecm-kv' }, [h('span', { class: 'ecm-kv__k', text: label }), h('span', { class: 'ecm-kv__v', text: val == null || val === '' ? '—' : String(val) }), badge(k)]); };
         detail.appendChild(h('div', { class: 'ecm-kvs' }, [
           line('Title', 'title', d.title), line('Brand', 'brand', d.brand), line('Manufacturer', 'manufacturer', d.manufacturer), line('Category', 'browse', d.browse),
@@ -1458,7 +1477,7 @@
         });
         box.appendChild(form);
         box.appendChild(err);
-        box.appendChild(h('p', { class: 'ecm-note', text: 'Someone who has not signed in yet is invited: at their first sign-in on solvephantasma.com (for example with Google) they join this workspace. Adding or inviting someone also lets them into this service.' }));
+        box.appendChild(h('p', { class: 'ecm-note', text: 'Not signed in yet? They join this workspace at their first sign-in.', title: 'Adding or inviting someone also lets them into this service.' }));
       }
     }).catch(function (e) { box.innerHTML = ''; box.appendChild(h('p', { class: 'ecm-error', text: e.message })); });
   }
@@ -1490,7 +1509,11 @@
     card.appendChild(h('h2', { class: 'ecm-h2', id: 'ecm-sync-h', text: 'Sync' }));
     var conn = current();
     if (!conn) { card.appendChild(h('p', { class: 'ecm-note', text: 'Add an Amazon account first.' })); return; }
-    card.appendChild(h('p', { class: 'ecm-note', text: 'Account: ' + conn.label + '. ' + TEST_NOTE + ' Data sets in the test run: FBA stock and stock development (30 days), business report (30 days), finance transactions (30 days), listings, repeat purchase (last 4 full weeks), product monitor (live content and offers of the 100 best-selling products per marketplace), review topics (10 products). Amazon prepares reports in a few minutes; you can leave this page and come back.' }));
+    // the explanation is hover text on the ⓘ (layout standard: no paragraphs on work screens)
+    var syncInfo = TEST_NOTE + ' Data sets in the test run: FBA stock and stock development (30 days), business report (30 days), finance transactions (30 days), listings, repeat purchase (last 4 full weeks), product monitor (live content and offers of the 100 best-selling products per marketplace), review topics (10 products). Amazon prepares reports in a few minutes; you can leave this page and come back.' ;
+    var sh = card.querySelector('#ecm-sync-h');
+    if (sh) sh.append(' ', h('span', { class: 'ecm-info', title: syncInfo, 'aria-hidden': 'true', text: 'ⓘ' }), h('span', { class: 'visually-hidden', text: '. ' + syncInfo }));
+    card.appendChild(h('p', { class: 'ecm-note', text: 'Account: ' + conn.label + '.' }));
     var jobs = data ? data.jobs : null;
     var open = (jobs || []).filter(function (j) { return OPEN[j.status]; }).length;
     var row = h('div', { class: 'ecm-row', style: 'margin: var(--space-3) 0' });
