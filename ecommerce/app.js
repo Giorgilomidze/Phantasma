@@ -874,10 +874,12 @@
       rows.sort(function (a, b) { return (b.changed_at || '') < (a.changed_at || '') ? -1 : (b.changed_at || '') > (a.changed_at || '') ? 1 : 0; });   // newest change first
       var own = conn.settings && conn.settings.seller_id;
       function seller(id) { return !id ? '—' : (own && id === own) ? 'Us' : (names[id] || id); }
+      // our Buy Box: our seller id (saved on the account) or Amazon's MyOffer mark
+      function bbOurs(d) { return d.buybox_ours === true || (!!own && d.buybox_seller === own); }
       rows.forEach(function (r) {
         var d = r.data || {}, f = r.field_changed_at || {};
         r._title = d.title; r._bullets = (d.bullets || []).length; r._pics = (d.images || []).length;
-        r._bb = d.buybox_ours === true ? 'Us' : seller(d.buybox_seller);
+        r._bb = bbOurs(d) ? 'Us' : seller(d.buybox_seller);
         r._offers = d.offers; r._sellers = (d.sellers || []).length;
         var fields = Object.keys(f).sort(function (a, b) { return f[b] < f[a] ? -1 : 1; });
         r._changed = r.changed_at ? ago(r.changed_at) + ' · ' + fields.slice(0, 3).map(function (k) { return FIELD_NAME[k] || k; }).join(', ') : 'no change yet';
@@ -894,8 +896,8 @@
       function keep(r) {
         var d = r.data || {}, b = bbSel.value;
         if (!bar.mpOk(r.marketplace_id) || !bar.dateOk(r.changed_at ? r.changed_at.slice(0, 10) : null)) return false;
-        if (b === 'us') return d.buybox_ours === true;
-        if (b === 'other') return !!d.buybox_seller && d.buybox_ours !== true;
+        if (b === 'us') return bbOurs(d);
+        if (b === 'other') return !!d.buybox_seller && !bbOurs(d);
         if (b === 'none') return !d.buybox_seller;
         return true;
       }
@@ -914,7 +916,7 @@
           { label: 'Products watched', value: fmtInt(sel.length), hint: 'last check ' + ago(last) },
           { label: 'Changed in 7 days', value: fmtInt(sel.filter(function (r) { return r.changed_at && Date.parse(r.changed_at) > wk; }).length), hint: 'content or sellers', tone: 'down' },
           { label: 'Field changes, 30 days', value: fmtInt(changes.filter(function (c) { return bar.mpOk(c.marketplace_id); }).length), hint: 'only the changed values are kept' },
-          { label: 'Buy Box with another seller', value: fmtInt(sel.filter(function (r) { var d = r.data || {}; return d.buybox_seller && d.buybox_ours !== true; }).length), tone: 'down' },
+          { label: 'Buy Box with another seller', value: fmtInt(sel.filter(function (r) { var d = r.data || {}; return d.buybox_seller && !bbOurs(d); }).length), tone: 'down' },
           { label: 'Several sellers', value: fmtInt(sel.filter(function (r) { return (r.data && r.data.sellers || []).length > 1; }).length), hint: 'more than one offer' },
           { label: 'Review topics', value: fmtInt(sel.filter(function (r) { return r._rev; }).length), hint: 'products with review data' }
         ]));
@@ -932,7 +934,7 @@
         var line = function (label, k, val) { return h('div', { class: 'ecm-kv' }, [h('span', { class: 'ecm-kv__k', text: label }), h('span', { class: 'ecm-kv__v', text: val == null || val === '' ? '—' : String(val) }), badge(k)]); };
         detail.appendChild(h('div', { class: 'ecm-kvs' }, [
           line('Title', 'title', d.title), line('Brand', 'brand', d.brand), line('Manufacturer', 'manufacturer', d.manufacturer), line('Category', 'browse', d.browse),
-          line('Buy Box', 'buybox_seller', d.buybox_ours === true ? 'Us' + (d.buybox_price != null ? ' · ' + fmtNum(d.buybox_price) : '') : seller(d.buybox_seller) + (d.buybox_price != null ? ' · ' + fmtNum(d.buybox_price) : '')),
+          line('Buy Box', 'buybox_seller', bbOurs(d) ? 'Us' + (d.buybox_price != null ? ' · ' + fmtNum(d.buybox_price) : '') : seller(d.buybox_seller) + (d.buybox_price != null ? ' · ' + fmtNum(d.buybox_price) : '')),
           line('Sellers', 'sellers', (d.sellers || []).map(seller).join(', ') + (d.offers != null ? ' · ' + d.offers + ' offers' : '')),
           line('Sales rank', null, d.sales_rank != null ? '#' + fmtInt(d.sales_rank) + (d.rank_group ? ' in ' + d.rank_group : '') : null),
           line('First seen / checked', null, fmtTime(r.first_seen_at) + ' / ' + fmtTime(r.checked_at) + ' · version ' + (r.versions || 1))]));
