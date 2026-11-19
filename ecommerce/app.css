@@ -316,6 +316,36 @@
 .pim-tagbtn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
 @media (pointer: coarse) { .pim-tagbtn { padding: var(--space-2) var(--space-3); } }
 .pim-module--empty { border-style: dashed; background: var(--bg); }
+/* A+ section (19 Nov 2026): the A+ on Amazon and the versions made here, each with a preview */
+.pim-aplus__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin: var(--space-2) 0; }
+.pim-aplus__head .ecm-h3 { margin: 0; }
+.pim-amzaplus { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.pim-amzdoc { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--bg); }
+.pim-amzdoc__t { display: grid; gap: 2px; min-width: 0; }
+.pim-aplus__preview--dlg { position: static; max-height: none; }
+/* The A+ viewer: Amazon's layout, simplified, on white like Amazon's page */
+.apv { display: grid; gap: var(--space-3); background: #fff; color: var(--ink); padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-sm); }
+.apv--story { grid-auto-flow: column; grid-auto-columns: minmax(220px, 300px); overflow-x: auto; align-items: start; }
+.apv-mod { min-width: 0; }
+.apv-wide, .apv-img { display: block; width: 100%; height: auto; }
+.apv-h { font-size: var(--type-body); font-weight: 700; margin: var(--space-2) 0 var(--space-1); }
+.apv-p { font-size: var(--type-body-sm); margin: 0 0 var(--space-2); white-space: pre-line; }
+.apv-group { display: grid; gap: var(--space-1); }
+.apv-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
+.apv-nav { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-2); border-bottom: 1px solid var(--rule); }
+.apv-nav__btn { all: unset; cursor: pointer; padding: var(--space-1) var(--space-3); border-bottom: 3px solid transparent; font-size: var(--type-caption); font-weight: 600; color: var(--ink-soft); }
+.apv-nav__btn[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.apv-nav__btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+@media (pointer: coarse) { .apv-nav__btn { padding: var(--space-2) var(--space-3); } }
+.apv-faq { border-bottom: 1px solid var(--rule); padding: var(--space-2) 0; font-size: var(--type-body-sm); }
+.apv-faq summary { cursor: pointer; font-weight: 600; }
+.apv-faq .apv-p { margin: var(--space-2) 0 0; }
+.apv-cards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(120px, 160px); gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-1); }
+.apv-card { display: grid; gap: var(--space-1); justify-items: start; font-size: var(--type-caption); }
+.apv-card__img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; }
+.apv-card__a { color: var(--partner); }
+.apv-specs th { width: 35%; }
 
 /* 6. Settings parts -------------------------------------------------------- */
 .ecm-accounts { display: grid; gap: var(--space-3); }

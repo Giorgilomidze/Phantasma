@@ -1650,7 +1650,7 @@
         q(sb().from('ecom_products').delete().eq('id', id)).then(function () { A.toast('Deleted.'); go('#/pim-products'); })
           .catch(function (e) { err.textContent = e.message; });
       });
-      if (id) box.appendChild(aplusPanel(w, id, versions));
+      if (id) box.appendChild(aplusPanel(w, id, versions, p));
     }).catch(function (e) { errorBox(box, e); });
   }
 
@@ -1706,21 +1706,180 @@
     return mods;
   }
 
-  function aplusPanel(w, pid, versions) {
-    var cols = [{ k: 'version', t: 'Version', num: true }, { k: 'name', t: 'Name', wide: true }, { k: 'locale', t: 'Language' }, { k: 'status', t: 'Status' },
-                { k: '_mods', t: 'Modules', num: true }, { k: 'updated_at', t: 'Updated', f: A.isoMinute }];
-    versions.forEach(function (v) { v._mods = (v.modules || []).length; });
+  // The simplified preview of one version made here (the editor and the A+ section's Preview)
+  function ownPreview(target, mods, emptyText) {
+    var ids = [];
+    mods.forEach(function (m) { (m.blocks || []).forEach(function (b) { if (b.image_id) ids.push(b.image_id); }); });
+    function draw(pics) {
+      target.innerHTML = '';
+      if (!mods.length) target.appendChild(h('p', { class: 'pim-hint', text: emptyText || 'This version is empty.' }));
+      mods.forEach(function (m) {
+        var M = MODS[m.type] || MODS.text, el = h('section', { class: 'pim-pv pim-pv--' + m.type + (m.side === 'right' ? ' is-right' : '') });
+        if (m.headline) el.appendChild(h('h3', { class: 'pim-pv__h', text: m.headline }));
+        if (m.subheadline) el.appendChild(h('p', { class: 'pim-pv__sub', text: m.subheadline }));
+        var grid = h('div', { class: 'pim-pv__blocks' });
+        (m.blocks || []).forEach(function (b) {
+          var src = b.image_id && pics[b.image_id] ? imgSrc(pics[b.image_id], 1000) : null;
+          grid.appendChild(h('div', { class: 'pim-pv__block' }, [M.img ? (src ? h('img', { src: src, alt: b.headline || '' }) : h('div', { class: 'pim-pv__ph', text: M.img })) : null,
+            b.headline ? h('strong', { text: b.headline }) : null, b.body ? h('p', { text: b.body }) : null]));
+        });
+        el.appendChild(grid);
+        if (m.rows) el.appendChild(h('table', { class: 'ecm-table' }, h('tbody', null, m.rows.filter(function (r) { return r.name || r.value; }).map(function (r) {
+          return h('tr', null, [h('th', { scope: 'row', text: r.name }), h('td', { text: r.value })]); }))));
+        target.appendChild(el);
+      });
+    }
+    if (!ids.length) { draw({}); return; }
+    q(sb().from('ecom_images').select('id,path,url').in('id', ids)).then(function (rows) {
+      var by = {}; rows.forEach(function (r) { by[r.id] = r; });
+      return signRows(rows).then(function () { draw(by); });
+    }).catch(function () { draw({}); });
+  }
+
+  // Amazon's A+ as Amazon shows it (owner, 19 Nov 2026: "make A+ content viewable … preview it in the A+ section"): the
+  // documents of the product's ASIN from ecom-amazon (aplus_get; only those this account made), standard and premium
+  // modules and the Brand Story, pictures straight from Amazon's media server. A simplified, read-only view.
+  function apImg(o, cls) {
+    if (!o || !o.uploadDestinationId) return null;
+    // the crop size reserves the picture's space before it arrives (no jumping while it loads)
+    var sz = o.imageCropSpecification && o.imageCropSpecification.size, wd = sz && sz.width && sz.width.value, ht = sz && sz.height && sz.height.value;
+    return h('img', { class: cls || 'apv-img', src: 'https://m.media-amazon.com/images/S/' + o.uploadDestinationId, loading: 'lazy',
+      width: wd ? String(wd) : null, height: ht ? String(ht) : null, alt: o.altText && o.altText !== 'aplus content image' ? o.altText : '' });
+  }
+  function apTxt(o) {
+    if (!o) return '';
+    if (typeof o.value === 'string') return o.value;
+    return (o.textList || []).map(function (t) { return (t && t.value) || ''; }).filter(Boolean).join('\n');
+  }
+  function apText(o, tag, cls) { var t = apTxt(o); return t ? h(tag || 'p', { class: cls || 'apv-p', text: t }) : null; }
+  function apBody(m) {
+    var k = Object.keys(m || {}).filter(function (x) { return x !== 'contentModuleType' && m[x] && typeof m[x] === 'object'; })[0];
+    return k ? m[k] : {};
+  }
+  function apKind(doc) {
+    if (/brand ?story/i.test(doc.content_type || '')) return 'Brand Story';
+    return (doc.modules || []).some(function (m) { return /^PREMIUM_/.test(m.contentModuleType || ''); }) ? 'Premium A+ content' : 'A+ content';
+  }
+  function apCard(img, title, asin, mp) {
+    var host = A.amzHost ? A.amzHost(mp) : '';
+    return h('div', { class: 'apv-card' }, [apImg(img, 'apv-card__img'), title ? h('span', { class: 'apv-card__t', text: title }) : null,
+      asin ? (host ? h('a', { class: 'apv-card__a', href: 'https://www.' + host + '/dp/' + encodeURIComponent(asin), target: '_blank', rel: 'noopener', text: asin })
+                   : h('span', { class: 'apv-card__a', text: asin })) : null]);
+  }
+  // any other module (Amazon's standard modules): headlines, texts, pictures and blocks in their order
+  function apGeneric(o, el, key) {
+    if (!o || typeof o !== 'object') return;
+    if (Array.isArray(o)) { o.forEach(function (x) { apGeneric(x, el, key); }); return; }
+    if (o.uploadDestinationId) { el.appendChild(apImg(o)); return; }
+    var head = /headline|title|navtext/i.test(key || '');
+    if (typeof o.value === 'string') { if (o.value) el.appendChild(h(head ? 'h4' : 'p', { class: head ? 'apv-h' : 'apv-p', text: o.value })); return; }
+    if (Array.isArray(o.textList)) { var t = apTxt(o); if (t) el.appendChild(h('p', { class: 'apv-p', text: t })); return; }
+    var keys = Object.keys(o).filter(function (k) { return k !== 'imageCropSpecification' && k !== 'decoratorSet' && !(k === 'mobileImage' && o.desktopImage); });
+    var multi = keys.filter(function (k) { return /^block\d+$/.test(k); }).length > 1, box = h('div', { class: 'apv-group' }), row = null;
+    keys.forEach(function (k) {
+      if (multi && /^block\d+$/.test(k)) {
+        if (!row) { row = h('div', { class: 'apv-row' }); box.appendChild(row); }
+        var col = h('div', { class: 'apv-col' }); apGeneric(o[k], col, k); row.appendChild(col);
+      } else apGeneric(o[k], box, k);
+    });
+    if (box.childNodes.length) el.appendChild(box);
+  }
+  function apModule(m, mp) {
+    var t = m.contentModuleType || '', b = apBody(m), el = h('section', { class: 'apv-mod', 'data-type': t });
+    function add(x) { if (x) el.appendChild(x); }
+    if (b.carouselCards) {   // a carousel: its tabs and one card at a time
+      var cards = b.carouselCards.map(apBody), stage = h('div', { class: 'apv-stage' }), nav = h('div', { class: 'apv-nav', role: 'tablist' });
+      var show = function (i) {
+        var c = cards[i] || {};
+        stage.replaceChildren();
+        [apImg(c.desktopImage || c.image || c.backgroundImage, 'apv-wide'), apText(c.headline, 'h4', 'apv-h'), apText(c.body || c.description)].forEach(function (x) { if (x) stage.appendChild(x); });
+        Array.prototype.forEach.call(nav.children, function (bt, j) { bt.setAttribute('aria-selected', String(j === i)); });
+      };
+      cards.forEach(function (c, i) { nav.appendChild(h('button', { type: 'button', role: 'tab', class: 'apv-nav__btn', text: apTxt(c.navText) || String(i + 1), onclick: function () { show(i); } })); });
+      add(apText(b.headline, 'h4', 'apv-h')); add(nav); add(stage); show(0);
+    } else if (b.faqs) {
+      add(apText(b.headline, 'h4', 'apv-h'));
+      b.faqs.forEach(function (f) { var x = apBody(f); add(h('details', { class: 'apv-faq' }, [h('summary', { text: apTxt(x.question) }), apText(x.answer)])); });
+    } else if (b.comparisonProducts || b.asinImages) {
+      add(apText(b.headline || b.title, 'h4', 'apv-h'));
+      add(h('div', { class: 'apv-cards' }, (b.comparisonProducts || b.asinImages).map(function (c) {
+        var x = apBody(c); return apCard(x.desktopImage || x.productImage || x.image, apTxt(x.productTitle), apTxt(x.productAsin), mp); })));
+    } else if (b.specificationList) {
+      add(apText(b.headline, 'h4', 'apv-h'));
+      add(h('table', { class: 'ecm-table apv-specs' }, h('tbody', null, b.specificationList.map(function (s) {
+        return h('tr', null, [h('th', { scope: 'row', text: apTxt(s.label) }), h('td', { text: apTxt(s.description) })]); }))));
+    } else if (b.desktopImage && !b.headline && !b.description && !b.body) {
+      add(apImg(b.desktopImage, 'apv-wide'));
+    } else apGeneric(b, el, '');
+    return el;
+  }
+  function apDocument(doc, mp) {
+    return h('div', { class: 'apv' + (/brand ?story/i.test(doc.content_type || '') ? ' apv--story' : '') }, (doc.modules || []).map(function (m) { return apModule(m, mp); }));
+  }
+
+  // The A+ section of a product (owner, 19 Nov 2026): the A+ that is on Amazon for its ASIN (read-only) and the
+  // versions made here — each with a Preview
+  function aplusPanel(w, pid, versions, p) {
+    var c = amzConn(), mp = amzMp();
     function create(from) {
       var row = { workspace_id: w.id, product_id: pid, name: from ? from.name : 'A+ content', locale: from ? from.locale : 'de-DE', modules: from ? from.modules : [] };
       q(sb().from('ecom_aplus').insert(row).select('id,version').single()).then(function (r) {
         A.toast('Version ' + r.version + ' created.'); go('#/pim-products/' + pid + '/aplus/' + r.id);
       }).catch(function (e) { A.toast(e.message, 'act'); });
     }
-    return h('fieldset', { class: 'pim-section' }, [h('legend', { text: 'A+ content (versions)' }),
-      h('div', { class: 'ecm-tools' }, [h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: '+ New A+ version', onclick: function () { create(null); } }),
-        versions.length ? h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Copy the newest as a new version', onclick: function () { create(versions[0]); } }) : null]),
-      versions.length ? A.dataTable('aplus-' + pid, { title: 'A+ versions', cols: cols, onRow: function (r) { go('#/pim-products/' + pid + '/aplus/' + r.id); } }, versions, { label: 'product ' + pid }).el
-                      : h('p', { class: 'pim-hint', text: 'No A+ content yet. A version holds up to 7 of Amazon\'s standard modules; make several versions and keep the one you submit.' })]);
+    function previewOwn(v) {
+      var body = h('div', { class: 'pim-aplus__preview pim-aplus__preview--dlg' });
+      var open = h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small', href: '#/pim-products/' + pid + '/aplus/' + v.id, text: 'Open in the editor' });
+      var d = dialog('A+ version ' + v.version + ' — preview', [h('p', { class: 'pim-hint', text: (v.name || 'A+ content') + ' · ' + v.locale + ' · ' + v.status + ' · ' +
+        (v.modules || []).length + ' modules · simplified preview' }), body], [open], true);
+      open.addEventListener('click', function () { d.close(); });
+      ownPreview(body, v.modules || [], 'This version is empty: open it in the editor and fill it with the product\'s data.');
+    }
+    function previewAmazon(doc) {
+      dialog((doc.name || apKind(doc)) + ' — on Amazon', [h('p', { class: 'pim-hint', text: apKind(doc) + ' · ' + String(doc.status || '').toLowerCase() + ' · ' + doc.locale +
+        (doc.updated ? ' · updated ' + A.fmtTime(doc.updated) : '') + ' · as on ' + (A.amzHost ? A.amzHost(mp) : 'Amazon') + ', simplified' }), apDocument(doc, mp)], [], true);
+    }
+    var amz = h('div', { class: 'pim-amzaplus', 'aria-live': 'polite' });
+    function loadAmazon() {
+      if (!p || !p.asin) { amz.replaceChildren(h('p', { class: 'pim-hint', text: 'Add an ASIN to see the A+ that is on Amazon for this product.' })); return; }
+      if (!c) { amz.replaceChildren(h('p', { class: 'pim-hint', text: 'Connect an Amazon account (Settings) to see the A+ that is on Amazon.' })); return; }
+      amz.replaceChildren(h('p', { class: 'pim-hint', text: 'Looking for the A+ of ASIN ' + p.asin + ' on Amazon ' + mpLabel(mp) + '…' }));
+      A.invoke('ecom-amazon', { action: 'aplus_get', connection_id: c.id, marketplace_id: mp, asin: p.asin }).then(function (r) {
+        amz.innerHTML = '';
+        if (!r.documents.length) {
+          amz.appendChild(h('p', { class: 'pim-hint', text: 'No A+ on Amazon ' + mpLabel(mp) + ' for ASIN ' + p.asin + ' from this account (Amazon does not give out A+ made by another brand owner).' }));
+          return;
+        }
+        r.documents.forEach(function (doc) {
+          amz.appendChild(h('div', { class: 'pim-amzdoc' }, [h('div', { class: 'pim-amzdoc__t' }, [h('strong', { text: doc.name || apKind(doc) }),
+            h('span', { class: 'pim-hint', text: apKind(doc) + ' · ' + String(doc.status || '').toLowerCase() + ' · ' + (doc.modules || []).length + ' modules · ' + doc.locale +
+              (doc.updated ? ' · updated ' + A.fmtTime(doc.updated) : '') })]),
+            h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: 'Preview', 'aria-label': 'Preview ' + (doc.name || apKind(doc)), onclick: function () { previewAmazon(doc); } })]));
+        });
+      }).catch(function (e) {
+        amz.replaceChildren(h('p', { class: 'pim-hint', text: /unknown action/i.test(e.message) ? 'To see the A+ that is on Amazon, the server function ecom-amazon needs its update (paste it in Supabase once).'
+          : 'The A+ on Amazon could not be read: ' + e.message }), h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Try again', onclick: loadAmazon }));
+      });
+    }
+    loadAmazon();
+    var list = versions.length ? h('div', { class: 'ecm-tablewrap' }, h('table', { class: 'ecm-table' }, [
+      h('caption', { class: 'visually-hidden', text: 'A+ versions of product ' + pid }),
+      h('thead', null, h('tr', null, ['Version', 'Name', 'Language', 'Status', 'Modules', 'Updated', ''].map(function (t, i) {
+        return h('th', { scope: 'col', class: i === 0 || i === 4 ? 'is-num' : null }, t ? t : h('span', { class: 'visually-hidden', text: 'Actions' })); }))),
+      h('tbody', null, versions.map(function (v) {
+        return h('tr', null, [h('td', { class: 'is-num', text: String(v.version) }), h('td', { text: v.name || '' }), h('td', { text: v.locale || '' }), h('td', { text: v.status || '' }),
+          h('td', { class: 'is-num', text: String((v.modules || []).length) }), h('td', { text: A.isoMinute(v.updated_at) }),
+          h('td', null, h('span', { class: 'pim-act__in' }, [
+            h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Preview', 'aria-label': 'Preview A+ version ' + v.version, onclick: function () { previewOwn(v); } }),
+            h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small', href: '#/pim-products/' + pid + '/aplus/' + v.id, text: 'Open', 'aria-label': 'Open A+ version ' + v.version })]))]);
+      }))])) : h('p', { class: 'pim-hint', text: 'No versions made here yet. A version holds up to 7 of Amazon\'s standard modules; make several and keep the one you submit.' });
+    return h('fieldset', { class: 'pim-section' }, [h('legend', { text: 'A+ content' }),
+      h('div', { class: 'pim-aplus__head' }, [h('h3', { class: 'ecm-h3', text: 'On Amazon ' + (mp ? mpLabel(mp) : '') }),
+        h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Reload', onclick: loadAmazon })]), amz,
+      h('div', { class: 'pim-aplus__head' }, [h('h3', { class: 'ecm-h3', text: 'Versions made here' }),
+        h('span', { class: 'pim-act__in' }, [h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: '+ New A+ version', onclick: function () { create(null); } }),
+          versions.length ? h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Copy the newest as a new version', onclick: function () { create(versions[0]); } }) : null])]),
+      list]);
   }
 
   function renderAplus(main, pid, vid) {
@@ -1797,32 +1956,9 @@
         } else editor.appendChild(h('p', { class: 'pim-hint', text: 'An A+ document holds at most 7 modules.' }));
       }
       function paintPreview() {
-        var ids = []; mods.forEach(function (m) { (m.blocks || []).forEach(function (b) { if (b.image_id) ids.push(b.image_id); }); });
-        var draw = function (pics) {
-          preview.innerHTML = '';
-          preview.appendChild(h('p', { class: 'pim-hint', text: 'Preview (simplified)' }));
-          if (!mods.length) preview.appendChild(h('p', { class: 'pim-hint', text: 'This version is empty. Fill it with the product\'s data, or add a module on the left.' }));
-          mods.forEach(function (m) {
-            var M = MODS[m.type] || MODS.text, el = h('section', { class: 'pim-pv pim-pv--' + m.type + (m.side === 'right' ? ' is-right' : '') });
-            if (m.headline) el.appendChild(h('h3', { class: 'pim-pv__h', text: m.headline }));
-            if (m.subheadline) el.appendChild(h('p', { class: 'pim-pv__sub', text: m.subheadline }));
-            var grid = h('div', { class: 'pim-pv__blocks' });
-            (m.blocks || []).forEach(function (b) {
-              var src = b.image_id && pics[b.image_id] ? imgSrc(pics[b.image_id], 1000) : null;
-              grid.appendChild(h('div', { class: 'pim-pv__block' }, [M.img ? (src ? h('img', { src: src, alt: b.headline || '' }) : h('div', { class: 'pim-pv__ph', text: M.img })) : null,
-                b.headline ? h('strong', { text: b.headline }) : null, b.body ? h('p', { text: b.body }) : null]));
-            });
-            el.appendChild(grid);
-            if (m.rows) el.appendChild(h('table', { class: 'ecm-table' }, h('tbody', null, m.rows.filter(function (r) { return r.name || r.value; }).map(function (r) {
-              return h('tr', null, [h('th', { scope: 'row', text: r.name }), h('td', { text: r.value })]); }))));
-            preview.appendChild(el);
-          });
-        };
-        if (!ids.length) { draw({}); return; }
-        q(sb().from('ecom_images').select('id,path,url').in('id', ids)).then(function (rows) {
-          var by = {}; rows.forEach(function (r) { by[r.id] = r; });
-          return signRows(rows).then(function () { draw(by); });
-        }).catch(function () { draw({}); });
+        var body = h('div');
+        preview.replaceChildren(h('p', { class: 'pim-hint', text: 'Preview (simplified)' }), body);
+        ownPreview(body, mods, 'This version is empty. Fill it with the product\'s data, or add a module on the left.');
       }
       function values() { return { name: name.value.trim() || 'A+ content', locale: locale.value, status: status.value, note: note.value.trim() || null, modules: mods }; }
       var save = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: 'Save version ' + v.version });
