@@ -30,7 +30,7 @@
     ['fe', 'Far East (Japan, Australia, Singapore)']
   ];
   var REGION_NAME = { eu: 'Europe', na: 'North America', fe: 'Far East' };
-  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', inventory_ledger: 'Stock development (ledger)', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance transactions', catalog: 'Product monitor', reviews: 'Review topics' };
+  var DATASET = { listings: 'Products (listings)', fba_inventory: 'FBA inventory', inventory_ledger: 'Stock development (ledger)', repeat_purchase: 'Repeat purchase', business: 'Business report', finances: 'Finance transactions', catalog: 'Product monitor', reviews: 'Review topics', search_queries: 'Search terms (keywords)' };
   var STATUS = { queued: 'Waiting', running: 'Loading', waiting: 'Amazon is preparing', done: 'Done', no_data: 'No data', error: 'Error', cancelled: 'Stopped', ok: 'Keys work', new: 'New', disabled: 'Off' };
   var OPEN = { queued: 1, running: 1, waiting: 1 };
 

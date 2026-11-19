@@ -274,7 +274,16 @@
 .pim-list thead th.pim-act { background: var(--surface); z-index: 1; }
 .pim-list tbody tr:hover td.pim-act, .pim-list tr.is-editing td { background: var(--surface); }
 .pim-act__in { display: inline-flex; gap: var(--space-1); }
-@media (max-width: 599px) { .pim-act__in { flex-direction: column; align-items: stretch; } .pim-act__in .ecm-btn { justify-content: center; } .pim-long { display: none; } .pim-mpwrap { margin-left: 0; } }
+/* Edit (pencil) and Open (eye) pinned on the left, Sync (Amazon smile) on the right (owner, 20 Nov 2026) */
+.pim-list th.pim-act--l, .pim-list td.pim-act--l { left: 0; right: auto; box-shadow: 1px 0 0 var(--rule); }
+.pim-iconbtn { width: var(--ecm-ctl-sm); padding: 0; justify-content: center; }
+.pim-ico { display: block; flex: none; }
+.pim-ico--amazon { color: #ff9900; }   /* Amazon's orange smile */
+.pim-syncbtn { gap: var(--space-1); }
+@media (max-width: 599px) {
+  .pim-mpwrap { margin-left: 0; }
+  .pim-list th.pim-act:not(.pim-act--l), .pim-list td.pim-act:not(.pim-act--l) { position: static; box-shadow: none; }   /* phones: only Edit / Open stay pinned */
+}
 .pim-list td.is-wide { min-width: 160px; max-width: 320px; white-space: nowrap; }
 .pim-1line { display: block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* the whole name on hover */
 .pim-list tr.is-editing td { vertical-align: middle; }
@@ -346,6 +355,30 @@
 .apv-card__img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; }
 .apv-card__a { color: var(--partner); }
 .apv-specs th { width: 35%; }
+/* Keywords per product (20 Nov 2026): score, terms worth adding, each bullet, all terms; Buy Box beside Sync */
+.pim-kw__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); }
+.pim-kw__score { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.pim-kw__score p { margin: 2px 0 0; }
+.pim-kw__big { display: inline-grid; place-items: center; min-width: 52px; height: 52px; box-sizing: border-box; border-radius: 999px; border: 3px solid var(--rule);
+  font-family: var(--font-display); font-size: var(--ecm-kpi); font-weight: 700; }
+.pim-kw__big--ok { border-color: var(--ok); color: var(--ok); }
+.pim-kw__big--mid { border-color: var(--watch); color: var(--watch); }
+.pim-kw__big--low { border-color: var(--act); color: var(--act); }
+.pim-kw__missing { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); }
+.pim-kw__chip { padding-right: var(--space-2); }
+.pim-kw__bullets { display: grid; gap: var(--space-1); margin-bottom: var(--space-2); }
+.pim-kw__bullet { display: grid; grid-template-columns: 60px 120px 44px minmax(0, 1fr); gap: var(--space-2); align-items: center; font-size: var(--type-caption); }
+.pim-kw__bar { height: 8px; background: var(--surface); border-radius: 999px; overflow: hidden; }
+.pim-kw__bar > span { display: block; height: 100%; background: var(--accent); }
+.pim-kw__bs { text-align: right; font-variant-numeric: tabular-nums; }
+.pim-kw__bt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pim-kw__all summary { cursor: pointer; font-size: var(--type-body-sm); font-weight: 600; margin: var(--space-1) 0; }
+.pim-kw__yes { color: var(--ok); font-weight: 700; }
+.pim-kw__part { color: var(--watch); }
+.pim-kw__no { color: var(--ink-soft); }
+.pim-kw tr.is-other td { color: var(--ink-soft); }
+.pim-bb { font-size: var(--type-caption); padding: 2px var(--space-2); border: 1px solid var(--rule); border-radius: 999px; background: var(--surface-raised); }
+@media (max-width: 599px) { .pim-kw__bullet { grid-template-columns: 56px minmax(0, 1fr) 40px; } .pim-kw__bt { grid-column: 1 / -1; } }
 
 /* 6. Settings parts -------------------------------------------------------- */
 .ecm-accounts { display: grid; gap: var(--space-3); }

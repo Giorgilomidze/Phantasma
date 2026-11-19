@@ -44,6 +44,24 @@
   function kb(b) { return b == null ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB'; }
   function go(hash) { if (location.hash === hash) A.go(); else location.hash = hash; }
   function norm(v) { return String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' '); }
+  // Small line icons, drawn here (inline SVG; owner, 20 Nov 2026): pencil = edit, eye = open, smile arrow = Amazon
+  var ICON = {
+    pencil: ['M4 20h4L19 9l-4-4L4 16v4z', 'M13.5 6.5l4 4'],
+    eye: ['M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
+    amazon: ['M3 12.5c5.2 3.8 12.8 3.8 18 0', 'M17.4 10.6l3.6 1.9-1.9 3.4']
+  };
+  function icon(name, cls) {
+    var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+    [['viewBox', '0 0 24 24'], ['width', '16'], ['height', '16'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'pim-ico' + (cls ? ' ' + cls : '')]]
+      .forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    ICON[name].forEach(function (d) {
+      var path = document.createElementNS(NS, 'path');
+      [['d', d], ['fill', 'none'], ['stroke', 'currentColor'], ['stroke-width', '2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]
+        .forEach(function (a) { path.setAttribute(a[0], a[1]); });
+      svg.appendChild(path);
+    });
+    return svg;
+  }
   function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   // Every row of a query (the database gives at most 1000 per request); make() builds the query again per page
   function pageAll(make) {
@@ -534,6 +552,7 @@
     { k: 'sku', t: 'SKU', mono: true, ed: 'sku' }, { k: 'asin', t: 'ASIN', mono: true, ed: 'asin' }, { k: 'gtin', t: 'GTIN / EAN', mono: true, ed: 'gtin' },
     { k: 'pzn', t: 'PZN', mono: true }, { k: 'title', t: 'Product name', wide: true },
     { k: '_maker', t: 'Manufacturer', ed: 'maker' }, { k: '_brand', t: 'Brand', ed: 'brand' }, { k: 'logistics', t: 'Logistics', ed: 'logistics' },
+    { k: '_bbp', t: 'Buy Box', num: true, pct: true, tip: true },
     { k: '_pics', t: 'Pictures', num: true }, { k: '_aplus', t: 'A+', num: true }, { k: 'status', t: 'Status' }, { k: 'updated_at', t: 'Updated', f: A.isoMinute }];
   var busy = false;   // one import or bulk fill at a time
 
@@ -550,13 +569,36 @@
       pageAll(function () { return sb().from('ecom_products').select(LIST_SEL).eq('workspace_id', w.id).order('id', { ascending: false }); }),
       q(sb().from('ecom_brands').select('id,name,alt_name,manufacturer_id').eq('workspace_id', w.id).order('name')),
       q(sb().from('ecom_manufacturers').select('id,name,alt_name').eq('workspace_id', w.id).order('name')),
-      pageAll(function () { return sb().from('ecom_aplus').select('product_id').eq('workspace_id', w.id).order('id'); })
+      pageAll(function () { return sb().from('ecom_aplus').select('product_id').eq('workspace_id', w.id).order('id'); }),
+      buyBoxData(amzMp())
     ]).then(function (res) {
-      var ctx = { w: w, rows: res[0], brands: res[1], makers: res[2], ap: {}, made: { makers: [], brands: [] } };
+      var ctx = { w: w, rows: res[0], brands: res[1], makers: res[2], ap: {}, made: { makers: [], brands: [] }, bb: res[4] };
       res[3].forEach(function (a) { ctx.ap[a.product_id] = (ctx.ap[a.product_id] || 0) + 1; });
       ctx.rows.forEach(function (r) { derive(ctx, r); });
       return ctx;
     });
+  }
+  // Buy Box per product (owner, 20 Nov 2026: "latest buybox % if available"): the featured-offer share of the newest
+  // Business Report of the marketplace chosen on the page (30 days), by SKU, else by ASIN (the row with most sessions)
+  function buyBoxData(mp) {
+    var c = amzConn();
+    if (!c || !mp) return Promise.resolve(null);
+    return q(sb().from('ecom_amz_business_asin').select('sku,child_asin,buy_box_pct,sessions,period_start,period_end').eq('connection_id', c.id)
+      .eq('marketplace_id', mp).order('period_end', { ascending: false }).limit(1000)).then(function (rows) {
+      var out = { mp: mp, bySku: {}, byAsin: {}, start: rows.length ? rows[0].period_start : null, end: rows.length ? rows[0].period_end : null };
+      rows.forEach(function (r) {
+        if (r.period_end !== out.end || r.buy_box_pct == null) return;
+        if (r.sku) out.bySku[r.sku] = r;
+        var cur = out.byAsin[r.child_asin];
+        if (!cur || (r.sessions || 0) > (cur.sessions || 0)) out.byAsin[r.child_asin] = r;
+      });
+      return out;
+    }).catch(function () { return null; });
+  }
+  function buyBoxOf(bb, p) { var r = bb ? (p.sku && bb.bySku[p.sku]) || (p.asin && bb.byAsin[p.asin]) : null; return r ? Number(r.buy_box_pct) : null; }
+  function buyBoxTip(bb) {
+    return bb && bb.end ? 'Buy Box (featured offer) share on ' + mpLabel(bb.mp) + ', Business Report ' + A.fmtDay(bb.start) + ' – ' + A.fmtDay(bb.end)
+                        : 'Buy Box: no Business Report for this marketplace yet (Settings → Sync)';
   }
   function byId(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
   function nameOf(list, id) { var x = id ? byId(list, id) : null; return x ? x.name : ''; }
@@ -569,7 +611,7 @@
   }
   function derive(ctx, r) {
     r._brand = nameOf(ctx.brands, r.brand_id); r._maker = nameOf(ctx.makers, r.manufacturer_id);
-    r._pics = (r.image_ids || []).length; r._aplus = ctx.ap[r.id] || 0;
+    r._pics = (r.image_ids || []).length; r._aplus = ctx.ap[r.id] || 0; r._bbp = buyBoxOf(ctx.bb, r);
     r._all = norm([r.id, r.sku, r.asin, r.gtin, r.pzn, r.title, r._maker, r._brand, r.logistics, r.status].join(' '));
     return r;
   }
@@ -637,7 +679,7 @@
     if (conn) {
       var mpSel = h('select', { class: 'ecm-input pim-mp', id: 'pim-mp' }, conn.marketplaces.map(function (m) { return h('option', { value: m.id, text: mpLabel(m.id) }); }));
       mpSel.value = amzMp();
-      mpSel.addEventListener('change', function () { A.store('ecm_pim_mp', mpSel.value); });
+      mpSel.addEventListener('change', function () { A.store('ecm_pim_mp', mpSel.value); reload(); });   // Buy Box of that marketplace
       mpBox = h('label', { class: 'pim-mpwrap', for: 'pim-mp', title: 'Sync with Amazon and the Amazon imports read the catalog of this marketplace (its language)' },
         [h('span', { text: 'Amazon' }), mpSel]);
     }
@@ -671,19 +713,19 @@
     var csv = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Download for Excel (CSV)', title: 'The products shown, with every field; Upload Excel reads this file back' });
     csv.addEventListener('click', function () { exportCsv(ctx, st.shown, csv); });
     function cls(c) { return [c.num ? 'is-num' : '', c.wide ? 'is-wide' : '', c.mono ? 'ecm-mono' : ''].join(' ').trim(); }
-    function cellText(c, r) { var v = r[c.k]; if (c.f) v = c.f(v); return v == null || v === '' ? '' : c.num ? A.fmtInt(v) : String(v); }
+    function cellText(c, r) { var v = r[c.k]; if (c.f) v = c.f(v); return v == null || v === '' ? '' : c.pct ? A.fmtNum(v, 1) + ' %' : c.num ? A.fmtInt(v) : String(v); }
     function head() {
       thead.innerHTML = '';
-      var tr = h('tr');
+      var tr = h('tr', null, h('th', { scope: 'col', class: 'pim-act pim-act--l' }, h('span', { class: 'visually-hidden', text: 'Edit or open' })));
       L_COLS.forEach(function (c) {
         var on = st.sort === c.k;
-        tr.appendChild(h('th', { scope: 'col', class: c.num ? 'is-num' : null, 'aria-sort': on ? (st.dir > 0 ? 'ascending' : 'descending') : 'none' },
+        tr.appendChild(h('th', { scope: 'col', class: c.num ? 'is-num' : null, title: c.tip ? buyBoxTip(ctx.bb) : null, 'aria-sort': on ? (st.dir > 0 ? 'ascending' : 'descending') : 'none' },
           h('button', { type: 'button', class: 'ecm-sort', onclick: function () {
             if (st.sort !== c.k) { st.sort = c.k; st.dir = 1; } else if (st.dir > 0) st.dir = -1; else { st.sort = null; st.dir = 1; }
             apply();
           } }, [c.t, h('span', { class: 'ecm-sort__arrow', 'aria-hidden': 'true', text: on ? (st.dir > 0 ? '▲' : '▼') : '↕' })])));
       });
-      tr.appendChild(h('th', { scope: 'col', class: 'pim-act' }, h('span', { class: 'visually-hidden', text: 'Actions' })));
+      tr.appendChild(h('th', { scope: 'col', class: 'pim-act' }, h('span', { class: 'visually-hidden', text: 'Sync with Amazon' })));
       thead.appendChild(tr);
     }
     function apply(keep) {
@@ -706,7 +748,7 @@
       tbody.innerHTML = '';
       var start = pager.page() * A.PAGE_ROWS, page = st.shown.slice(start, start + A.PAGE_ROWS);
       if (!page.length) {
-        tbody.appendChild(h('tr', null, h('td', { colspan: String(L_COLS.length + 1), class: 'pim-empty', text: ctx.rows.length ? 'No product matches these filters.'
+        tbody.appendChild(h('tr', null, h('td', { colspan: String(L_COLS.length + 2), class: 'pim-empty', text: ctx.rows.length ? 'No product matches these filters.'
           : 'No products yet: add one, upload an Excel file or create them from your Amazon listings.' })));
         return;
       }
@@ -719,36 +761,37 @@
     // the product name in one line; the whole name on hover (owner, 19 Nov 2026)
     function cell(c, r) {
       var t = cellText(c, r);
-      return c.wide ? h('td', { class: cls(c) }, h('span', { class: 'pim-1line', title: t, text: t })) : h('td', { class: cls(c), text: t });
+      return c.wide ? h('td', { class: cls(c) }, h('span', { class: 'pim-1line', title: t, text: t })) : h('td', { class: cls(c), text: t, title: c.tip ? buyBoxTip(ctx.bb) : null });
     }
     function viewRow(r) {
-      var tr = h('tr');
+      var tr = h('tr', null, h('td', { class: 'pim-act pim-act--l' }, h('span', { class: 'pim-act__in' }, [
+        h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small pim-iconbtn', 'data-edit': String(r.id), 'aria-label': 'Edit product ' + r.id + ' in this row',
+          title: 'Click to edit product elements', onclick: function () { st.edit = r.id; draw(); var el = tbody.querySelector('tr.is-editing input'); if (el) el.focus(); } }, icon('pencil')),
+        h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small pim-iconbtn', href: '#/pim-products/' + r.id, 'aria-label': 'Open product ' + r.id,
+          title: 'Open the product details' }, icon('eye'))])));
       L_COLS.forEach(function (c) { tr.appendChild(cell(c, r)); });
-      tr.appendChild(h('td', { class: 'pim-act' }, h('span', { class: 'pim-act__in' }, [
-        h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: 'Edit', 'data-edit': String(r.id), 'aria-label': 'Edit product ' + r.id + ' in this row',
-          onclick: function () { st.edit = r.id; draw(); var el = tbody.querySelector('tr.is-editing input'); if (el) el.focus(); } }),
-        h('a', { class: 'ecm-btn ecm-btn--ghost ecm-btn--small', href: '#/pim-products/' + r.id, text: 'Open', 'aria-label': 'Open product ' + r.id }),
-        syncButton(r, null).el])));
+      tr.appendChild(h('td', { class: 'pim-act' }, syncButton(r, null).el));
       return tr;
     }
     // "Sync with Amazon" of one row: from the saved ASIN / EAN, or from what is typed in the quick edit
     function syncButton(r, typed) {
-      var b = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', 'aria-label': 'Sync product ' + r.id + ' with Amazon' });
-      // one text piece (the button's flex gap would otherwise widen the space); "Sync" only on phones
-      function label() { b.replaceChildren(h('span', null, ['Sync', h('span', { class: 'pim-long', text: ' with Amazon' })])); }
+      var b = h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small pim-syncbtn', 'aria-label': 'Sync product ' + r.id + ' with Amazon' });
+      function label(text) { b.replaceChildren(icon('amazon', 'pim-ico--amazon'), h('span', { text: text || 'Sync' })); }
       label();
       function has() { var t = typed ? typed() : r; return !!(t.asin || t.gtin); }
       function state() {
         b.disabled = !amzConn() || !has();
-        b.title = !amzConn() ? 'Connect an Amazon account first (Settings).' : !has() ? 'Add an ASIN (or an EAN) first.'
-          : 'Fill this product from Amazon ' + mpLabel(amzMp()) + (r.amazon_synced_at ? ' · last time ' + A.ago(r.amazon_synced_at) : '');
+        b.title = !amzConn() ? 'Sync with Amazon: connect an Amazon account first (Settings).' : !has() ? 'Sync with Amazon: add an ASIN (or an EAN) first.'
+          : 'Sync with Amazon: fills this product from Amazon\'s catalog on ' + mpLabel(amzMp()) + ', by its ASIN (or by its EAN when it has no ASIN). ' +
+            'You see what Amazon has beside what the product has and tick what to take; nothing changes before you save.' +
+            (r.amazon_synced_at ? ' Last time: ' + A.ago(r.amazon_synced_at) + '.' : '');
       }
       state();
       b.addEventListener('click', function () {
         var t = typed ? typed() : null;
         if (t && t.error) { A.toast(t.error, 'act'); return; }
         if (t) delete t.error;
-        b.disabled = true; b.textContent = 'Asking Amazon…';
+        b.disabled = true; label('Asking…');
         syncOne(ctx, r, t, function (row) {
           replaceRow(ctx, row); st.edit = null; apply(true);
           A.toast('Product #' + row.id + ' filled from Amazon ' + A.mpCode(row.amazon_marketplace) + ' and saved.');
@@ -812,8 +855,9 @@
         if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); doSave(); }
         else if (e.key === 'Escape') { e.preventDefault(); leaveEdit(r.id); }
       });
+      tr.appendChild(h('td', { class: 'pim-act pim-act--l' }, h('span', { class: 'pim-act__in' }, [save, cancel])));
       L_COLS.forEach(function (col) { tr.appendChild(col.ed ? h('td', { class: (cls(col) + ' is-edit').trim() }, c[col.ed]) : cell(col, r)); });
-      tr.appendChild(h('td', { class: 'pim-act' }, h('span', { class: 'pim-act__in' }, [save, cancel, sy.el])));
+      tr.appendChild(h('td', { class: 'pim-act' }, sy.el));
       return tr;
     }
     apply();
@@ -1473,6 +1517,138 @@
     }).catch(function (e) { A.toast(e.message, 'act'); }).then(function () { btn.disabled = false; });
   }
 
+  // 4f. Keywords per product (owner, 20 Nov 2026: "keywords … per page … the rate to existing product content - and
+  // bullets"). Amazon's search terms of the product (Brand Analytics → Search Query Performance, data set
+  // search_queries, table ecom_amz_search_queries) against the product's own text: are all words of a term in the
+  // name, the bullets, the description? A term counts by the square root of its weekly searches, so one very big term
+  // does not decide alone. Words match also in longer forms and inside compound words (kapsel → kapseln, nacken →
+  // nackenwärmer). The rating follows the form while you type. ----------------------------------------------------
+  var KW_STOP = ('für fur mit und oder der die das den dem des ein eine einer eines einem im in am an auf aus bei zu zum zur von vom ohne ' +
+    'pour avec et le la les de du des un une per con e il lo gli di da para y el los las del for with and or the a an of on to by from without').split(' ');
+  function kwTokens(s) { return norm(s).replace(/[^\p{L}\p{N}]+/gu, ' ').split(' ').filter(function (t) { return t && KW_STOP.indexOf(t) < 0; }); }
+  function kwHas(words, t) {
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (w === t) return true;
+      if (t.length >= 4 && w.indexOf(t) === 0) return true;                                        // kapsel → kapseln
+      if (w.length >= 4 && t.indexOf(w) === 0 && t.length - w.length <= 2) return true;            // kapseln → kapsel
+      if (t.length >= 5 && w.indexOf(t) > 0) return true;                                          // nacken → wärmenacken
+    }
+    return false;
+  }
+  function kwCover(term, words) { var ts = kwTokens(term); return ts.length ? ts.filter(function (t) { return kwHas(words, t); }).length / ts.length : 0; }
+  // a term naming another brand or manufacturer of the PIM (not the product's own): Amazon does not allow other brands'
+  // names in a listing, so it is neither suggested nor counted
+  function kwOther(term, others) {
+    var t = ' ' + kwTokens(term).join(' ') + ' ';
+    return (others || []).some(function (b) { return b && t.indexOf(' ' + b + ' ') >= 0; });
+  }
+  function kwRate(rows, text, others) {
+    var W = { title: kwTokens(text.title), content: kwTokens(text.content), bullets: (text.bullets || []).map(kwTokens) };
+    W.bulletsAll = [].concat.apply([], W.bullets);
+    W.all = W.title.concat(W.bulletsAll, W.content);
+    var tot = 0, sum = { score: 0, title: 0, bullets: 0, content: 0 }, perBullet = W.bullets.map(function () { return { w: 0, terms: [] }; });
+    var terms = rows.map(function (r) {
+      var w = Math.sqrt(Math.max(1, r.query_volume || 0));
+      if (kwOther(r.search_query, others)) return { r: r, w: w, other: true, title: false, bullets: false, content: false, part: 0 };
+      var inT = kwCover(r.search_query, W.title) === 1, inB = kwCover(r.search_query, W.bulletsAll) === 1, inC = kwCover(r.search_query, W.content) === 1;
+      var part = kwCover(r.search_query, W.all);
+      tot += w;
+      sum.score += w * (inT ? 1 : inB ? 0.8 : inC ? 0.5 : part * 0.3);
+      if (inT) sum.title += w; if (inB) sum.bullets += w; if (inC) sum.content += w;
+      W.bullets.forEach(function (bw, i) { if (bw.length && kwCover(r.search_query, bw) === 1) { perBullet[i].w += w; perBullet[i].terms.push(r.search_query); } });
+      return { r: r, w: w, title: inT, bullets: inB, content: inC, part: part };
+    });
+    function pc(x) { return tot ? Math.round(100 * x / tot) : 0; }
+    return { terms: terms, score: pc(sum.score), title: pc(sum.title), bullets: pc(sum.bullets), content: pc(sum.content),
+             perBullet: perBullet.map(function (b, i) { return { n: i + 1, empty: !W.bullets[i].length, score: pc(b.w), terms: b.terms }; }),
+             missing: terms.filter(function (t) { return !t.other && !t.title && !t.bullets; }).sort(function (a, b) { return b.w - a.w; }).slice(0, 8) };
+  }
+  // The keyword sync of one marketplace from the product page (the same jobs as Settings → Sync), followed to the end
+  function keywordSync(c, mp, line) {
+    return A.invoke('ecom-amazon', { action: 'sync', connection_id: c.id, datasets: ['search_queries'], marketplaces: [mp] }).then(function (r) {
+      if (r.already_running && !(r.jobs || []).some(function (j) { return j.dataset === 'search_queries'; }))
+        throw new Error('Another sync is running (Settings → Sync); try again when it has finished.');
+      var t0 = Date.now();
+      return (function step() {
+        return wait(5000).then(function () { return A.invoke('ecom-amazon', { action: 'step', connection_id: c.id }); }).then(function (s) {
+          var jobs = s.jobs || [], open = jobs.filter(function (j) { return /queued|running|waiting/.test(j.status); });
+          if (!open.length) return jobs.filter(function (j) { return j.dataset === 'search_queries'; });
+          line.textContent = 'Amazon is preparing the search terms of ' + mpLabel(mp) + '… ' + Math.round((Date.now() - t0) / 1000) + ' s (usually 1 to 3 minutes)';
+          if (Date.now() - t0 > 10 * 60000) throw new Error('Amazon has not finished after 10 minutes; Settings → Sync shows how far it is.');
+          return step();
+        });
+      })();
+    });
+  }
+  function keywordPanel(p, getText, others) {
+    var c = amzConn(), mp = amzMp(), rows = [], period = null, busyKw = false;
+    var body = h('div'), line = h('p', { class: 'pim-hint', 'aria-live': 'polite' });
+    var el = h('fieldset', { class: 'pim-section pim-kw' }, [h('legend', { text: 'Keywords' }), body, line]);
+    var mark = function (on, part) { return on ? h('span', { class: 'pim-kw__yes', title: 'all words', text: '✓' }) : part >= 0.5 ? h('span', { class: 'pim-kw__part', title: 'some words', text: '◐' }) : h('span', { class: 'pim-kw__no', title: 'missing', text: '–' }); };
+    function getNewest() {
+      if (busyKw || !c) return;
+      busyKw = true; paint();
+      keywordSync(c, mp, line).then(function (jobs) {
+        var bad = jobs.filter(function (j) { return j.status === 'error'; })[0];
+        line.textContent = bad ? 'Amazon: ' + bad.message : jobs.length ? (jobs[0].message || '') : '';
+        return load();
+      }).catch(function (e) { line.textContent = e.message; }).then(function () { busyKw = false; paint(); });
+    }
+    function load() {
+      if (!c || !p.asin) { paint(); return Promise.resolve(); }
+      return q(sb().from('ecom_amz_search_queries').select('search_query,query_score,query_volume,click_share,purchase_share,impression_share,period_start,period_end')
+        .eq('connection_id', c.id).eq('marketplace_id', mp).eq('asin', p.asin).order('period_end', { ascending: false }).order('query_score', { ascending: true }).limit(200))
+        .then(function (r) {
+          period = r.length ? { start: r[0].period_start, end: r[0].period_end } : null;
+          rows = r.filter(function (x) { return period && x.period_end === period.end; });
+          paint();
+        }).catch(function (e) { rows = []; period = null; body.replaceChildren(h('p', { class: 'pim-hint', text: /0049|not there|schema cache|does not exist/i.test(e.message) ? 'The keywords need supabase/0049-ecom-search-queries.sql (Supabase → SQL Editor).' : e.message })); });
+    }
+    function paint() {
+      body.innerHTML = '';
+      var newest = c ? h('button', { type: 'button', class: 'ecm-btn ecm-btn--ghost ecm-btn--small', text: busyKw ? 'Asking Amazon…' : 'Get the newest from Amazon', disabled: busyKw,
+        title: 'Brand Analytics → Search Query Performance of ' + mpLabel(mp) + ' for the PIM products (the last full week)', onclick: getNewest }) : null;
+      if (!p.asin) { body.appendChild(h('p', { class: 'pim-hint', text: 'Add an ASIN to see what customers search for this product.' })); return; }
+      if (!c) { body.appendChild(h('p', { class: 'pim-hint', text: 'Connect an Amazon account (Settings) to see the search terms.' })); return; }
+      if (!rows.length) {
+        body.append(h('p', { class: 'pim-hint', text: 'No search terms yet for ASIN ' + p.asin + ' on ' + mpLabel(mp) + '. Amazon gives them for products of brands in your Brand Registry.' }), h('div', { class: 'ecm-row' }, newest));
+        return;
+      }
+      var R = kwRate(rows, getText(), others);
+      body.append(
+        h('div', { class: 'pim-kw__head' }, [h('span', { class: 'pim-hint', text: mpLabel(mp) + ' · week ' + A.fmtDay(period.start) + ' – ' + A.fmtDay(period.end) + ' · the ' + rows.length +
+          ' most important search terms (test mode)' }), newest]),
+        h('div', { class: 'pim-kw__score' }, [
+          h('span', { class: 'pim-kw__big pim-kw__big--' + (R.score >= 70 ? 'ok' : R.score >= 40 ? 'mid' : 'low'), text: String(R.score) }),
+          h('div', null, [h('strong', { text: 'Keyword score' }), h('span', { class: 'pim-hint', text: ' of 100 · name ' + R.title + ' % · bullets ' + R.bullets + ' % · description ' + R.content + ' %' }),
+            h('p', { class: 'pim-hint', text: 'How much of what customers search (by searches) the text below covers; it changes while you edit.' })])]),
+        R.missing.length ? h('div', { class: 'pim-kw__missing' }, [h('span', { class: 'pim-label', text: 'Worth adding to the name or bullets — only what describes this product, no other brands:' }),
+          h('div', { class: 'pim-tags' }, R.missing.map(function (t) { return h('span', { class: 'pim-fx__chip pim-kw__chip', title: A.fmtInt(t.r.query_volume) + ' searches in the week' },
+            h('span', { text: t.r.search_query + ' · ' + A.fmtInt(t.r.query_volume) })); }))]) : h('p', { class: 'pim-hint', text: 'Every search term is in the name or the bullets.' }),
+        h('div', { class: 'pim-kw__bullets' }, R.perBullet.map(function (b) {
+          return h('div', { class: 'pim-kw__bullet' }, [h('span', { class: 'pim-kw__bn', text: 'Bullet ' + b.n }),
+            h('span', { class: 'pim-kw__bar', role: 'img', 'aria-label': b.score + ' %' }, h('span', { style: 'width:' + b.score + '%' })),
+            h('span', { class: 'pim-kw__bs', text: b.empty ? 'empty' : b.score + ' %' }),
+            h('span', { class: 'pim-hint pim-kw__bt', text: b.terms.slice(0, 5).join(' · ') + (b.terms.length > 5 ? ' …' : '') })]);
+        })),
+        h('details', { class: 'pim-kw__all' }, [h('summary', { text: 'All ' + rows.length + ' search terms' }),
+          h('div', { class: 'ecm-tablewrap' }, h('table', { class: 'ecm-table' }, [
+            h('thead', null, h('tr', null, [['#', 1], ['Search term', 0], ['Searches', 1], ['Your clicks', 1], ['Your purchases', 1], ['Name', 0], ['Bullets', 0], ['Description', 0]].map(function (x) {
+              return h('th', { scope: 'col', class: x[1] ? 'is-num' : null, text: x[0] }); }))),
+            h('tbody', null, R.terms.map(function (t) {
+              var pc = function (v) { return v == null ? '' : A.fmtNum(v, 1) + ' %'; };
+              return h('tr', { class: t.other ? 'is-other' : null }, [h('td', { class: 'is-num', text: String(t.r.query_score || '') }),
+                h('td', { class: 'is-wide', text: t.r.search_query + (t.other ? ' (other brand: not counted)' : '') }),
+                h('td', { class: 'is-num', text: A.fmtInt(t.r.query_volume) }), h('td', { class: 'is-num', text: pc(t.r.click_share) }), h('td', { class: 'is-num', text: pc(t.r.purchase_share) }),
+                h('td', null, mark(t.title, 0)), h('td', null, mark(t.bullets, 0)), h('td', null, mark(t.content, t.part))]);
+            }))]))]));
+    }
+    var timer = null;
+    load();
+    return { el: el, refresh: function () { clearTimeout(timer); timer = setTimeout(function () { if (rows.length) paint(); }, 250); } };
+  }
+
   /* 5. Product editor ------------------------------------------------------ */
   var PF = {
     sku: { k: 'sku', t: 'SKU', max: 100 },
@@ -1501,7 +1677,8 @@
       q(sb().from('ecom_brands').select('id,name,alt_name,manufacturer_id').eq('workspace_id', w.id).order('name')),
       q(sb().from('ecom_manufacturers').select('id,name,alt_name').eq('workspace_id', w.id).order('name')),
       pageAll(function () { return sb().from('ecom_products').select('id,sku,title,asin').eq('workspace_id', w.id).order('id', { ascending: false }); }),
-      id ? q(sb().from('ecom_aplus').select('id,version,name,locale,status,modules,updated_at').eq('product_id', id).order('version', { ascending: false })) : Promise.resolve([])
+      id ? q(sb().from('ecom_aplus').select('id,version,name,locale,status,modules,updated_at').eq('product_id', id).order('version', { ascending: false })) : Promise.resolve([]),
+      buyBoxData(amzMp())
     ]).then(function (res) {
       var p = res[0], others = res[3].filter(function (x) { return x.id !== id; }), versions = res[4];
       if (id && !p) { box.innerHTML = ''; box.appendChild(h('p', { class: 'ecm-error', text: 'This product does not exist (any more).' })); return; }
@@ -1588,7 +1765,9 @@
           });
         }).catch(function (e) { err.textContent = e.message; }).then(function () { amzBtn.textContent = 'Sync with Amazon'; amzState(); });
       });
-      var amzBar = h('div', { class: 'pim-amzbar' }, [amzBtn, amzHint]);
+      var bbv = id ? buyBoxOf(res[5], p) : null;
+      var amzBar = h('div', { class: 'pim-amzbar' }, [amzBtn, amzHint, id ? h('span', { class: 'pim-bb', title: buyBoxTip(res[5]),
+        text: 'Buy Box ' + (bbv == null ? '— (not in the Business Report)' : A.fmtNum(bbv, 1) + ' %') + ' · ' + mpLabel(amzMp()) }) : null]);
       // bullets
       var bullets = [];
       var bulletBox = h('fieldset', { class: 'pim-section' }, [h('legend', { text: 'Bullets' }), h('div', { class: 'pim-form' }, (function () {
@@ -1625,9 +1804,15 @@
       paintPics();
       var save = h('button', { type: 'button', class: 'ecm-btn ecm-btn--primary ecm-btn--small', text: id ? 'Save' : 'Create product' });
       var del = id ? h('button', { type: 'button', class: 'ecm-btn ecm-btn--danger ecm-btn--small', text: 'Delete product' }) : null;
-      box.append(amzBar, ident, sect('Content', ['title', 'content', 'details']), bulletBox, sect('Size and weight', ['width_mm', 'length_mm', 'depth_mm', 'weight_g']), picBox,
+      var contentBox = sect('Content', ['title', 'content', 'details']);
+      var others = ectx.brands.filter(function (b) { return b.id !== p.brand_id; }).map(function (b) { return b.name; })
+        .concat(ectx.makers.filter(function (m) { return m.id !== p.manufacturer_id; }).map(function (m) { return m.name; }))
+        .map(function (n) { return kwTokens(n).join(' '); }).filter(function (n) { return n && kwTokens(nameOf(ectx.brands, p.brand_id) + ' ' + nameOf(ectx.makers, p.manufacturer_id)).join(' ').indexOf(n) < 0; });
+      var kw = id ? keywordPanel(p, function () { return { title: ctrls.title.value, content: ctrls.content.value, bullets: bullets.map(function (b) { return b.value; }) }; }, others) : null;
+      if (kw) [ctrls.title, ctrls.content].concat(bullets).forEach(function (el) { el.addEventListener('input', kw.refresh); });
+      box.append.apply(box, [amzBar, ident, contentBox, bulletBox, kw ? kw.el : null, sect('Size and weight', ['width_mm', 'length_mm', 'depth_mm', 'weight_g']), picBox,
         h('div', { class: 'ecm-row pim-actions' }, [save, del, err].filter(Boolean)),
-        id ? h('p', { class: 'pim-hint', text: 'ID ' + id + ' · created ' + A.fmtTime(p.created_at) + ' · updated ' + A.fmtTime(p.updated_at) }) : null);
+        id ? h('p', { class: 'pim-hint', text: 'ID ' + id + ' · created ' + A.fmtTime(p.created_at) + ' · updated ' + A.fmtTime(p.updated_at) }) : null].filter(Boolean));
       save.addEventListener('click', function () {
         var v = {}, msg = '';
         Object.keys(ctrls).forEach(function (k) { var x = readValue(PF[k], ctrls[k]); msg = msg || checkValue(PF[k], x); v[k] = x; });
