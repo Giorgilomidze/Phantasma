@@ -2347,7 +2347,7 @@
       save.type = 'submit';
       save.dataset.focusKey = 'save:' + f.id;
       save.setAttribute('aria-label', 'Save status and reply for the request from ' + who);
-      const reply = el('button', 'btn btn-secondary btn-sm fb-admin__reply-btn', 'Reply');   // opens with the saved reply, if any
+      const reply = el('button', 'btn btn-sm fb-admin__reply-btn', 'Reply');   // opens with the saved reply, if any; outlined look: .fb-admin__reply-btn (§28)
       reply.type = 'button';
       reply.dataset.fbReply = String(f.id);
       reply.dataset.focusKey = 'reply:' + f.id;
